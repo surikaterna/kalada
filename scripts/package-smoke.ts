@@ -28,18 +28,37 @@ async function createConsumer(directory: string): Promise<void> {
   );
   await writeFile(
     join(directory, "index.mjs"),
-    'import { KALADA_CORE_PACKAGE } from "@kalada/core";\n' +
-      'if (KALADA_CORE_PACKAGE !== "@kalada/core") throw new Error("ESM identity mismatch");\n',
+    'import * as root from "@kalada/core";\n' +
+      'import { ExpressionProfile, standardV1 } from "@kalada/core/kuery-v1";\n' +
+      'const again = await import("@kalada/core/kuery-v1");\n' +
+      'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("ESM root surface mismatch");\n' +
+      'if (standardV1 !== again.standardV1 || !(standardV1 instanceof ExpressionProfile)) throw new Error("ESM identity mismatch");\n',
   );
   await writeFile(
     join(directory, "index.cjs"),
-    'const { KALADA_CORE_PACKAGE } = require("@kalada/core");\n' +
-      'if (KALADA_CORE_PACKAGE !== "@kalada/core") throw new Error("CJS identity mismatch");\n',
+    'const root = require("@kalada/core");\n' +
+      'const first = require("@kalada/core/kuery-v1");\n' +
+      'const again = require("@kalada/core/kuery-v1");\n' +
+      'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("CJS root surface mismatch");\n' +
+      'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n',
   );
   await writeFile(
-    join(directory, "types.ts"),
-    'import { KALADA_CORE_PACKAGE } from "@kalada/core";\n' +
-      'const identity: "@kalada/core" = KALADA_CORE_PACKAGE;\nvoid identity;\n',
+    join(directory, "types.mts"),
+    'import { fromKueryExpression, type KaladaProgramV1 } from "@kalada/core";\n' +
+      'import { compileExpression, standardV1, type ValueExpression } from "@kalada/core/kuery-v1";\n' +
+      'const expression: ValueExpression = { kind: "literal", value: true };\n' +
+      "const result = fromKueryExpression(expression);\n" +
+      "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
+      "void compileExpression(expression, { profile: standardV1 });\nvoid program;\n",
+  );
+  await writeFile(
+    join(directory, "types.cts"),
+    'import core = require("@kalada/core");\n' +
+      'import kuery = require("@kalada/core/kuery-v1");\n' +
+      'const expression: kuery.ValueExpression = { kind: "literal", value: true };\n' +
+      "const result = core.fromKueryExpression(expression);\n" +
+      "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
+      "void kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 
@@ -57,7 +76,24 @@ async function main(): Promise<void> {
     run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", archive], directory);
     run(["node", "index.mjs"], directory);
     run(["node", "index.cjs"], directory);
-    run([join(root, "node_modules", ".bin", "tsc"), "--strict", "--noEmit", "types.ts"], directory);
+    for (const file of ["types.mts", "types.cts"]) {
+      run(
+        [
+          join(root, "node_modules", ".bin", "tsc"),
+          "--strict",
+          "--noEmit",
+          "--skipLibCheck",
+          "--target",
+          "ES2022",
+          "--module",
+          "NodeNext",
+          "--moduleResolution",
+          "NodeNext",
+          file,
+        ],
+        directory,
+      );
+    }
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

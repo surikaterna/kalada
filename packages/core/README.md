@@ -1,8 +1,10 @@
 # `@kalada/core`
 
-This package is the dependency-free home of Kalada's canonical, versioned runtime contracts.
-It is currently an architecture-facing shell: only package identity is exported, and no AST,
-compiler, evaluator, operator, profile, parser, effects, or scheduling semantics exist yet.
+This dependency-free package owns Kalada's canonical, versioned runtime contracts. The root
+exports the four-field `KaladaProgramV1` envelope, its strict canonicalizer, and Kuery-expression
+adapters. It intentionally does not export a compiler, evaluator, profile, parser, effects, or
+scheduling semantics.
 
-The public contract will be added through separately reviewed changes after its serialization,
-compatibility, determinism, and resource boundaries are specified.
+The exact Kuery 2.1 strict-expression compatibility API is available only from
+`@kalada/core/kuery-v1`. Provenance is recorded in the shipped `provenance/kuery-2.1.0.json`, and
+third-party license declarations are reproduced in `THIRD_PARTY_NOTICES.md`.

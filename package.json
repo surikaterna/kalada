@@ -25,6 +25,8 @@
     "@biomejs/biome": "2.5.14",
     "@changesets/cli": "3.0.3",
     "@types/node": "22.20.3",
+    "ajv": "8.17.1",
+    "kuery": "2.1.0",
     "tsup": "8.5.1",
     "typescript": "5.9.3",
     "vitest": "5.0.1"

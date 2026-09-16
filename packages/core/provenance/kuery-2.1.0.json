@@ -1,0 +1,93 @@
+{
+  "upstream": {
+    "package": "kuery@2.1.0",
+    "tag": "v2.1.0",
+    "releaseCommit": "732eb12b1deacd85bb1421b92169c9af20a98962",
+    "sourceTree": "be5951e00aa227d3f6c4009700fe5920e786b66c",
+    "treeListingSha256": "6bf36f342a26b2021a51f12b8421e6e8b5be630cee53e99e3142e81fafaf78c9",
+    "npmIntegrity": "sha512-L7H1oOAJApFQvgAuwBGvUsUcYmqsg04LxfpiCHSrYqDKecOzPDT4X2Yz5YrqrJDJevlZTCmsafV3JcBvAdxnJA=="
+  },
+  "productionFiles": [
+    [
+      "callback-promise.ts",
+      "7178b9cd936d317eaaec786932c1c251656fbb79",
+      "076faae096ce36ccfbc1e82a23c66f561b9af008514c4230bea1d5a7bba61d21"
+    ],
+    [
+      "canonicalize.ts",
+      "8b92e931c62855f7e677a93f1563cbcc5103d78c",
+      "aff37b07cf2b3cf6096e63208fc3cd4db5dcb2db9411cf111c708350af236eb1"
+    ],
+    [
+      "compile.ts",
+      "f3f5125cfbcc96bbc6cdd70af3d20528558cf044",
+      "b68b30cbcf4328f84a6f612c8f72808ba795f627f37109eb8d8d9abb4aef13e9"
+    ],
+    [
+      "dependencies.ts",
+      "09da4c7f3fe418257fd77607e8a977edd43a6be9",
+      "68f24956a37692d19a87fb1a54c4293f9c47a8d89b459a3b9bf97437ab2070dd"
+    ],
+    [
+      "evaluate.ts",
+      "e99d3e5d7b7531bf968828c2dad9f73e3a1b5cd9",
+      "2d3faf5f31717b2a8930ed27f7af54066816a8734a293d1743ff53c6d129376c"
+    ],
+    [
+      "index.ts",
+      "e747100518abce0ddf58139cf5a075a3b48a609b",
+      "2a975ea636eb0377c295c9e2296b65a0a100b34af8c90dde91a36c0c7d005ccd"
+    ],
+    [
+      "inspect.ts",
+      "abb662b632a836395a061f217b456b7691588158",
+      "05386e1a47cdb907f3da624be4e451c9e1ca50076d87912bb8da432856db94a3"
+    ],
+    [
+      "json-schema.ts",
+      "8c24f1d359bd2b0e7c8eb52b20fd7ec5e6f2b884",
+      "91f4894acf7701410727b5fd2e919e7c1bb67b546cdc7abca346805e9c49ee5a"
+    ],
+    [
+      "limits.ts",
+      "4ce94b35a92d3f3757625c9e692e371a6b926770",
+      "9a05f3f16f5d44746d4dbc8ffe09dee4415b95fec798bbd714fb3bee876f338b"
+    ],
+    [
+      "profile.ts",
+      "81d40b568f12ff09cac3121825a3e36ffa594367",
+      "6c5f8dadb87160ae2e1c9a544c099653000d77c6f8b51b7a2f1eda30219312bd"
+    ],
+    [
+      "result.ts",
+      "a1cf6072df5c05be80fcae3691fd2ff09c3a6fd7",
+      "12e4a4848b6c6337a45afed49c23f85d7dc53cdf052f6630fe92cf0e71377dca"
+    ],
+    [
+      "standard-profile.ts",
+      "b820f6c2b1f2a29bc01eab9184a3252f570c94ec",
+      "75ecb1cf7e552033243e0fdfb3bb8b944b2c3105f4d56e7b541e2408175eec0a"
+    ],
+    [
+      "types.ts",
+      "29eaacffbe92dca89a28a334ec4521bdea1b1374",
+      "702f11f74b602afe3c73cae364fc48b5cda705b1dec52d267c1599f17bd4b14c"
+    ]
+  ],
+  "productionSourcePrefix": "src/expression/",
+  "productionDestinationPrefix": "packages/core/src/kuery-v1/",
+  "productionClassification": "verbatim source before repository formatting; formatting/import/type syntax, explicit fields replacing parameter properties, strict annotations, one local rename, and one cohesive helper extraction only",
+  "tests": {
+    "source": "src/expression/__tests__/expression.test.ts",
+    "blob": "7b3e2dcda1bbe43e09119cb6f9b7f32ee3e3678c",
+    "sha256": "0d63e399e0e64326f752e573617c57e8955e2dd6490ffb5abd76b5cd8759c239",
+    "destinations": [
+      "packages/core/src/kuery-v1/__tests__/canonicalize.test.ts",
+      "packages/core/src/kuery-v1/__tests__/standard-profile.test.ts",
+      "packages/core/src/kuery-v1/__tests__/compiled.test.ts",
+      "packages/core/src/kuery-v1/__tests__/profiles.test.ts",
+      "packages/core/src/kuery-v1/__tests__/json-schema.test.ts"
+    ],
+    "classification": "split by top-level suite; imports formatted; strict annotations added; shared fixture constructors extracted"
+  }
+}

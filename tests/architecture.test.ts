@@ -25,12 +25,12 @@ describe("package boundaries", () => {
     }
   });
 
-  it("keeps the core source free of imports", async () => {
+  it("keeps compiler, evaluator, and profile APIs off the root entry point", async () => {
     const source = await readFile(resolve(core, "src/index.ts"), "utf8");
     const file = ts.createSourceFile("index.ts", source, ts.ScriptTarget.Latest, true);
-    const imports = file.statements.filter(
-      (statement) => ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement),
-    );
-    expect(imports).toEqual([]);
+    const text = file.getText();
+    for (const forbidden of ["compileExpression", "evaluateCompiled", "ExpressionProfile"]) {
+      expect(text).not.toContain(forbidden);
+    }
   });
 });
