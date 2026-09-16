@@ -41,9 +41,9 @@ jobs:
       - name: Open release PR or publish approved versions
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish: bun run release
-          title: "chore: release packages"
-          commit: "chore: release packages"
+          publish-script: bun run release
+          pr-title: "chore: release packages"
+          commit-message: "chore: release packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
