@@ -1,0 +1,32 @@
+{
+  "name": "kalada",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": "1.4.2",
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "changeset": "changeset",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "package:smoke": "bun run build && bun scripts/package-smoke.ts",
+    "release": "changeset publish",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@changesets/cli": "3.0.3",
+    "@types/node": "22.20.3",
+    "tsup": "8.5.1",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1"
+  }
+}
