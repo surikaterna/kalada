@@ -23,14 +23,7 @@ async function sourceFiles(directory: string): Promise<string[]> {
       return entry.isDirectory() ? sourceFiles(path) : [path];
     }),
   );
-  return paths
-    .flat()
-    .filter(
-      (path) =>
-        [".ts", ".tsx"].includes(extname(path)) &&
-        !path.includes("/__tests__/") &&
-        !path.endsWith(".test.ts"),
-    );
+  return paths.flat().filter((path) => [".ts", ".tsx"].includes(extname(path)));
 }
 
 function nestingDepth(node: ts.Node, depth = 0): number {
