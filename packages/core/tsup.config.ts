@@ -1,9 +1,26 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
+  bundle: false,
   clean: true,
   dts: true,
-  entry: ["src/index.ts"],
+  entry: [
+    "src/index.ts",
+    "src/program-v1.ts",
+    "src/kuery-v1/callback-promise.ts",
+    "src/kuery-v1/canonicalize.ts",
+    "src/kuery-v1/compile.ts",
+    "src/kuery-v1/dependencies.ts",
+    "src/kuery-v1/evaluate.ts",
+    "src/kuery-v1/index.ts",
+    "src/kuery-v1/inspect.ts",
+    "src/kuery-v1/json-schema.ts",
+    "src/kuery-v1/limits.ts",
+    "src/kuery-v1/profile.ts",
+    "src/kuery-v1/result.ts",
+    "src/kuery-v1/standard-profile.ts",
+    "src/kuery-v1/types.ts",
+  ],
   format: ["esm", "cjs"],
   outExtension({ format }) {
     return { js: format === "cjs" ? ".cjs" : ".js" };
