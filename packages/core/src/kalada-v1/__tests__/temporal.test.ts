@@ -176,6 +176,21 @@ it("contains type mismatches and overflow at the right operand", () => {
   }
 });
 
+it("validates subtraction types before boundary arithmetic", () => {
+  const expression = KaladaV1.temporalArithmetic(
+    "subtract",
+    KaladaV1.duration(Number.MAX_SAFE_INTEGER),
+    KaladaV1.instant(Number.MIN_SAFE_INTEGER),
+  );
+  expect(compile(expression).evaluate(missing)).toMatchObject({
+    ok: false,
+    diagnostic: {
+      code: "KALADA_TEMPORAL_TYPE_MISMATCH",
+      path: ["expression", "right"],
+    },
+  });
+});
+
 it("evaluates left first and charges exactly one step per AST node", () => {
   const resolve = vi.fn(() => ({ found: true as const, value: Duration.fromMilliseconds(1) }));
   const expression = KaladaV1.temporalArithmetic(

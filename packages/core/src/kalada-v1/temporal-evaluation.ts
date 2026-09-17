@@ -74,10 +74,15 @@ function add(left: TemporalValue, right: TemporalValue, path: Path): TemporalVal
 }
 
 function subtract(left: TemporalValue, right: TemporalValue, path: Path): TemporalValue {
-  const output = checked(left.milliseconds - right.milliseconds, path);
-  if (isInstant(left) && isInstant(right)) return Duration.fromMilliseconds(output);
-  if (isInstant(left) && isDuration(right)) return Instant.fromMilliseconds(output);
-  if (isDuration(left) && isDuration(right)) return Duration.fromMilliseconds(output);
+  if (isInstant(left) && isInstant(right)) {
+    return Duration.fromMilliseconds(checked(left.milliseconds - right.milliseconds, path));
+  }
+  if (isInstant(left) && isDuration(right)) {
+    return Instant.fromMilliseconds(checked(left.milliseconds - right.milliseconds, path));
+  }
+  if (isDuration(left) && isDuration(right)) {
+    return Duration.fromMilliseconds(checked(left.milliseconds - right.milliseconds, path));
+  }
   return mismatch(path);
 }
 
