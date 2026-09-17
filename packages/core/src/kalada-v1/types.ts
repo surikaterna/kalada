@@ -219,6 +219,7 @@ export interface KaladaV1FunctionLimits {
   readonly maxCallDepth: number;
   readonly maxContinuationFrames: number;
   readonly maxCollectionLength: number;
+  readonly maxCollectionIterations: number;
 }
 
 export interface KaladaV1FunctionCapture {

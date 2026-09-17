@@ -65,6 +65,7 @@ export function runEvaluation<R extends JsonValue>(
     closures: 0,
     captured: 0,
     callDepth: 0,
+    collectionIterations: 0,
   };
   try {
     return runLoop(state);

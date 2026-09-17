@@ -7,8 +7,9 @@ import {
   fail,
   type MachineState,
   push,
+  reserveCollectionIteration,
 } from "./evaluation-state.js";
-import type { JsonValue } from "./json.js";
+import { cloneJson, type JsonValue } from "./json.js";
 import {
   callableType,
   isCallable,
@@ -49,8 +50,9 @@ export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void 
     case "user-return":
       deliverReturn(frame, state);
       break;
-    default:
-      fail("KALADA_FUNCTION_ESCAPE", frame.path);
+    case "core-iteration":
+      deliverCoreCallback(frame, state);
+      break;
   }
 }
 
@@ -211,8 +213,19 @@ function dispatch<R extends JsonValue>(
   state: MachineState<R>,
 ): void {
   if (!isCallable(callable)) fail("KALADA_NOT_CALLABLE", [...path, "callee"]);
-  if (callable.callable === "core") fail("KALADA_FUNCTION_ESCAPE", path);
-  const closure = callable as UserClosure<R>;
+  if (callable.callable === "core") {
+    dispatchCore(callable.name, values, path, state);
+    return;
+  }
+  dispatchUser(callable as UserClosure<R>, values, path, state);
+}
+
+function dispatchUser<R extends JsonValue>(
+  closure: UserClosure<R>,
+  values: readonly RuntimeValue[],
+  path: Path,
+  state: MachineState<R>,
+): void {
   if (state.callDepth >= state.limits.maxCallDepth) fail("KALADA_CALL_DEPTH_LIMIT", path);
   ensureCapacity(path, state);
   charge(path, state);
@@ -226,6 +239,129 @@ function dispatch<R extends JsonValue>(
     caller: state.environment,
   });
   evaluate(closure.body, [...closure.path, "body"], functionEnvironment(closure, values), state);
+}
+
+function dispatchCore<R extends JsonValue>(
+  operator: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>["operator"],
+  values: readonly RuntimeValue[],
+  path: Path,
+  state: MachineState<R>,
+): void {
+  const input = values[0] as readonly JsonValue[];
+  if (input.length > state.limits.maxCollectionLength) {
+    fail("KALADA_COLLECTION_LIMIT", [...path, "arguments", 0]);
+  }
+  if (state.callDepth >= state.limits.maxCallDepth) fail("KALADA_CALL_DEPTH_LIMIT", path);
+  ensureCapacity(path, state);
+  charge(path, state);
+  state.callDepth += 1;
+  const frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }> = {
+    kind: "core-iteration",
+    phase: "ready",
+    path,
+    operator,
+    callback: values[1] as RuntimeValue,
+    input,
+    index: 0,
+    partial: operator === "some" ? false : operator === "every" ? true : [],
+  };
+  state.stack.push(frame);
+  if (input.length === 0) finishCore(frame, state);
+  else dispatchCoreCallback(frame, state);
+}
+
+function dispatchCoreCallback<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  state: MachineState<R>,
+): void {
+  frame.phase = "callback";
+  reserveCollectionIteration(frame.path, state);
+  dispatch(
+    frame.callback,
+    [frame.input[frame.index] as JsonValue, frame.index],
+    [...frame.path, "arguments", 1],
+    state,
+  );
+}
+
+function deliverCoreCallback<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  state: MachineState<R>,
+): void {
+  charge(frame.path, state);
+  const value = state.value as RuntimeValue;
+  validateCoreResult(frame, value);
+  updateCoreResult(frame, value as JsonValue | boolean);
+  if (coreFinished(frame, value)) {
+    finishCore(frame, state);
+    return;
+  }
+  frame.index += 1;
+  if (frame.index === frame.input.length) finishCore(frame, state);
+  else dispatchCoreCallback(frame, state);
+}
+
+function validateCoreResult<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  value: RuntimeValue,
+): void {
+  const expected = {
+    kind: "primitive-type",
+    name: frame.operator === "map" ? "json" : "boolean",
+  } as const;
+  if (!matchesType(value, expected)) {
+    fail("KALADA_COLLECTION_TYPE_MISMATCH", [...frame.path, "arguments", 1]);
+  }
+}
+
+function updateCoreResult<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  value: JsonValue | boolean,
+): void {
+  if (frame.operator === "map") (frame.partial as JsonValue[]).push(value as JsonValue);
+  if (frame.operator === "filter" && value) {
+    (frame.partial as JsonValue[]).push(frame.input[frame.index] as JsonValue);
+  }
+  if (frame.operator === "some" && value) frame.partial = true;
+  if (frame.operator === "every" && !value) frame.partial = false;
+}
+
+function coreFinished<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  value: RuntimeValue,
+): boolean {
+  return (
+    (frame.operator === "some" && value === true) || (frame.operator === "every" && value === false)
+  );
+}
+
+function finishCore<R extends JsonValue>(
+  frame: Extract<EvaluationFrame<R>, { kind: "core-iteration" }>,
+  state: MachineState<R>,
+): void {
+  const output = Array.isArray(frame.partial)
+    ? validateCollectionOutput(frame.partial, frame.path, state)
+    : frame.partial;
+  state.stack.pop();
+  state.callDepth -= 1;
+  deliver(output, state);
+}
+
+function validateCollectionOutput<R extends JsonValue>(
+  output: JsonValue[],
+  path: Path,
+  state: MachineState<R>,
+): JsonValue[] {
+  try {
+    cloneJson(output, {
+      maxDepth: state.limits.maxValueDepth,
+      maxNodes: state.limits.maxValueNodes,
+      maxStringLength: state.limits.maxStringLength,
+    });
+  } catch {
+    fail("KALADA_LIMIT_EXCEEDED", path);
+  }
+  return Object.freeze(output) as JsonValue[];
 }
 
 function deliverReturn<R extends JsonValue>(

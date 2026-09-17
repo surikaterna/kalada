@@ -201,6 +201,7 @@ the hard maximum are rejected before canonicalization or evaluation.
 | `maxCallDepth` | 256 | 4,096 | each active user or core dispatch |
 | `maxContinuationFrames` | 1,000 | 100,000 | each live trampoline frame |
 | `maxCollectionLength` | 10,000 | 100,000 | input length before iteration |
+| `maxCollectionIterations` | 10,000 | 100,000 | each visited element across one evaluation |
 | `maxEvaluationSteps` | 10,000 | 100,000 | existing shared operation budget |
 
 Function nodes, calls, core-function nodes, group declarations, parameters, and type nodes each
@@ -234,8 +235,9 @@ preserving exact 0.3.0 step outcomes. Arity and
 non-callable failures occur after the charged `call-callee` delivery but before argument or
 dispatch charging. Argument expressions retain their ordinary node charges. Limit checks happen
 before the operation that would exceed the inclusive bound. Counters are evaluation-wide and
-are not refunded after return or short-circuit; active call depth and live continuation frames
-decrement on return or failure unwind.
+are not refunded after return or short-circuit. Collection iterations are cumulative across nested
+collection calls and are reserved before the visited-element step charge. Active call depth and
+live continuation frames decrement on return or failure unwind.
 
 Static validation precedence is: safe structural read and exact keys; AST/depth/string limits;
 node discriminant and local field shape; per-signature parameter length; duplicate declarations

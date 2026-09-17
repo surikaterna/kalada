@@ -24,6 +24,7 @@ export interface MachineState<R extends JsonValue> {
   closures: number;
   captured: number;
   callDepth: number;
+  collectionIterations: number;
 }
 
 export function evaluate<R extends JsonValue>(
@@ -57,6 +58,17 @@ export function ensureCapacity<R extends JsonValue>(path: Path, state: MachineSt
 export function charge<R extends JsonValue>(path: Path, state: MachineState<R>): void {
   if (state.steps >= state.limits.maxEvaluationSteps) fail("KALADA_EVALUATION_LIMIT", path);
   state.steps += 1;
+}
+
+export function reserveCollectionIteration<R extends JsonValue>(
+  path: Path,
+  state: MachineState<R>,
+): void {
+  if (state.collectionIterations >= state.limits.maxCollectionIterations) {
+    fail("KALADA_COLLECTION_LIMIT", path);
+  }
+  state.collectionIterations += 1;
+  charge(path, state);
 }
 
 export function copyCaptures<R extends JsonValue>(
