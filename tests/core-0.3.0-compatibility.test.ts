@@ -45,6 +45,14 @@ describe("published @kalada/core 0.3.0 compatibility", () => {
     expect(
       kuery.canonicalizeExpression({ kind: "literal", value: { z: [1, null], a: true } }),
     ).toEqual(fixture.outcomes.kueryCanonicalization);
+    const temporal = kalada.KaladaV1.temporalArithmetic(
+      "add",
+      kalada.KaladaV1.instant(4),
+      kalada.KaladaV1.duration(3),
+    );
+    expect(kalada.canonicalizeKaladaV1Program(kalada.KaladaV1.program(temporal))).toEqual(
+      fixture.outcomes.kaladaCanonicalization,
+    );
     expect(
       kuery.extractExpressionDependencies({
         kind: "op",
@@ -84,6 +92,15 @@ describe("published @kalada/core 0.3.0 compatibility", () => {
     expect(kalada.encodeKaladaValue(collision)).toEqual(fixture.outcomes.collision);
     expect(kalada.encodeKaladaValue(kalada.Instant.fromMilliseconds(-7))).toEqual(
       fixture.outcomes.temporal,
+    );
+    const valid = kalada.KaladaV1.temporalArithmetic(
+      "add",
+      kalada.KaladaV1.instant(4),
+      kalada.KaladaV1.duration(3),
+    );
+    const validCompiled = kalada.compileKaladaV1Program(kalada.KaladaV1.program(valid));
+    expect(validCompiled.ok && validCompiled.value.evaluate(missing)).toEqual(
+      fixture.outcomes.temporalOutcome,
     );
     const expression = kalada.KaladaV1.temporalArithmetic(
       "add",

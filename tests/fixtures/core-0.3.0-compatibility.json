@@ -99,6 +99,20 @@
       "ok": true,
       "value": { "kind": "literal", "value": { "a": true, "z": [1, null] } }
     },
+    "kaladaCanonicalization": {
+      "ok": true,
+      "value": {
+        "format": "kalada-program",
+        "version": 1,
+        "profile": "kalada-v1",
+        "expression": {
+          "kind": "temporal-arithmetic",
+          "operator": "add",
+          "left": { "kind": "instant", "milliseconds": 4 },
+          "right": { "kind": "duration", "milliseconds": 3 }
+        }
+      }
+    },
     "kueryDependencies": { "ok": true, "value": ["b", "a"] },
     "kaladaDependencies": ["outside", "later"],
     "rootDiagnostic": {
@@ -170,6 +184,10 @@
       "type": "Instant",
       "variant": "milliseconds",
       "value": -7
+    },
+    "temporalOutcome": {
+      "ok": true,
+      "value": { "type": "Instant", "milliseconds": 7 }
     }
   }
 }
