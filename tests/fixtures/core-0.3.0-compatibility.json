@@ -1,0 +1,231 @@
+{
+  "artifact": {
+    "purpose": "Documentary provenance for the immutable npm artifact used to generate this fixture; these are not local package expectations.",
+    "name": "@kalada/core",
+    "version": "0.3.0",
+    "sha1": "c963824e9e5470d461b10cfae944d1b1378a29c2",
+    "integrity": "sha512-viBoDxOSef4qYV3sHh3ik67tfssKMdChpFrUvOOzuDui+itTELqwmZ7zae9ajJXaNUaaUnAtiNeOwRBaoJnyGw==",
+    "fileCount": 190,
+    "unpackedSize": 766057
+  },
+  "package": {
+    "name": "@kalada/core",
+    "sideEffects": false,
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      "exact": {
+        ".": {
+          "import": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+          },
+          "require": {
+            "types": "./dist/index.d.cts",
+            "default": "./dist/index.cjs"
+          }
+        },
+        "./kuery-v1": {
+          "import": {
+            "types": "./dist/kuery-v1/index.d.ts",
+            "default": "./dist/kuery-v1/index.js"
+          },
+          "require": {
+            "types": "./dist/kuery-v1/index.d.cts",
+            "default": "./dist/kuery-v1/index.cjs"
+          }
+        },
+        "./package.json": "./package.json"
+      },
+      "additiveBaseline": {
+        "./kalada-v1": {
+          "import": {
+            "types": "./dist/kalada-v1/index.d.ts",
+            "default": "./dist/kalada-v1/index.js"
+          },
+          "require": {
+            "types": "./dist/kalada-v1/index.d.cts",
+            "default": "./dist/kalada-v1/index.cjs"
+          }
+        }
+      }
+    },
+    "runtimeDependencyFields": ["dependencies", "optionalDependencies", "peerDependencies"]
+  },
+  "runtimeExports": {
+    "root": ["canonicalizeKaladaProgramV1", "fromKueryExpression", "toKueryExpression"],
+    "kueryV1": [
+      "DEFAULT_EXPRESSION_LIMITS",
+      "ExpressionProfile",
+      "ExpressionProfileBuilder",
+      "MAX_EXPRESSION_OPERATOR_ARGS",
+      "canonicalizeExpression",
+      "compileExpression",
+      "extractExpressionDependencies",
+      "generateExpressionJsonSchema",
+      "getStandardExpressionJsonSchema",
+      "standardV1"
+    ],
+    "kaladaV1": [
+      "DEFAULT_KALADA_V1_LIMITS",
+      "Duration",
+      "Instant",
+      "KALADA_V1_PROGRAM_SCHEMA",
+      "KALADA_VALUE_V1_SCHEMA",
+      "KaladaV1",
+      "Option",
+      "Result",
+      "canonicalizeKaladaV1Program",
+      "collectKaladaV1Dependencies",
+      "compileKaladaV1Program",
+      "decodeKaladaValue",
+      "encodeKaladaValue",
+      "equalKaladaValues",
+      "isDuration",
+      "isInstant",
+      "isOption",
+      "isResult"
+    ]
+  },
+  "declarationSha256": {
+    "kaladaV1Purpose": "Documentary hashes of the 0.3.0 additive baseline; later kalada-v1 declarations may grow while preserving named baseline types.",
+    "rootAndKueryV1EsmSet": "156fd97acd30486448c9edc614cdd939540b3475c5afc46a85c8352ed41c29bd",
+    "rootAndKueryV1CjsSet": "bd32949fab213f31c9451964883e15a746147f776e6ebb26df3c9d5a5fc0ec6e",
+    "rootEsm": "03d1ae9ef6cb97d4998bf71e1ef7186e99ca9517cdde68abf3425ade06f0b06c",
+    "rootCjs": "d88ecb55d28e39d81db87333ff47f8f40b8fa0039cf6797d3f00985ef2d41bc2",
+    "kueryV1Esm": "8eb31a13f38d7eb86c57c5af6cd503d334b9f99696df0225633820726bbc9489",
+    "kueryV1Cjs": "5d5f668fa500bdd14e48012b92952ea8e574f153eb35ebcda85786c386c092a9",
+    "kaladaV1Esm": "c3f8b78ff908a1df9876a91d75402810c59b461d4c29a51e1a56d7a5b1155b3b",
+    "kaladaV1Cjs": "846594f1bedeb2e851faeab691cf1b3fbc22b25c7c27c1e21dd806657a2b7b59"
+  },
+  "schemas": {
+    "kueryV1Sha256": "efd3bc6b01b93476082341c936ed72e715ea34c794624313d10d7342d76b4e5c",
+    "kaladaProgramV1Sha256": "7d51c80277714e1ed3b27332a72588eee8db1d4dd37587f5f581d605c524efa0",
+    "kaladaValueV1Sha256": "bf000e12f2c789168eb0cfb4e0ab301f50bb831c7f376339039cf6b585a1bcac"
+  },
+  "limits": {
+    "kueryV1": {
+      "maxDepth": 64,
+      "maxNodes": 10000,
+      "maxArgs": 32,
+      "maxStringLength": 10000,
+      "maxReferenceLength": 1000,
+      "maxEvaluationSteps": 10000
+    },
+    "kaladaV1": {
+      "maxAstDepth": 64,
+      "maxAstNodes": 10000,
+      "maxValueDepth": 64,
+      "maxValueNodes": 10000,
+      "maxStringLength": 10000,
+      "maxReferenceLength": 1000,
+      "maxEvaluationSteps": 10000
+    }
+  },
+  "outcomes": {
+    "rootCanonicalization": {
+      "ok": true,
+      "value": {
+        "format": "kalada-program",
+        "version": 1,
+        "profile": "standard-v1",
+        "expression": { "kind": "literal", "value": { "a": true, "z": 1 } }
+      }
+    },
+    "kueryCanonicalization": {
+      "ok": true,
+      "value": { "kind": "literal", "value": { "a": true, "z": [1, null] } }
+    },
+    "kaladaCanonicalization": {
+      "ok": true,
+      "value": {
+        "format": "kalada-program",
+        "version": 1,
+        "profile": "kalada-v1",
+        "expression": {
+          "kind": "temporal-arithmetic",
+          "operator": "add",
+          "left": { "kind": "instant", "milliseconds": 4 },
+          "right": { "kind": "duration", "milliseconds": 3 }
+        }
+      }
+    },
+    "kueryDependencies": { "ok": true, "value": ["b", "a"] },
+    "kaladaDependencies": ["outside", "later"],
+    "rootDiagnostic": {
+      "ok": false,
+      "diagnostic": {
+        "code": "EXPRESSION_INVALID_INPUT",
+        "path": [],
+        "message": "Expression input is invalid."
+      }
+    },
+    "kueryDiagnostic": {
+      "ok": false,
+      "diagnostic": {
+        "code": "EXPRESSION_INVALID_REFERENCE",
+        "path": ["ref"],
+        "message": "Expression reference is invalid."
+      }
+    },
+    "kaladaDiagnostic": {
+      "ok": false,
+      "diagnostic": {
+        "code": "KALADA_INVALID_INPUT",
+        "path": ["expression", "milliseconds"],
+        "message": "Kalada program input is invalid."
+      }
+    },
+    "temporalDiagnostic": {
+      "ok": false,
+      "diagnostic": {
+        "code": "KALADA_TEMPORAL_TYPE_MISMATCH",
+        "path": ["expression", "right"],
+        "message": "Kalada temporal operation received incompatible values."
+      }
+    },
+    "adt": {
+      "format": "kalada-value",
+      "version": 1,
+      "type": "Option",
+      "variant": "some",
+      "value": {
+        "format": "kalada-value",
+        "version": 1,
+        "type": "Result",
+        "variant": "err",
+        "value": {
+          "format": "kalada-value",
+          "version": 1,
+          "type": "Json",
+          "variant": "value",
+          "value": { "reason": "bad" }
+        }
+      }
+    },
+    "collision": {
+      "format": "kalada-value",
+      "version": 1,
+      "type": "Json",
+      "variant": "value",
+      "value": {
+        "format": "kalada-value",
+        "version": 1,
+        "type": "Option",
+        "variant": "none"
+      }
+    },
+    "temporal": {
+      "format": "kalada-value",
+      "version": 1,
+      "type": "Instant",
+      "variant": "milliseconds",
+      "value": -7
+    },
+    "temporalOutcome": {
+      "ok": true,
+      "value": { "type": "Instant", "milliseconds": 7 }
+    }
+  }
+}

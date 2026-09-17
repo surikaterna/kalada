@@ -95,6 +95,9 @@ and statically acyclic. Lambdas are initially non-escaping and accepted only by 
 bounded collection operators. Closures over ambient state, dynamic calls, unbounded recursion,
 and host function serialization are excluded.
 
+ADR-0003 supersedes only this function boundary. All other decisions in this ADR remain in
+force.
+
 ### Projection boundary
 
 Projection is a separate deterministic transformation layer over JSON-compatible data and core
