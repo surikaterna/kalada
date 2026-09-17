@@ -25,6 +25,7 @@ function visit<R extends JsonValue>(
     node.kind === "instant" ||
     node.kind === "duration" ||
     node.kind === "current-instant" ||
+    node.kind === "core-function" ||
     (node.kind === "option" && node.variant === "none")
   )
     return;
@@ -32,6 +33,8 @@ function visit<R extends JsonValue>(
     visitBinding(node, scope, output, identities);
     return;
   }
+  if (visitFunctionNode(node, scope, output, identities)) return;
+
   if (node.kind === "match") {
     visitMatch(node.value, node.arms, scope, output, identities);
     return;
@@ -41,7 +44,54 @@ function visit<R extends JsonValue>(
     visit(node.right, scope, output, identities);
     return;
   }
-  visit(node.value, scope, output, identities);
+  if (node.kind === "option" || node.kind === "result") {
+    visit(node.value, scope, output, identities);
+  }
+}
+
+function visitFunctionNode<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  scope: ReadonlySet<string>,
+  output: R[],
+  identities: Set<string>,
+): boolean {
+  if (node.kind === "function") {
+    visit(
+      node.body,
+      extendedMany(
+        scope,
+        node.parameters.map((parameter) => parameter.name),
+      ),
+      output,
+      identities,
+    );
+    return true;
+  }
+  if (node.kind === "function-group") {
+    const groupScope = extendedMany(
+      scope,
+      node.functions.map((member) => member.name),
+    );
+    for (const member of node.functions) {
+      visit(
+        member.body,
+        extendedMany(
+          groupScope,
+          member.parameters.map((parameter) => parameter.name),
+        ),
+        output,
+        identities,
+      );
+    }
+    visit(node.body, groupScope, output, identities);
+    return true;
+  }
+  if (node.kind === "call") {
+    visit(node.callee, scope, output, identities);
+    for (const argument of node.arguments) visit(argument, scope, output, identities);
+    return true;
+  }
+  return false;
 }
 
 function visitBinding<R extends JsonValue>(
@@ -83,5 +133,11 @@ function addReference<R extends JsonValue>(
 function extended(scope: ReadonlySet<string>, name: string): ReadonlySet<string> {
   const output = new Set(scope);
   output.add(name);
+  return output;
+}
+
+function extendedMany(scope: ReadonlySet<string>, names: readonly string[]): ReadonlySet<string> {
+  const output = new Set(scope);
+  for (const name of names) output.add(name);
   return output;
 }

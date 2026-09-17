@@ -13,6 +13,12 @@ import {
   strictArray,
 } from "./canonical-input.js";
 import { failure, KaladaFailure, success } from "./diagnostics.js";
+import {
+  canonicalCall,
+  canonicalCoreFunction,
+  canonicalFunction,
+  canonicalGroup,
+} from "./function-contracts.js";
 import type { JsonValue } from "./json.js";
 import { resolveLimits } from "./limits.js";
 import type {
@@ -36,6 +42,11 @@ const NODE_KEYS = new Set([
   "operator",
   "left",
   "right",
+  "parameters",
+  "returns",
+  "callee",
+  "arguments",
+  "functions",
 ]);
 const ARM_ORDER = Object.freeze({ Option: ["some", "none"], Result: ["ok", "err"] } as const);
 
@@ -86,6 +97,8 @@ function canonicalNode<R extends JsonValue>(
     const raw = properties(input, path, NODE_KEYS, false);
     if (raw.kind === "literal") return canonicalLiteral(raw, path, state);
     if (raw.kind === "ref") return canonicalReference(raw, path, state);
+    const added = canonicalAddedNode(raw, path, depth, state);
+    if (added) return added;
     if (raw.kind === "binding") return canonicalBinding(raw, path, depth, state);
     if (raw.kind === "option") return canonicalOption(raw, path, depth, state);
     if (raw.kind === "result") return canonicalResult(raw, path, depth, state);
@@ -109,6 +122,19 @@ function canonicalNode<R extends JsonValue>(
   } finally {
     state.active.delete(input);
   }
+}
+
+function canonicalAddedNode<R extends JsonValue>(
+  raw: Record<string, unknown>,
+  path: Path,
+  depth: number,
+  state: State<R>,
+): KaladaV1Expression<R> | undefined {
+  if (raw.kind === "function") return canonicalFunction(raw, path, depth, state, canonicalNode);
+  if (raw.kind === "call") return canonicalCall(raw, path, depth, state, canonicalNode);
+  if (raw.kind === "function-group") return canonicalGroup(raw, path, depth, state, canonicalNode);
+  if (raw.kind === "core-function") return canonicalCoreFunction(raw, path);
+  return undefined;
 }
 
 function canonicalTemporal(

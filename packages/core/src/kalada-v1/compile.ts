@@ -1,16 +1,17 @@
 import { rejectCallbackPromise } from "../kuery-v1/callback-promise.js";
 import { canonicalizeKaladaV1Program } from "./canonicalize.js";
 import { collectKaladaV1Dependencies } from "./dependencies.js";
-import { failure, success } from "./diagnostics.js";
+import { failure, KaladaFailure, success } from "./diagnostics.js";
 import { evaluateKaladaV1 } from "./evaluate.js";
 import type { JsonValue } from "./json.js";
-import { resolveLimits } from "./limits.js";
+import { type ResolvedKaladaV1Limits, resolveLimits } from "./limits.js";
+import { analyzeKaladaV1Functions } from "./static-analysis.js";
 import { isInstant } from "./temporal.js";
 import type {
   CompiledKaladaV1Program,
   KaladaV1Clock,
   KaladaV1EvaluationInputs,
-  KaladaV1Limits,
+  KaladaV1FunctionCapture,
   KaladaV1Options,
   KaladaV1Outcome,
   KaladaV1Resolver,
@@ -22,18 +23,27 @@ export function compileKaladaV1Program<R extends JsonValue = string>(
 ): KaladaV1Outcome<CompiledKaladaV1Program<R>> {
   const canonical = canonicalizeKaladaV1Program<R>(input, options);
   if (!canonical.ok) return canonical;
-  let limits: KaladaV1Limits;
+  let limits: ResolvedKaladaV1Limits;
   try {
     limits = resolveLimits(options.limits);
   } catch {
     return failure("KALADA_LIMIT_EXCEEDED", []);
   }
   const program = canonical.value;
+  let functions: readonly KaladaV1FunctionCapture[];
+  try {
+    functions = analyzeKaladaV1Functions(program.expression, limits);
+  } catch (error) {
+    const problem =
+      error instanceof KaladaFailure ? error : new KaladaFailure("KALADA_INVALID_INPUT", []);
+    return failure(problem.code, problem.path);
+  }
   const dependencies = collectKaladaV1Dependencies(program.expression);
   return success(
     Object.freeze({
       program,
       dependencies,
+      functions,
       evaluate: (resolve: KaladaV1Resolver<R>, inputs?: KaladaV1EvaluationInputs) =>
         evaluateKaladaV1(program.expression, resolve, limits, inputs),
       evaluateWithClock: (resolve: KaladaV1Resolver<R>, clock: KaladaV1Clock) =>
@@ -45,7 +55,7 @@ export function compileKaladaV1Program<R extends JsonValue = string>(
 function evaluateWithClock<R extends JsonValue>(
   expression: Parameters<typeof evaluateKaladaV1<R>>[0],
   resolve: KaladaV1Resolver<R>,
-  limits: KaladaV1Limits,
+  limits: ResolvedKaladaV1Limits,
   clock: KaladaV1Clock,
 ): ReturnType<typeof evaluateKaladaV1<R>> {
   let sample: unknown;
