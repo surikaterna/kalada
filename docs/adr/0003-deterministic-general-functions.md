@@ -94,6 +94,58 @@ never invokes the evaluator recursively on the JavaScript stack. Direct, mutual,
 non-tail recursion use the same mechanism. No tail-call-elimination guarantee changes the
 observable call-depth charge.
 
+The trampoline has one current state (evaluate an expression or deliver a completed value) and
+one LIFO continuation stack. It uses exactly four function-related frame variants:
+
+- `call-callee` retains the call path and argument expressions while the callee evaluates.
+- `call-arguments` retains the callable, one next-argument index, and completed argument values.
+  One frame serves the entire argument list; there is never one frame per remaining argument.
+- `user-return` or `core-iteration` retains one active dispatch. `user-return` retains the
+  declared return type and call path. `core-iteration` retains the operator, callback, input,
+  next index, and partial result or short-circuit state.
+
+Entering a call node first charges its ordinary expression step, checks continuation capacity,
+pushes one `call-callee` frame, and evaluates the callee. Successful callee delivery resumes and
+charges that frame, pops it, then checks callability and arity. A zero-argument call proceeds to
+dispatch. Otherwise the machine checks capacity, pushes one `call-arguments` frame, and
+evaluates argument zero. Each successfully delivered argument resumes and charges the same
+retained frame, is type-checked and appended, then either starts the next argument without
+another push or pops the frame after the last argument. Child failure unwinds retained frames
+without a resume charge and evaluates no later argument.
+
+After arguments, user dispatch checks call depth and capacity, charges the dispatcher step,
+increments active call depth, pushes one `user-return` frame, and evaluates the body. Successful
+body delivery resumes and charges that frame, pops it, decrements call depth, validates the
+declared return type, then delivers to the next frame. Return-type failure occurs after the pop
+and decrement. A body failure unwinds the frame and decrements depth without a resume charge.
+The caller's frame remains below `user-return` throughout. This transition, rather than a
+JavaScript evaluator call, is the only way to enter a user body.
+
+Core dispatch performs the same call-depth/capacity checks and dispatcher charge, increments
+depth, and pushes exactly one `core-iteration` frame. Empty input pops it immediately, decrements
+depth, and delivers the operator's empty result without a resume charge because no child ran.
+For a visited element the retained frame first charges the element step, then invokes the
+callback through common dispatch with the already evaluated `(element, index)` values; callback
+values create no argument-expression frame. Successful callback delivery resumes and charges
+`core-iteration`, validates the operator-specific result, and either retains the same frame for
+the next index or pops it, decrements depth, and delivers the completed/short-circuit result.
+`some(true)` and `every(false)` pop immediately after that callback resume. Callback failure
+unwinds the core frame, decrements depth, and performs no resume, later-element, or result charge.
+
+A push is allowed exactly when the resulting live-frame count is at most
+`maxContinuationFrames`; otherwise it fails before the child or dispatch starts. A resume means
+delivery of one successful child value to the current top frame and charges one evaluation step
+while that frame is still live. Pop, unwind, initial frame setup, switching a retained argument
+or iteration frame to its next child, and delivery with no frame do not charge a resume step.
+Consequently stack occupancy and step boundaries depend only on these transitions, not on an
+implementation's loop structure or JavaScript call stack.
+
+Continuation-capacity failure uses `KALADA_CONTINUATION_LIMIT`. A `call-callee`, `user-return`,
+or `core-iteration` push reports the canonical call-node path; `call-arguments` reports that
+call's `arguments` array path. Dispatching a core callback from already evaluated values reports
+the callback expression path (`arguments[1]`) for its return-frame capacity failure. These paths
+are fixed even though no source-syntax call exists for the callback invocation.
+
 Function-group construction is left-to-right. It validates the whole group before materializing
 any closure, snapshots captures from definition scope, creates all group members atomically,
 then enters `body`. A closure creation or limit failure prevents body evaluation.
@@ -119,7 +171,7 @@ the hard maximum are rejected before canonicalization or evaluation.
 
 | Limit | Default | Hard maximum | Charge |
 | --- | ---: | ---: | --- |
-| `maxFunctionParameters` | 32 | 256 | each declared parameter |
+| `maxFunctionParameters` | 32 | 256 | length of each function/callback signature independently |
 | `maxFunctionGroupSize` | 64 | 1,024 | each declaration in one group |
 | `maxCapturesPerClosure` | 64 | 256 | each distinct lexical capture slot |
 | `maxCapturedBindings` | 1,000 | 100,000 | each slot materialized across one evaluation |
@@ -134,22 +186,35 @@ count once toward existing AST-node/depth limits. A type's children are traverse
 then return order. Closure environments and group back-edges do not count as `KaladaValue` nodes
 and are never recursively walked as values.
 
+`maxFunctionParameters` resets for every function expression, every member of a function group,
+and every function type, including a nested callback type. It is neither cumulative across a
+group/program nor evaluation-wide. Built-in core signatures obey the same bound but do not
+consume a user declaration's allowance. A parameters array of exactly the configured limit is
+accepted; the next element is rejected with `KALADA_LIMIT_EXCEEDED` at the canonical
+`...parameters` array path. After safe descriptor/exact-key reads and enclosing AST/depth/string
+checks, parameter-array shape and length are checked before reading parameter entries, duplicate
+names, or parameter/return types. This per-signature check therefore precedes duplicate-binding,
+type-shape, capture, and dependency diagnostics for that signature.
+
 The existing rule of one step on entry to every evaluated expression remains. In addition, the
-dispatcher charges one step when dispatch begins, the trampoline charges one step when it
-resumes a suspended frame, closure materialization charges one step per closure, capture copy
-charges one step per slot, and a collection core function charges one step per visited element
-before its callback. Arity and non-callable failures occur before dispatch charging; argument
-expressions retain their ordinary node charges. Limit checks happen before the operation that
-would exceed the inclusive bound. Counters are evaluation-wide and are not refunded after
-return or short-circuit; active call depth and live continuation frames decrement on return.
+dispatcher charges one step when dispatch begins, each successful frame resume defined above
+charges one step, closure materialization charges one step per closure, capture copy charges one
+step per slot, and a collection core function charges one step per visited element before its
+callback. Arity and non-callable failures occur after the charged `call-callee` resume but before
+argument or dispatch charging. Argument expressions retain their ordinary node charges. Limit
+checks happen before the operation that would exceed the inclusive bound. Counters are
+evaluation-wide and are not refunded after return or short-circuit; active call depth and live
+continuation frames decrement on return or failure unwind.
 
 Static validation precedence is: safe structural read and exact keys; AST/depth/string limits;
-node discriminant and local field shape; duplicate declarations/parameters; type shape; lexical
-resolution and capture analysis; function/group/capture limits; dependency extraction. Runtime
-precedence is: call node step; callee result; callability; arity; arguments left-to-right with
-immediate type checks; call depth; continuation capacity; dispatch step; body or collection
-work; return type; top-level escape. The shared evaluation-step failure wins whenever its next
-charge occurs earlier in this sequence.
+node discriminant and local field shape; per-signature parameter length; duplicate declarations
+or parameters; type shape; lexical resolution and capture analysis; group/capture limits;
+dependency extraction. Runtime precedence is: call-node step; `call-callee` capacity/push;
+callee result; callee-frame resume step; callability; arity; argument-frame capacity/push;
+arguments left-to-right with a resume step and immediate type check after each; call depth;
+return/iteration-frame capacity; dispatch step; body or collection work and their frame resumes;
+return type; top-level escape. The shared evaluation-step failure wins whenever its next charge
+occurs earlier in this sequence.
 
 ## Diagnostics and context
 
