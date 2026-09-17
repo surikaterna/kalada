@@ -14,8 +14,9 @@ export function validateChangesetPolicy(
   assertCommit(repository, head, "Head");
   const entries = diffEntries(repository, base, head);
   assertNoChangedEmptyChangesets(repository, head, entries);
-  const declared = changedPackagesFromChangesets(repository, head, entries);
   const packages = mergedPackages(repository, base, head);
+  const workspaceNames = new Set([...packages.values()].map(({ name }) => name));
+  const declared = changedPackagesFromChangesets(repository, head, entries, workspaceNames);
   const affected = affectedPackages(entries, packages);
   const uncovered = new Set([...affected].filter((name) => !declared.has(name)));
   const exception = addedException(repository, head, entries);

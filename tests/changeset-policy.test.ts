@@ -14,6 +14,7 @@ type MutableException = RecordValue & {
   files: Array<RecordValue & { changeClass: string; headSha256: string; path: string }>;
   issue: string;
   observedRegistryEvidence: RecordValue & {
+    capturedAt: string;
     command: string;
     package: string;
     responseSha256: string;
@@ -134,7 +135,7 @@ function validException(fix: Fixture, mutate?: (record: MutableException) => voi
       version: "0.1.0",
       status: "not-found",
       httpStatus: 404,
-      observedAt: "2026-09-17T12:00:00Z",
+      capturedAt: "2026-09-17T12:00:00Z",
       command: "npm view @kalada/core@0.1.0 version --json",
       response: registryResponse,
       responseSha256: hash(registryResponse),
@@ -191,6 +192,23 @@ describe("ordinary Changeset policy", () => {
     const fix = fixture();
     write(fix.path, "packages/core/src/index.ts", "export const value = 2;\n");
     expect(() => validate(fix, commit(fix.path))).toThrow(/Missing Changeset/u);
+  });
+
+  it("rejects a Changeset declaring only an unknown workspace package", () => {
+    const fix = fixture();
+    write(fix.path, ".changeset/unknown.md", changeset("@bogus/pkg"));
+    expect(() => validate(fix, commit(fix.path))).toThrow(/not in the publishable workspace/u);
+  });
+
+  it("rejects mixed real and unknown workspace package declarations", () => {
+    const fix = fixture();
+    write(fix.path, "packages/core/src/index.ts", "export const value = 2;\n");
+    write(
+      fix.path,
+      ".changeset/mixed.md",
+      '---\n"@kalada/core": patch\n"@bogus/pkg": patch\n---\n\nMixed declarations.\n',
+    );
+    expect(() => validate(fix, commit(fix.path))).toThrow(/@bogus\/pkg.*not in/u);
   });
 
   it("rejects an empty Changeset", () => {
@@ -270,6 +288,28 @@ describe("ordinary Changeset policy", () => {
     const fix = fixture();
     expect(() => validate(fix, validException(fix, mutate))).toThrow();
   });
+
+  it.each(["2026-13-01T00:00:00Z", "2025-02-29T00:00:00Z", "2026-01-01T24:00:00Z"])(
+    "rejects invalid registry evidence calendar value %s",
+    (capturedAt) => {
+      const fix = fixture();
+      const head = validException(fix, (record) => {
+        record.observedRegistryEvidence.capturedAt = capturedAt;
+      });
+      expect(() => validate(fix, head)).toThrow(/timestamp|schema/u);
+    },
+  );
+
+  it.each(["2024-02-29T23:59:59Z", "2000-02-29T00:00:00.123456789Z"])(
+    "accepts valid UTC RFC3339 edge %s",
+    (capturedAt) => {
+      const fix = fixture();
+      const head = validException(fix, (record) => {
+        record.observedRegistryEvidence.capturedAt = capturedAt;
+      });
+      expect(() => validate(fix, head)).not.toThrow();
+    },
+  );
 
   it("rejects a manifest change beyond repository", () => {
     const fix = fixture();

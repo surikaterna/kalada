@@ -41,7 +41,7 @@ export type ReleaseException = {
     version: string;
     status: "not-found";
     httpStatus: 404;
-    observedAt: string;
+    capturedAt: string;
     command: string;
     response: string;
     responseSha256: string;

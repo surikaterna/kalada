@@ -152,7 +152,32 @@ function validateEvidence(record: ReleaseException): void {
   if (sha256(Buffer.from(evidence.response, "utf8")) !== evidence.responseSha256) {
     throw new Error("Registry evidence response hash does not match");
   }
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(evidence.observedAt)) {
-    throw new Error("Registry evidence timestamp must be UTC ISO-8601");
+  if (!isUtcRfc3339(evidence.capturedAt)) throw new Error("Registry evidence timestamp is invalid");
+}
+
+function isUtcRfc3339(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/u.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  if (
+    !year ||
+    !month ||
+    !day ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined
+  ) {
+    return false;
   }
+  if (month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  return day <= daysInMonth(year, month);
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }

@@ -11,6 +11,7 @@ export function changedPackagesFromChangesets(
   repository: string,
   head: string,
   entries: DiffEntry[],
+  workspacePackages: Set<string>,
 ): Set<string> {
   const packages = new Set<string>();
   for (const { path } of addedChangesets(entries)) {
@@ -21,6 +22,11 @@ export function changedPackagesFromChangesets(
     for (const line of match[1].split("\n")) {
       const item = /^['"]?([^'"]+)['"]?:\s*(patch|minor|major)$/u.exec(line.trim());
       if (!item?.[1]) throw new Error(`${path} has unsupported frontmatter`);
+      if (!workspacePackages.has(item[1])) {
+        throw new Error(
+          `${path} declares package ${item[1]} which is not in the publishable workspace`,
+        );
+      }
       packages.add(item[1]);
     }
   }

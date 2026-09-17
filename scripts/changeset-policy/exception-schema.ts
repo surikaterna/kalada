@@ -5,7 +5,7 @@ import type { ReleaseException } from "./types.js";
 
 const schemaPath = resolve(import.meta.dirname, "../../release-exceptions/schema.v1.json");
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
-const ajv = new Ajv({ allErrors: true, strict: true, formats: { "date-time": true } });
+const ajv = new Ajv({ allErrors: true, strict: true });
 const validate = ajv.compile<ReleaseException>(schema);
 
 export function parseException(value: Buffer, path: string): ReleaseException {
