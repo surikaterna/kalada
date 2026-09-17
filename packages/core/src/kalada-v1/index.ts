@@ -1,5 +1,7 @@
 export { canonicalizeKaladaV1Program } from "./canonicalize.js";
 export { decodeKaladaValue, type EncodedKaladaValueV1, encodeKaladaValue } from "./codec.js";
+export { compileKaladaV1Program } from "./compile.js";
+export { collectKaladaV1Dependencies } from "./dependencies.js";
 export { KaladaV1 } from "./factories.js";
 export type { JsonPrimitive, JsonValue } from "./json.js";
 export { DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
