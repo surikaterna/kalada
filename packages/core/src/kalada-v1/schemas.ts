@@ -2,30 +2,38 @@ import { DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
 
 export type KaladaV1JsonSchema = Readonly<Record<string, unknown>>;
 
-const jsonValue = {
-  anyOf: [
-    { type: "null" },
-    { type: "boolean" },
-    { type: "number", minimum: -1.7976931348623157e308, maximum: 1.7976931348623157e308 },
-    { type: "string", maxLength: DEFAULT_KALADA_V1_LIMITS.maxStringLength },
-    {
-      type: "array",
-      maxItems: DEFAULT_KALADA_V1_LIMITS.maxNodes,
-      items: { $ref: "#/$defs/jsonValue" },
-    },
-    {
-      type: "object",
-      maxProperties: DEFAULT_KALADA_V1_LIMITS.maxNodes,
-      propertyNames: {
-        allOf: [
-          { maxLength: DEFAULT_KALADA_V1_LIMITS.maxStringLength },
-          { not: { enum: ["__proto__", "constructor", "prototype"] } },
-        ],
+const jsonValue = jsonValueSchema("#/$defs/jsonValue", DEFAULT_KALADA_V1_LIMITS.maxValueNodes - 1);
+const encodedJsonValue = jsonValueSchema(
+  "#/$defs/encodedJsonValue",
+  DEFAULT_KALADA_V1_LIMITS.maxValueNodes - 2,
+);
+
+function jsonValueSchema(reference: string, maxContainerSize: number): Record<string, unknown> {
+  return {
+    anyOf: [
+      { type: "null" },
+      { type: "boolean" },
+      { type: "number", minimum: -1.7976931348623157e308, maximum: 1.7976931348623157e308 },
+      { type: "string", maxLength: DEFAULT_KALADA_V1_LIMITS.maxStringLength },
+      {
+        type: "array",
+        maxItems: maxContainerSize,
+        items: { $ref: reference },
       },
-      additionalProperties: { $ref: "#/$defs/jsonValue" },
-    },
-  ],
-};
+      {
+        type: "object",
+        maxProperties: maxContainerSize,
+        propertyNames: {
+          allOf: [
+            { maxLength: DEFAULT_KALADA_V1_LIMITS.maxStringLength },
+            { not: { enum: ["__proto__", "constructor", "prototype"] } },
+          ],
+        },
+        additionalProperties: { $ref: reference },
+      },
+    ],
+  };
+}
 
 const expression = {
   oneOf: [
@@ -61,7 +69,7 @@ export const KALADA_V1_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://kalada.dev/schema/program/kalada-v1",
   $comment:
-    "Shape is canonical; aggregate depth, node, and evaluation limits remain runtime-authoritative.",
+    "The schema enforces canonical shape and local string/container bounds. Aggregate AST depth, AST nodes, value nodes, and evaluation steps remain runtime-authoritative.",
   type: "object",
   properties: {
     format: { const: "kalada-program" },
@@ -79,10 +87,10 @@ export const KALADA_VALUE_V1_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $id: "https://kalada.dev/schema/value/kalada-value-v1",
   $ref: "#/$defs/encodedValue",
   $defs: {
-    jsonValue,
+    encodedJsonValue,
     encodedValue: {
       oneOf: [
-        valueEnvelope("Json", "value", { $ref: "#/$defs/jsonValue" }),
+        valueEnvelope("Json", "value", { $ref: "#/$defs/encodedJsonValue" }),
         valueEnvelope("Option", "none"),
         valueEnvelope("Option", "some", { $ref: "#/$defs/encodedValue" }),
         valueEnvelope("Result", "ok", { $ref: "#/$defs/encodedValue" }),

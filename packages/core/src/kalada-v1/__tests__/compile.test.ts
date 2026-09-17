@@ -143,3 +143,17 @@ it("extracts first-seen external dependencies with lexical exclusions", () => {
   const compiled = compileKaladaV1Program(KaladaV1.program(expression));
   expect(compiled.ok && compiled.value.dependencies).toEqual(["initializer", "source"]);
 });
+
+it("deduplicates custom references by property-order-independent canonical identity", () => {
+  type Reference = { [key: string]: number };
+  const first: Reference = { a: 1, b: 2 };
+  const second: Reference = { b: 2, a: 1 };
+  const expression = KaladaV1.binding("unused", KaladaV1.ref(first), KaladaV1.ref(second));
+  const compiled = compileKaladaV1Program<Reference>(KaladaV1.program(expression), {
+    reference: {
+      validate: (input): input is Reference => typeof input === "object" && input !== null,
+      canonicalize: (reference) => reference,
+    },
+  });
+  expect(compiled.ok && compiled.value.dependencies).toEqual([{ a: 1, b: 2 }]);
+});

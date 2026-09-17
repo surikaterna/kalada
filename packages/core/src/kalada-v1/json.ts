@@ -17,12 +17,32 @@ export interface JsonCloneLimits {
   readonly maxStringLength: number;
 }
 
+export interface JsonCloneResult {
+  readonly value: JsonValue;
+  readonly nodes: number;
+}
+
 export function cloneJson(input: unknown, limits: JsonCloneLimits): JsonValue {
-  return cloneValue(input, 0, {
+  return cloneJsonWithStats(input, limits).value;
+}
+
+export function cloneJsonWithStats(input: unknown, limits: JsonCloneLimits): JsonCloneResult {
+  const state: CloneState = {
     ...limits,
     active: new WeakSet(),
     nodes: 0,
-  });
+  };
+  const value = cloneValue(input, 0, state);
+  return { value, nodes: state.nodes };
+}
+
+export function canonicalJsonIdentity(value: JsonValue): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJsonIdentity).join(",")}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJsonIdentity(value[key] as JsonValue)}`)
+    .join(",")}}`;
 }
 
 function cloneValue(input: unknown, depth: number, state: CloneState): JsonValue {

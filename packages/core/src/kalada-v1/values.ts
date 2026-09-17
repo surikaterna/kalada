@@ -4,24 +4,31 @@ export type KaladaValue = JsonValue | OptionValue | ResultValue;
 export type OptionValue = SomeValue | NoneValue;
 export type ResultValue = OkValue | ErrValue;
 
+declare const optionBrand: unique symbol;
+declare const resultBrand: unique symbol;
+
 export interface SomeValue {
+  readonly [optionBrand]: true;
   readonly type: "Option";
   readonly variant: "some";
   readonly value: KaladaValue;
 }
 
 export interface NoneValue {
+  readonly [optionBrand]: true;
   readonly type: "Option";
   readonly variant: "none";
 }
 
 export interface OkValue {
+  readonly [resultBrand]: true;
   readonly type: "Result";
   readonly variant: "ok";
   readonly value: KaladaValue;
 }
 
 export interface ErrValue {
+  readonly [resultBrand]: true;
   readonly type: "Result";
   readonly variant: "err";
   readonly value: KaladaValue;
@@ -46,11 +53,15 @@ function snapshot(value: KaladaValue): KaladaValue {
   return cloneJson(value, DEFAULT_VALUE_LIMITS);
 }
 
-const NONE = branded(optionBrands, { type: "Option", variant: "none" } as const);
+const NONE = branded(optionBrands, { type: "Option", variant: "none" } as unknown as NoneValue);
 
 export const Option = Object.freeze({
   some(value: KaladaValue): SomeValue {
-    return branded(optionBrands, { type: "Option", variant: "some", value: snapshot(value) });
+    return branded(optionBrands, {
+      type: "Option",
+      variant: "some",
+      value: snapshot(value),
+    } as unknown as SomeValue);
   },
   none(): NoneValue {
     return NONE;
@@ -59,10 +70,18 @@ export const Option = Object.freeze({
 
 export const Result = Object.freeze({
   ok(value: KaladaValue): OkValue {
-    return branded(resultBrands, { type: "Result", variant: "ok", value: snapshot(value) });
+    return branded(resultBrands, {
+      type: "Result",
+      variant: "ok",
+      value: snapshot(value),
+    } as unknown as OkValue);
   },
   err(value: KaladaValue): ErrValue {
-    return branded(resultBrands, { type: "Result", variant: "err", value: snapshot(value) });
+    return branded(resultBrands, {
+      type: "Result",
+      variant: "err",
+      value: snapshot(value),
+    } as unknown as ErrValue);
   },
 });
 

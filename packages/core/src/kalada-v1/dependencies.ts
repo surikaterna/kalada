@@ -1,4 +1,4 @@
-import type { JsonValue } from "./json.js";
+import { canonicalJsonIdentity, type JsonValue } from "./json.js";
 import type { KaladaV1Expression, MatchArm } from "./types.js";
 
 export function collectKaladaV1Dependencies<R extends JsonValue>(
@@ -62,7 +62,7 @@ function addReference<R extends JsonValue>(
   identities: Set<string>,
 ): void {
   if (typeof reference === "string" && scope.has(reference)) return;
-  const identity = JSON.stringify(reference);
+  const identity = canonicalJsonIdentity(reference);
   if (identities.has(identity)) return;
   identities.add(identity);
   output.push(reference);

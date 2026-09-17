@@ -123,6 +123,35 @@ it("enforces configured structure and string limits", () => {
   ).toMatchObject({ ok: false, diagnostic: { code: "KALADA_LIMIT_EXCEEDED" } });
   const nested = KaladaV1.Option.some(KaladaV1.Option.some(literal(1)));
   expect(
-    canonicalizeKaladaV1Program(KaladaV1.program(nested), { limits: { maxDepth: 1 } }),
+    canonicalizeKaladaV1Program(KaladaV1.program(nested), { limits: { maxAstDepth: 1 } }),
   ).toMatchObject({ ok: false, diagnostic: { code: "KALADA_LIMIT_EXCEEDED" } });
+});
+
+it("counts AST and embedded values independently and in aggregate", () => {
+  const expression = KaladaV1.binding("x", KaladaV1.literal([1, 2]), KaladaV1.literal([3, 4]));
+  const input = KaladaV1.program(expression);
+  expect(
+    canonicalizeKaladaV1Program(input, { limits: { maxAstNodes: 3, maxValueNodes: 6 } }),
+  ).toMatchObject({ ok: true });
+  expect(
+    canonicalizeKaladaV1Program(input, { limits: { maxAstNodes: 2, maxValueNodes: 6 } }),
+  ).toMatchObject({ ok: false, diagnostic: { code: "KALADA_LIMIT_EXCEEDED" } });
+  expect(
+    canonicalizeKaladaV1Program(input, { limits: { maxAstNodes: 3, maxValueNodes: 5 } }),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression", "body", "value"] },
+  });
+});
+
+it("accepts the exact default string-reference boundary", () => {
+  const accepted = "r".repeat(1_000);
+  const rejected = "r".repeat(1_001);
+  expect(canonicalizeKaladaV1Program(KaladaV1.program(KaladaV1.ref(accepted)))).toMatchObject({
+    ok: true,
+  });
+  expect(canonicalizeKaladaV1Program(KaladaV1.program(KaladaV1.ref(rejected)))).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression", "ref"] },
+  });
 });

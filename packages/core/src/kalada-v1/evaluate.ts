@@ -149,7 +149,11 @@ function missingResolution(input: object, keys: readonly PropertyKey[], path: Pa
 function safeValue(input: unknown, path: Path, limits: KaladaV1Limits): KaladaValue {
   if (isOption(input) || isResult(input)) return input;
   try {
-    return cloneJson(input, limits);
+    return cloneJson(input, {
+      maxDepth: limits.maxValueDepth,
+      maxNodes: limits.maxValueNodes,
+      maxStringLength: limits.maxStringLength,
+    });
   } catch (error) {
     if (error instanceof RangeError) throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
     throw new KaladaFailure("KALADA_INVALID_RESULT", path);

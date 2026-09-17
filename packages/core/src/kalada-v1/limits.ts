@@ -1,16 +1,20 @@
 import type { KaladaV1Limits } from "./types.js";
 
 export const DEFAULT_KALADA_V1_LIMITS: KaladaV1Limits = Object.freeze({
-  maxDepth: 64,
-  maxNodes: 10_000,
+  maxAstDepth: 64,
+  maxAstNodes: 10_000,
+  maxValueDepth: 64,
+  maxValueNodes: 10_000,
   maxStringLength: 10_000,
   maxReferenceLength: 1_000,
   maxEvaluationSteps: 10_000,
 });
 
 const MAXIMUM: KaladaV1Limits = Object.freeze({
-  maxDepth: 256,
-  maxNodes: 100_000,
+  maxAstDepth: 256,
+  maxAstNodes: 100_000,
+  maxValueDepth: 256,
+  maxValueNodes: 100_000,
   maxStringLength: 1_000_000,
   maxReferenceLength: 100_000,
   maxEvaluationSteps: 100_000,

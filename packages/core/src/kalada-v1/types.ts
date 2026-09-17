@@ -73,8 +73,10 @@ export type KaladaV1Outcome<T> =
   | { readonly ok: false; readonly diagnostic: KaladaV1Diagnostic };
 
 export interface KaladaV1Limits {
-  readonly maxDepth: number;
-  readonly maxNodes: number;
+  readonly maxAstDepth: number;
+  readonly maxAstNodes: number;
+  readonly maxValueDepth: number;
+  readonly maxValueNodes: number;
   readonly maxStringLength: number;
   readonly maxReferenceLength: number;
   readonly maxEvaluationSteps: number;
