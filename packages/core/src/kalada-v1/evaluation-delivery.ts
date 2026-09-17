@@ -217,9 +217,6 @@ function dispatch<R extends JsonValue>(
   ensureCapacity(path, state);
   charge(path, state);
   state.callDepth += 1;
-  state.calls.push(
-    Object.freeze({ kind: "function-call", name: closure.name, path: Object.freeze([...path]) }),
-  );
   state.stack.push({
     kind: "user-return",
     phase: "body",
@@ -239,7 +236,6 @@ function deliverReturn<R extends JsonValue>(
   state.stack.pop();
   state.environment = frame.caller;
   state.callDepth -= 1;
-  state.calls.pop();
   if (!matchesType(state.value as RuntimeValue, frame.returns))
     fail("KALADA_FUNCTION_TYPE_MISMATCH", frame.path);
 }

@@ -17,7 +17,6 @@ export interface MachineState<R extends JsonValue> {
   readonly captures: ReadonlyMap<string, readonly string[]>;
   readonly instant: InstantValue | undefined;
   readonly stack: EvaluationFrame<R>[];
-  readonly calls: KaladaV1DiagnosticContextFrame[];
   task: EvaluationTask<R> | null;
   value: RuntimeValue | null;
   environment: RuntimeEnvironment;
@@ -94,10 +93,25 @@ export function unwind<R extends JsonValue>(state: MachineState<R>): void {
     if (frame.kind === "user-return") {
       state.environment = frame.caller;
       state.callDepth -= 1;
-      state.calls.pop();
     }
     if (frame.kind === "core-iteration") state.callDepth -= 1;
   }
+}
+
+export function diagnosticContext<R extends JsonValue>(
+  state: MachineState<R>,
+): readonly KaladaV1DiagnosticContextFrame[] {
+  const context: KaladaV1DiagnosticContextFrame[] = [];
+  for (let index = state.stack.length - 1; index >= 0 && context.length < 32; index -= 1) {
+    const frame = state.stack[index] as EvaluationFrame<R>;
+    if (frame.kind === "user-return") {
+      context.push({ kind: "function-call", name: frame.name, path: frame.path });
+    }
+    if (frame.kind === "core-iteration") {
+      context.push({ kind: "core-call", name: frame.operator, path: frame.path });
+    }
+  }
+  return context;
 }
 
 export function fail(code: ConstructorParameters<typeof KaladaFailure>[0], path: Path): never {

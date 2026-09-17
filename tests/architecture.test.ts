@@ -33,4 +33,13 @@ describe("package boundaries", () => {
       expect(text).not.toContain(forbidden);
     }
   });
+
+  it("uses the continuation stack as the only evaluator call-stack authority", async () => {
+    const state = await readFile(resolve(core, "src/kalada-v1/evaluation-state.ts"), "utf8");
+    const delivery = await readFile(resolve(core, "src/kalada-v1/evaluation-delivery.ts"), "utf8");
+    expect(state.match(/readonly stack:/gu)).toHaveLength(1);
+    expect(state).not.toContain("readonly calls:");
+    expect(delivery).not.toContain("calls.push");
+    expect(delivery).not.toContain("calls.pop");
+  });
 });

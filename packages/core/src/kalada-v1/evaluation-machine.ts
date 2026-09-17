@@ -7,6 +7,7 @@ import {
   charge,
   copyCaptures,
   deliver,
+  diagnosticContext,
   evaluate,
   fail,
   type MachineState,
@@ -30,6 +31,19 @@ import { temporalLeaf } from "./temporal-evaluation.js";
 import type { KaladaV1Expression, KaladaV1FunctionCapture, KaladaV1Resolver } from "./types.js";
 import { type KaladaValue, Option } from "./values.js";
 
+const FUNCTION_RUNTIME_DIAGNOSTICS = new Set([
+  "KALADA_CAPTURE_LIMIT",
+  "KALADA_NOT_CALLABLE",
+  "KALADA_FUNCTION_ARITY",
+  "KALADA_FUNCTION_TYPE_MISMATCH",
+  "KALADA_CLOSURE_LIMIT",
+  "KALADA_CALL_DEPTH_LIMIT",
+  "KALADA_CONTINUATION_LIMIT",
+  "KALADA_COLLECTION_TYPE_MISMATCH",
+  "KALADA_COLLECTION_LIMIT",
+  "KALADA_FUNCTION_ESCAPE",
+]);
+
 export function runEvaluation<R extends JsonValue>(
   expression: KaladaV1Expression<R>,
   resolve: KaladaV1Resolver<R>,
@@ -44,7 +58,6 @@ export function runEvaluation<R extends JsonValue>(
     captures: captureMap(functions),
     instant,
     stack: [],
-    calls: [],
     task: { node: expression, path: ["expression"], environment },
     value: null,
     environment,
@@ -57,9 +70,10 @@ export function runEvaluation<R extends JsonValue>(
     return runLoop(state);
   } catch (error) {
     if (!(error instanceof KaladaFailure) || error.context) throw error;
-    const context = state.calls.slice(-32).reverse();
+    const context = diagnosticContext(state);
+    const includeContext = context.length > 0 || FUNCTION_RUNTIME_DIAGNOSTICS.has(error.code);
     unwind(state);
-    throw new KaladaFailure(error.code, error.path, context.length === 0 ? undefined : context);
+    throw new KaladaFailure(error.code, error.path, includeContext ? context : undefined);
   }
 }
 
