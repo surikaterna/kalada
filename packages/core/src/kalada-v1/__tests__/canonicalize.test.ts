@@ -155,3 +155,28 @@ it("accepts the exact default string-reference boundary", () => {
     diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression", "ref"] },
   });
 });
+
+it("canonicalizes arrays without invoking a hostile length get trap", () => {
+  const hostile = new Proxy([1], {
+    get: (target, property, receiver) => {
+      if (property === "length") throw new Error("hostile length");
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  expect(canonicalizeKaladaV1Program(KaladaV1.program(KaladaV1.literal(hostile)))).toMatchObject({
+    ok: true,
+    value: { expression: { value: [1] } },
+  });
+  const descriptorTrap = new Proxy([1], {
+    getOwnPropertyDescriptor: (target, property) => {
+      if (property === "length") throw new Error("hostile descriptor");
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+  expect(
+    canonicalizeKaladaV1Program(KaladaV1.program(KaladaV1.literal(descriptorTrap))),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_INVALID_INPUT", path: ["expression", "value"] },
+  });
+});

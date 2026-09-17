@@ -1,4 +1,4 @@
-import { cloneJson, deepEqualJson, type JsonValue } from "./json.js";
+import { cloneJson, cloneJsonWithStats, deepEqualJson, type JsonValue } from "./json.js";
 
 export type KaladaValue = JsonValue | OptionValue | ResultValue;
 export type OptionValue = SomeValue | NoneValue;
@@ -97,6 +97,36 @@ export function equalKaladaValues(left: KaladaValue, right: KaladaValue): boolea
   if (isOption(left) || isOption(right)) return equalOptions(left, right);
   if (isResult(left) || isResult(right)) return equalResults(left, right);
   return deepEqualJson(left, right);
+}
+
+export function validateKaladaValueLimits(
+  value: KaladaValue,
+  limits: {
+    readonly maxDepth: number;
+    readonly maxNodes: number;
+    readonly maxStringLength: number;
+  },
+): void {
+  const seen = new WeakSet<object>();
+  let current = value;
+  let depth = 0;
+  let nodes = 0;
+  while (isOption(current) || isResult(current)) {
+    nodes += 1;
+    if (depth > limits.maxDepth || nodes > limits.maxNodes) throw new RangeError("limit");
+    if (seen.has(current)) throw new TypeError("cycle");
+    seen.add(current);
+    if (isOption(current) && current.variant === "none") return;
+    current = current.value;
+    depth += 1;
+  }
+  const remainingDepth = limits.maxDepth - depth;
+  if (remainingDepth < 0) throw new RangeError("limit");
+  cloneJsonWithStats(current, {
+    maxDepth: remainingDepth,
+    maxNodes: limits.maxNodes - nodes,
+    maxStringLength: limits.maxStringLength,
+  });
 }
 
 function equalOptions(left: KaladaValue, right: KaladaValue): boolean {

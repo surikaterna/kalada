@@ -127,6 +127,36 @@ it("accepts only branded ADTs from resolvers and snapshots JSON", () => {
   });
 });
 
+it("enforces exact resolver-branded ADT depth and node boundaries", () => {
+  const expression = KaladaV1.program(KaladaV1.ref("host"));
+  const depthPass = compileKaladaV1Program(expression, {
+    limits: { maxValueDepth: 1, maxValueNodes: 2 },
+  });
+  const depthFail = compileKaladaV1Program(expression, {
+    limits: { maxValueDepth: 1, maxValueNodes: 3 },
+  });
+  const nodeFail = compileKaladaV1Program(expression, {
+    limits: { maxValueDepth: 2, maxValueNodes: 2 },
+  });
+  const oneDeep = Option.some(1);
+  const twoDeep = Option.some(oneDeep);
+  expect(
+    depthPass.ok && depthPass.value.evaluate(() => ({ found: true, value: oneDeep })),
+  ).toMatchObject({ ok: true });
+  expect(
+    depthFail.ok && depthFail.value.evaluate(() => ({ found: true, value: twoDeep })),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression"] },
+  });
+  expect(
+    nodeFail.ok && nodeFail.value.evaluate(() => ({ found: true, value: twoDeep })),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression"] },
+  });
+});
+
 it("extracts first-seen external dependencies with lexical exclusions", () => {
   const expression = KaladaV1.binding(
     "local",

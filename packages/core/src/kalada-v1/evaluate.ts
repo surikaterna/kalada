@@ -8,7 +8,14 @@ import type {
   KaladaV1Resolver,
   MatchArm,
 } from "./types.js";
-import { isOption, isResult, type KaladaValue, Option, Result } from "./values.js";
+import {
+  isOption,
+  isResult,
+  type KaladaValue,
+  Option,
+  Result,
+  validateKaladaValueLimits,
+} from "./values.js";
 
 type Path = readonly (string | number)[];
 interface State<R extends JsonValue> {
@@ -147,8 +154,15 @@ function missingResolution(input: object, keys: readonly PropertyKey[], path: Pa
 }
 
 function safeValue(input: unknown, path: Path, limits: KaladaV1Limits): KaladaValue {
-  if (isOption(input) || isResult(input)) return input;
   try {
+    if (isOption(input) || isResult(input)) {
+      validateKaladaValueLimits(input, {
+        maxDepth: limits.maxValueDepth,
+        maxNodes: limits.maxValueNodes,
+        maxStringLength: limits.maxStringLength,
+      });
+      return input;
+    }
     return cloneJson(input, {
       maxDepth: limits.maxValueDepth,
       maxNodes: limits.maxValueNodes,

@@ -77,6 +77,32 @@ it("contains hostile encoded accessors and proxies", () => {
   expect(() => decodeKaladaValue(keysProxy)).toThrow(TypeError);
 });
 
+it("contains throwing array length traps across codec entry points", () => {
+  const hostile = new Proxy([], {
+    get: (target, property, receiver) => {
+      if (property === "length") throw new Error("hostile length");
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  expect(() => encodeKaladaValue(hostile as never)).not.toThrow();
+  const encoded = {
+    format: "kalada-value",
+    version: 1,
+    type: "Json",
+    variant: "value",
+    value: hostile,
+  };
+  expect(() => decodeKaladaValue(encoded)).not.toThrow();
+  const descriptorTrap = new Proxy([1], {
+    getOwnPropertyDescriptor: (target, property) => {
+      if (property === "length") throw new Error("hostile descriptor");
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+  expect(() => encodeKaladaValue(descriptorTrap as never)).toThrow(TypeError);
+  expect(() => decodeKaladaValue({ ...encoded, value: descriptorTrap })).toThrow(TypeError);
+});
+
 it("enforces exact codec string and flat-container boundaries", () => {
   expect(() => encodeKaladaValue("x".repeat(10_000))).not.toThrow();
   expect(() => encodeKaladaValue("x".repeat(10_001))).toThrow(RangeError);

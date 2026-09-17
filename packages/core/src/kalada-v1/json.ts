@@ -74,13 +74,28 @@ function cloneObject(input: object, depth: number, state: CloneState): JsonValue
 }
 
 function cloneArray(input: unknown[], depth: number, state: CloneState): JsonValue[] {
+  const length = arrayLength(input);
   const keys = safeKeys(input);
-  if (keys.length !== input.length + 1 || !keys.includes("length")) throw new TypeError("array");
+  if (keys.length !== length + 1 || !keys.includes("length")) throw new TypeError("array");
   const output: JsonValue[] = [];
-  for (let index = 0; index < input.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     output.push(cloneValue(dataValue(input, String(index)), depth + 1, state));
   }
   return Object.freeze(output) as JsonValue[];
+}
+
+function arrayLength(input: unknown[]): number {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(input, "length");
+  } catch {
+    throw new TypeError("array");
+  }
+  if (!descriptor || !("value" in descriptor) || !Number.isSafeInteger(descriptor.value)) {
+    throw new TypeError("array");
+  }
+  if (descriptor.value < 0 || descriptor.value > 0xffff_ffff) throw new TypeError("array");
+  return descriptor.value;
 }
 
 function cloneRecord(
