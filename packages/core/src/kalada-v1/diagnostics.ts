@@ -1,4 +1,9 @@
-import type { KaladaV1Diagnostic, KaladaV1DiagnosticCode, KaladaV1Outcome } from "./types.js";
+import type {
+  KaladaV1Diagnostic,
+  KaladaV1DiagnosticCode,
+  KaladaV1DiagnosticContextFrame,
+  KaladaV1Outcome,
+} from "./types.js";
 
 const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze({
   KALADA_INVALID_INPUT: "Kalada program input is invalid.",
@@ -37,24 +42,40 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
 export class KaladaFailure extends Error {
   readonly code: KaladaV1DiagnosticCode;
   readonly path: readonly (string | number)[];
+  readonly context?: readonly KaladaV1DiagnosticContextFrame[];
 
-  constructor(code: KaladaV1DiagnosticCode, path: readonly (string | number)[]) {
+  constructor(
+    code: KaladaV1DiagnosticCode,
+    path: readonly (string | number)[],
+    context?: readonly KaladaV1DiagnosticContextFrame[],
+  ) {
     super(code);
     this.code = code;
     this.path = path;
+    this.context = context;
   }
 }
 
 export function failure<T>(
   code: KaladaV1DiagnosticCode,
   path: readonly (string | number)[],
+  context?: readonly KaladaV1DiagnosticContextFrame[],
 ): KaladaV1Outcome<T> {
   const diagnostic: KaladaV1Diagnostic = Object.freeze({
     code,
     path: Object.freeze([...path]),
     message: MESSAGES[code],
+    ...(context === undefined ? {} : { context: freezeContext(context) }),
   });
   return Object.freeze({ ok: false, diagnostic });
+}
+
+function freezeContext(
+  context: readonly KaladaV1DiagnosticContextFrame[],
+): readonly KaladaV1DiagnosticContextFrame[] {
+  return Object.freeze(
+    context.map((frame) => Object.freeze({ ...frame, path: Object.freeze([...frame.path]) })),
+  );
 }
 
 export function success<T>(value: T): KaladaV1Outcome<T> {
