@@ -1,5 +1,13 @@
 # @kalada/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 68d00d8: Add the `kalada-v1` canonical typed-function AST, factories, schemas, static signature checks, lexical capture metadata, dependency traversal, diagnostics, and limits for Kalada #23 (K6-2), parent #6, and Formbar #93. Runtime function execution remains deferred, and module/import hooks from #21 remain excluded.
+- bf3257e: Execute typed lexical closures, higher-order calls, and bounded recursion through the iterative `kalada-v1` continuation machine for Kalada #24 (K6-3), parent #6, and Formbar #93. Core collection execution and modules/imports remain deferred.
+- 28e743d: Execute bounded `map`, `filter`, `some`, and `every` core-function values through the shared `kalada-v1` callable continuation machine for Kalada #25 (K6-4), parent #6, and Formbar #93. Modules and imports from #21 remain excluded.
+
 ## 0.3.0
 
 ### Minor Changes
