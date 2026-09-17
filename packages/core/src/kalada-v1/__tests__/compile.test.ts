@@ -138,6 +138,9 @@ it("enforces exact resolver-branded ADT depth and node boundaries", () => {
   const nodeFail = compileKaladaV1Program(expression, {
     limits: { maxValueDepth: 2, maxValueNodes: 2 },
   });
+  const nodePass = compileKaladaV1Program(expression, {
+    limits: { maxValueDepth: 2, maxValueNodes: 3 },
+  });
   const oneDeep = Option.some(1);
   const twoDeep = Option.some(oneDeep);
   expect(
@@ -155,6 +158,9 @@ it("enforces exact resolver-branded ADT depth and node boundaries", () => {
     ok: false,
     diagnostic: { code: "KALADA_LIMIT_EXCEEDED", path: ["expression"] },
   });
+  expect(
+    nodePass.ok && nodePass.value.evaluate(() => ({ found: true, value: twoDeep })),
+  ).toMatchObject({ ok: true });
 });
 
 it("extracts first-seen external dependencies with lexical exclusions", () => {
