@@ -330,3 +330,50 @@ it("registers legacy and additive program schemas without identity collision", (
   }).not.toThrow();
   expect(KALADA_V1_FUNCTION_PROGRAM_SCHEMA.$id).not.toBe(KALADA_V1_PROGRAM_SCHEMA.$id);
 });
+
+it("checks known match branches when the other Option branch is dynamic", () => {
+  const compileMatch = (some: ReturnType<typeof KaladaV1.ref>, none: ReturnType<typeof literal>) =>
+    compileKaladaV1Program(
+      KaladaV1.program(
+        KaladaV1.function(
+          [],
+          number,
+          KaladaV1.match("Option", KaladaV1.ref("input"), [
+            KaladaV1.arm("some", some, "value"),
+            KaladaV1.arm("none", none),
+          ]),
+        ),
+      ),
+    );
+  expect(compileMatch(KaladaV1.ref("external"), literal(false))).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_FUNCTION_TYPE_MISMATCH", path: ["expression", "body"] },
+  });
+  expect(compileMatch(KaladaV1.ref("external"), literal(1))).toMatchObject({ ok: true });
+});
+
+it("checks known-first branches when the other Option branch is dynamic", () => {
+  const body = KaladaV1.match("Option", KaladaV1.ref("input"), [
+    KaladaV1.arm("some", literal(false), "value"),
+    KaladaV1.arm("none", KaladaV1.ref("external")),
+  ]);
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], number, body))),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_FUNCTION_TYPE_MISMATCH", path: ["expression", "body"] },
+  });
+});
+
+it("applies dynamic-branch checking symmetrically to Result matches", () => {
+  const body = KaladaV1.match("Result", KaladaV1.ref("input"), [
+    KaladaV1.arm("ok", KaladaV1.ref("external"), "value"),
+    KaladaV1.arm("err", literal(false), "error"),
+  ]);
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], number, body))),
+  ).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_FUNCTION_TYPE_MISMATCH", path: ["expression", "body"] },
+  });
+});

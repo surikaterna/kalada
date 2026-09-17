@@ -232,7 +232,6 @@ function assignable(actual: StaticType, expected: KaladaType): boolean {
 }
 
 function join(types: readonly StaticType[]): StaticType {
-  if (types.some((item) => item === DYNAMIC)) return DYNAMIC;
   const unique: StaticType[] = [];
   for (const item of types) {
     if (!unique.some((candidate) => staticEqual(candidate, item))) unique.push(item);
