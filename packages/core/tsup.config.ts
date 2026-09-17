@@ -21,6 +21,7 @@ export default defineConfig({
     "src/kalada-v1/limits.ts",
     "src/kalada-v1/schemas.ts",
     "src/kalada-v1/static-analysis.ts",
+    "src/kalada-v1/static-types.ts",
     "src/kalada-v1/temporal.ts",
     "src/kalada-v1/temporal-evaluation.ts",
     "src/kalada-v1/types.ts",

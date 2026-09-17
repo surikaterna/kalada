@@ -4,6 +4,7 @@ import {
   canonicalizeKaladaV1Program,
   compileKaladaV1Program,
   KALADA_V1_FUNCTION_PROGRAM_SCHEMA,
+  KALADA_V1_PROGRAM_SCHEMA,
   KaladaV1,
 } from "../index.js";
 
@@ -210,4 +211,122 @@ it("publishes a schema that accepts canonical function programs and rejects extr
   );
   expect(validate(program)).toBe(true);
   expect(validate({ ...program, imports: [] })).toBe(false);
+});
+
+it("preserves Option and Result shapes during expected return checking", () => {
+  const string = KaladaV1.Type.primitive("string");
+  const optionNumber = KaladaV1.Type.option(number);
+  const resultType = KaladaV1.Type.result(number, string);
+  const compileReturn = (returns: typeof number, body: ReturnType<typeof literal>) =>
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], returns, body)));
+  expect(compileReturn(number, KaladaV1.Option.none() as never)).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_FUNCTION_TYPE_MISMATCH" },
+  });
+  expect(compileReturn(optionNumber, KaladaV1.Option.none() as never)).toMatchObject({ ok: true });
+  expect(compileReturn(optionNumber, KaladaV1.Option.some(literal(1)) as never)).toMatchObject({
+    ok: true,
+  });
+  expect(compileReturn(optionNumber, KaladaV1.Option.some(literal(false)) as never)).toMatchObject({
+    ok: false,
+  });
+  expect(compileReturn(resultType, KaladaV1.Result.ok(literal(1)) as never)).toMatchObject({
+    ok: true,
+  });
+  expect(compileReturn(resultType, KaladaV1.Result.err(literal("bad")) as never)).toMatchObject({
+    ok: true,
+  });
+  expect(compileReturn(resultType, KaladaV1.Result.ok(literal(false)) as never)).toMatchObject({
+    ok: false,
+  });
+  expect(compileReturn(resultType, KaladaV1.Result.err(literal(2)) as never)).toMatchObject({
+    ok: false,
+  });
+});
+
+it("preserves temporal result types and rejects heterogeneous match joins", () => {
+  const instant = KaladaV1.Type.primitive("Instant");
+  const duration = KaladaV1.Type.primitive("Duration");
+  const arithmetic = KaladaV1.temporalArithmetic("add", KaladaV1.instant(1), KaladaV1.duration(2));
+  const durationArithmetic = KaladaV1.temporalArithmetic(
+    "subtract",
+    KaladaV1.instant(3),
+    KaladaV1.instant(1),
+  );
+  const temporalComparison = KaladaV1.temporalComparison(
+    "equal",
+    KaladaV1.duration(1),
+    KaladaV1.duration(1),
+  );
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], boolean, arithmetic))),
+  ).toMatchObject({ ok: false });
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], instant, arithmetic))),
+  ).toMatchObject({ ok: true });
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], duration, durationArithmetic))),
+  ).toMatchObject({ ok: true });
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], boolean, temporalComparison))),
+  ).toMatchObject({ ok: true });
+  const mixed = KaladaV1.match("Option", KaladaV1.Option.none(), [
+    KaladaV1.arm("some", literal(1), "value"),
+    KaladaV1.arm("none", literal(false)),
+  ]);
+  expect(
+    compileKaladaV1Program(KaladaV1.program(KaladaV1.function([], number, mixed))),
+  ).toMatchObject({ ok: false, diagnostic: { code: "KALADA_FUNCTION_TYPE_MISMATCH" } });
+});
+
+it("does not charge runtime materialization limits during static analysis", () => {
+  const group = KaladaV1.binding(
+    "captured",
+    literal(1),
+    KaladaV1.functionGroup(
+      [
+        KaladaV1.namedFunction("first", [], number, KaladaV1.ref("captured")),
+        KaladaV1.namedFunction("second", [], number, KaladaV1.ref("captured")),
+      ],
+      literal(0),
+    ),
+  );
+  expect(
+    compileKaladaV1Program(KaladaV1.program(group), {
+      limits: { maxClosures: 1, maxCapturedBindings: 1 },
+    }),
+  ).toMatchObject({ ok: true });
+});
+
+it("propagates typed Option and Result payloads through match branches", () => {
+  const string = KaladaV1.Type.primitive("string");
+  const optionBody = KaladaV1.match("Option", KaladaV1.ref("input"), [
+    KaladaV1.arm("some", KaladaV1.ref("value"), "value"),
+    KaladaV1.arm("none", literal(0)),
+  ]);
+  const optionFunction = KaladaV1.function(
+    [KaladaV1.parameter("input", KaladaV1.Type.option(number))],
+    number,
+    optionBody,
+  );
+  expect(compileKaladaV1Program(KaladaV1.program(optionFunction))).toMatchObject({ ok: true });
+  const resultBody = KaladaV1.match("Result", KaladaV1.ref("input"), [
+    KaladaV1.arm("ok", literal("ok"), "value"),
+    KaladaV1.arm("err", KaladaV1.ref("error"), "error"),
+  ]);
+  const resultFunction = KaladaV1.function(
+    [KaladaV1.parameter("input", KaladaV1.Type.result(number, string))],
+    string,
+    resultBody,
+  );
+  expect(compileKaladaV1Program(KaladaV1.program(resultFunction))).toMatchObject({ ok: true });
+});
+
+it("registers legacy and additive program schemas without identity collision", () => {
+  const ajv = new Ajv2020({ strict: false });
+  expect(() => {
+    ajv.addSchema(KALADA_V1_PROGRAM_SCHEMA);
+    ajv.addSchema(KALADA_V1_FUNCTION_PROGRAM_SCHEMA);
+  }).not.toThrow();
+  expect(KALADA_V1_FUNCTION_PROGRAM_SCHEMA.$id).not.toBe(KALADA_V1_PROGRAM_SCHEMA.$id);
 });

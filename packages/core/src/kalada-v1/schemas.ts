@@ -109,7 +109,7 @@ const expression = {
 
 export const KALADA_V1_FUNCTION_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "https://kalada.dev/schema/program/kalada-v1",
+  $id: "https://kalada.dev/schema/program/kalada-v1-functions",
   $comment:
     "The schema enforces canonical shape and local string/container bounds. Aggregate AST depth, AST nodes, value nodes, and evaluation steps remain runtime-authoritative.",
   type: "object",
