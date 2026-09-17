@@ -15,6 +15,7 @@
     "build": "bun run --filter '*' build",
     "changeset": "changeset",
     "changeset:check": "bun scripts/check-changesets.ts",
+    "compatibility:0.3.0": "bun run build && bun scripts/check-core-0.3.0-compatibility.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",
