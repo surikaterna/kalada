@@ -174,6 +174,28 @@ describe("ordinary Changeset policy", () => {
     expect(() => validate(fix, commit(fix.path))).not.toThrow();
   });
 
+  it("accepts the canonical YAML comment syntax from the Auditor probe", () => {
+    const fix = fixture();
+    write(fix.path, "packages/core/src/index.ts", "export const value = 2;\n");
+    write(
+      fix.path,
+      ".changeset/comment.md",
+      '---\n# valid YAML comment\n"@kalada/core": patch\n---\n\nValid with frontmatter comment.\n',
+    );
+    expect(() => validate(fix, commit(fix.path))).not.toThrow();
+  });
+
+  it.each([
+    ['\n"@kalada/core": minor\n', "Blank YAML lines."],
+    ['"@kalada/core": patch # inline YAML comment\n', "Inline YAML comment."],
+    ['"@kalada/core": none\n', "Canonical none release type."],
+  ])("accepts representative canonical frontmatter %#", (frontmatter, summary) => {
+    const fix = fixture();
+    write(fix.path, "packages/core/src/index.ts", "export const value = 2;\n");
+    write(fix.path, ".changeset/parity.md", `---\n${frontmatter}---\n\n${summary}\n`);
+    expect(() => validate(fix, commit(fix.path))).not.toThrow();
+  });
+
   it("accepts internal, documentation, CI, and test-only changes", () => {
     const fix = fixture();
     write(fix.path, "docs/policy.md", "Policy.\n");

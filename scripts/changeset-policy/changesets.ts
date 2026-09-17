@@ -1,3 +1,4 @@
+import { parseChangesetFile } from "@changesets/parse";
 import { readAt } from "./git.js";
 import type { DiffEntry } from "./types.js";
 
@@ -16,21 +17,27 @@ export function changedPackagesFromChangesets(
   const packages = new Set<string>();
   for (const { path } of addedChangesets(entries)) {
     const text = readAt(repository, head, path).toString("utf8");
-    const match = /^---\n([\s\S]*?)\n---\n+([\s\S]+)$/u.exec(text.trim());
-    if (!match?.[1]?.trim() || !match[2]?.trim())
-      throw new Error(`${path} must be a non-empty Changeset`);
-    for (const line of match[1].split("\n")) {
-      const item = /^['"]?([^'"]+)['"]?:\s*(patch|minor|major)$/u.exec(line.trim());
-      if (!item?.[1]) throw new Error(`${path} has unsupported frontmatter`);
-      if (!workspacePackages.has(item[1])) {
+    const releases = parseChangeset(text, path);
+    if (releases.length === 0) throw new Error(`${path} must be a non-empty Changeset`);
+    for (const { name } of releases) {
+      if (!workspacePackages.has(name)) {
         throw new Error(
-          `${path} declares package ${item[1]} which is not in the publishable workspace`,
+          `${path} declares package ${name} which is not in the publishable workspace`,
         );
       }
-      packages.add(item[1]);
+      packages.add(name);
     }
   }
   return packages;
+}
+
+function parseChangeset(text: string, path: string) {
+  try {
+    return parseChangesetFile(text).releases;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${path} is not a valid Changeset: ${detail}`, { cause: error });
+  }
 }
 
 export function assertNoChangedEmptyChangesets(

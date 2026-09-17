@@ -7,6 +7,7 @@
       "devDependencies": {
         "@biomejs/biome": "2.5.14",
         "@changesets/cli": "3.0.3",
+        "@changesets/parse": "1.0.0",
         "@types/node": "22.20.3",
         "ajv": "8.17.1",
         "kuery": "2.1.0",
@@ -17,7 +18,7 @@
     },
     "packages/core": {
       "name": "@kalada/core",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
   },
   "packages": {
