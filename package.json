@@ -14,6 +14,7 @@
   "scripts": {
     "build": "bun run --filter '*' build",
     "changeset": "changeset",
+    "changeset:check": "bun scripts/check-changesets.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",
