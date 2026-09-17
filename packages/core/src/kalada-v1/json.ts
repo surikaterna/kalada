@@ -63,7 +63,11 @@ function cloneArray(input: unknown[], depth: number, state: CloneState): JsonVal
   return Object.freeze(output) as JsonValue[];
 }
 
-function cloneRecord(input: object, depth: number, state: CloneState): { [key: string]: JsonValue } {
+function cloneRecord(
+  input: object,
+  depth: number,
+  state: CloneState,
+): { [key: string]: JsonValue } {
   const prototype = safePrototype(input);
   if (prototype !== Object.prototype && prototype !== null) throw new TypeError("object");
   const output = Object.create(null) as Record<string, JsonValue>;
@@ -116,10 +120,15 @@ export function deepEqualJson(left: JsonValue, right: JsonValue): boolean {
   const rightKeys = Object.keys(right);
   return (
     leftKeys.length === rightKeys.length &&
-    leftKeys.every((key) => key in right && deepEqualJson(left[key]!, right[key]!))
+    leftKeys.every(
+      (key) => key in right && deepEqualJson(left[key] as JsonValue, right[key] as JsonValue),
+    )
   );
 }
 
 function equalArrays(left: JsonValue[], right: JsonValue[]): boolean {
-  return left.length === right.length && left.every((value, index) => deepEqualJson(value, right[index]!));
+  return (
+    left.length === right.length &&
+    left.every((value, index) => deepEqualJson(value, right[index] as JsonValue))
+  );
 }

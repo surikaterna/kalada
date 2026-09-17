@@ -1,5 +1,5 @@
 import { cloneJson, dataValue, type JsonValue } from "./json.js";
-import { isOption, isResult, Option, Result, type KaladaValue } from "./values.js";
+import { isOption, isResult, type KaladaValue, Option, Result } from "./values.js";
 
 export type EncodedKaladaValueV1 =
   | JsonValue
@@ -18,7 +18,8 @@ export function encodeKaladaValue(value: KaladaValue): EncodedKaladaValueV1 {
     if (value.variant === "none") return frozenEnvelope("Option", "none");
     return frozenEnvelope("Option", "some", encodeKaladaValue(value.value));
   }
-  if (isResult(value)) return frozenEnvelope("Result", value.variant, encodeKaladaValue(value.value));
+  if (isResult(value))
+    return frozenEnvelope("Result", value.variant, encodeKaladaValue(value.value));
   return cloneJson(value, LIMITS);
 }
 
@@ -69,6 +70,7 @@ function frozenEnvelope(
   variant: "some" | "none" | "ok" | "err",
   value?: EncodedKaladaValueV1,
 ): EncodedKaladaValueV1 {
-  if (value === undefined) return Object.freeze({ format: "kalada-value", version: 1, type, variant });
+  if (value === undefined)
+    return Object.freeze({ format: "kalada-value", version: 1, type, variant });
   return Object.freeze({ format: "kalada-value", version: 1, type, variant, value });
 }

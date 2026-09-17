@@ -48,9 +48,25 @@ describe("kalada-v1 values", () => {
   });
 
   it("rejects malformed v1 envelopes and hostile descriptors", () => {
-    expect(() => decodeKaladaValue({ format: "kalada-value", version: 1, type: "Option", variant: "wat" })).toThrow();
-    const hostile = Object.defineProperty({}, "format", { enumerable: true, get: () => "kalada-value" });
+    expect(() =>
+      decodeKaladaValue({ format: "kalada-value", version: 1, type: "Option", variant: "wat" }),
+    ).toThrow();
+    const hostile = Object.defineProperty({}, "format", {
+      enumerable: true,
+      get: () => "kalada-value",
+    });
     expect(() => decodeKaladaValue(hostile)).toThrow();
-    expect(() => decodeKaladaValue(new Proxy({}, { ownKeys: () => { throw new Error("no"); } }))).toThrow();
+    expect(() =>
+      decodeKaladaValue(
+        new Proxy(
+          {},
+          {
+            ownKeys: () => {
+              throw new Error("no");
+            },
+          },
+        ),
+      ),
+    ).toThrow();
   });
 });

@@ -29,7 +29,11 @@ export interface ErrValue {
 
 const optionBrands = new WeakSet<object>();
 const resultBrands = new WeakSet<object>();
-const DEFAULT_VALUE_LIMITS = Object.freeze({ maxDepth: 64, maxNodes: 10_000, maxStringLength: 10_000 });
+const DEFAULT_VALUE_LIMITS = Object.freeze({
+  maxDepth: 64,
+  maxNodes: 10_000,
+  maxStringLength: 10_000,
+});
 
 function branded<T extends object>(brand: WeakSet<object>, value: T): T {
   Object.freeze(value);
