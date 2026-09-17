@@ -1,5 +1,6 @@
 {
   "artifact": {
+    "purpose": "Documentary provenance for the immutable npm artifact used to generate this fixture; these are not local package expectations.",
     "name": "@kalada/core",
     "version": "0.3.0",
     "sha1": "c963824e9e5470d461b10cfae944d1b1378a29c2",
@@ -13,7 +14,43 @@
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
-    "exportKeys": [".", "./kalada-v1", "./kuery-v1", "./package.json"],
+    "exports": {
+      "exact": {
+        ".": {
+          "import": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+          },
+          "require": {
+            "types": "./dist/index.d.cts",
+            "default": "./dist/index.cjs"
+          }
+        },
+        "./kuery-v1": {
+          "import": {
+            "types": "./dist/kuery-v1/index.d.ts",
+            "default": "./dist/kuery-v1/index.js"
+          },
+          "require": {
+            "types": "./dist/kuery-v1/index.d.cts",
+            "default": "./dist/kuery-v1/index.cjs"
+          }
+        },
+        "./package.json": "./package.json"
+      },
+      "additiveBaseline": {
+        "./kalada-v1": {
+          "import": {
+            "types": "./dist/kalada-v1/index.d.ts",
+            "default": "./dist/kalada-v1/index.js"
+          },
+          "require": {
+            "types": "./dist/kalada-v1/index.d.cts",
+            "default": "./dist/kalada-v1/index.cjs"
+          }
+        }
+      }
+    },
     "runtimeDependencyFields": ["dependencies", "optionalDependencies", "peerDependencies"]
   },
   "runtimeExports": {
@@ -52,6 +89,7 @@
     ]
   },
   "declarationSha256": {
+    "kaladaV1Purpose": "Documentary hashes of the 0.3.0 additive baseline; later kalada-v1 declarations may grow while preserving named baseline types.",
     "rootAndKueryV1EsmSet": "156fd97acd30486448c9edc614cdd939540b3475c5afc46a85c8352ed41c29bd",
     "rootAndKueryV1CjsSet": "bd32949fab213f31c9451964883e15a746147f776e6ebb26df3c9d5a5fc0ec6e",
     "rootEsm": "03d1ae9ef6cb97d4998bf71e1ef7186e99ca9517cdde68abf3425ade06f0b06c",

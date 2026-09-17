@@ -28,7 +28,17 @@ describe("published @kalada/core 0.3.0 compatibility", () => {
       module: fixture.package.module,
       types: fixture.package.types,
     });
-    expect(Object.keys(manifest.exports).sort()).toEqual(fixture.package.exportKeys);
+    for (const [subpath, entry] of Object.entries(fixture.package.exports.exact)) {
+      expect(manifest.exports[subpath]).toEqual(entry);
+    }
+    for (const [subpath, entry] of Object.entries(fixture.package.exports.additiveBaseline)) {
+      expect(manifest.exports[subpath]).toMatchObject(entry as object);
+    }
+    const expectedSubpaths = [
+      ...Object.keys(fixture.package.exports.exact),
+      ...Object.keys(fixture.package.exports.additiveBaseline),
+    ].sort();
+    expect(Object.keys(manifest.exports).sort()).toEqual(expectedSubpaths);
     for (const field of fixture.package.runtimeDependencyFields)
       expect(manifest[field]).toBeUndefined();
   });
