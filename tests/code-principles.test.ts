@@ -3,7 +3,10 @@ import { extname, resolve } from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-const sourceRoot = resolve(import.meta.dirname, "../packages/core/src");
+const sourceRoots = [
+  resolve(import.meta.dirname, "../packages/core/src"),
+  resolve(import.meta.dirname, "../scripts/changeset-policy"),
+];
 const nestedKinds = new Set([
   ts.SyntaxKind.ForStatement,
   ts.SyntaxKind.ForInStatement,
@@ -47,7 +50,7 @@ function functions(file: ts.SourceFile): ts.SignatureDeclaration[] {
 
 describe("production code principles", () => {
   it("limits file and function size and nesting", async () => {
-    for (const path of await sourceFiles(sourceRoot)) {
+    for (const path of (await Promise.all(sourceRoots.map(sourceFiles))).flat()) {
       const text = await readFile(path, "utf8");
       const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
       expect(text.split("\n").length, `${path} lines`).toBeLessThanOrEqual(400);

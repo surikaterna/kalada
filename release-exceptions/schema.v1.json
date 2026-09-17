@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/surikaterna/kalada/blob/main/release-exceptions/schema.v1.json",
+  "title": "Kalada release exception v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "exceptionClass",
+    "issue",
+    "repository",
+    "baseCommit",
+    "package",
+    "files",
+    "observedRegistryEvidence"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "exceptionClass": { "const": "already-versioned-unpublished-correction" },
+    "issue": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/issues/[1-9][0-9]*$"
+    },
+    "repository": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$" },
+    "baseCommit": { "$ref": "#/definitions/hash" },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "version",
+        "baseManifestSha256",
+        "headManifestSha256",
+        "repository"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^packages/[^/]+/package\\.json$" },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "baseManifestSha256": { "$ref": "#/definitions/sha256" },
+        "headManifestSha256": { "$ref": "#/definitions/sha256" },
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "url", "directory"],
+          "properties": {
+            "type": { "const": "git" },
+            "url": {
+              "type": "string",
+              "pattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$"
+            },
+            "directory": { "type": "string", "pattern": "^packages/[^/]+$" }
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "changeClass", "baseSha256", "headSha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "changeClass": { "enum": ["package-manifest-repository", "package-verification"] },
+          "baseSha256": { "$ref": "#/definitions/sha256" },
+          "headSha256": { "$ref": "#/definitions/sha256" }
+        }
+      }
+    },
+    "observedRegistryEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry",
+        "package",
+        "version",
+        "status",
+        "httpStatus",
+        "capturedAt",
+        "command",
+        "response",
+        "responseSha256"
+      ],
+      "properties": {
+        "registry": { "const": "https://registry.npmjs.org" },
+        "package": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "status": { "const": "not-found" },
+        "httpStatus": { "const": 404 },
+        "capturedAt": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+        },
+        "command": { "type": "string", "minLength": 1 },
+        "response": { "type": "string", "minLength": 1 },
+        "responseSha256": { "$ref": "#/definitions/sha256" }
+      }
+    }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
