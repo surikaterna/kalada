@@ -13,7 +13,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Anchor comparison branch to the PR event
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -34,7 +34,11 @@ jobs:
       - run: bun run package:smoke
       - name: Validate ordinary PR Changesets
         if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
-        run: bun x changeset status --since origin/main
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_REPOSITORY: ${{ github.event.repository.full_name }}
+        run: bun run changeset:check -- "$PR_BASE_SHA" "$PR_HEAD_SHA" "$PR_REPOSITORY"
       - name: Validate generated release integrity
         if: github.head_ref == 'changeset-release/main' && github.event.pull_request.head.repo.full_name == github.repository
         run: bun scripts/validate-release-pr.ts origin/main
