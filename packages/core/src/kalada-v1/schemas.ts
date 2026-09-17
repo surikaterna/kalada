@@ -60,6 +60,18 @@ const expression = {
       "variant",
       "value",
     ]),
+    node("instant", { milliseconds: safeInteger() }, ["milliseconds"]),
+    node("duration", { milliseconds: safeInteger() }, ["milliseconds"]),
+    node("current-instant", {}, []),
+    temporalNode("temporal-arithmetic", ["add", "subtract"]),
+    temporalNode("temporal-comparison", [
+      "equal",
+      "not-equal",
+      "less-than",
+      "less-than-or-equal",
+      "greater-than",
+      "greater-than-or-equal",
+    ]),
     matchNode("Option", [arm("some", true), arm("none", false)]),
     matchNode("Result", [arm("ok", true), arm("err", true)]),
   ],
@@ -95,6 +107,8 @@ export const KALADA_VALUE_V1_SCHEMA: KaladaV1JsonSchema = deepFreeze({
         valueEnvelope("Option", "some", { $ref: "#/$defs/encodedValue" }),
         valueEnvelope("Result", "ok", { $ref: "#/$defs/encodedValue" }),
         valueEnvelope("Result", "err", { $ref: "#/$defs/encodedValue" }),
+        valueEnvelope("Instant", "milliseconds", safeInteger()),
+        valueEnvelope("Duration", "milliseconds", safeInteger()),
       ],
     },
   },
@@ -110,6 +124,22 @@ function node(
     properties: { kind: { const: kind }, ...properties },
     required: ["kind", ...required],
     additionalProperties: false,
+  };
+}
+
+function temporalNode(kind: string, operators: readonly string[]): Record<string, unknown> {
+  return node(
+    kind,
+    { operator: { enum: operators }, left: expressionRef(), right: expressionRef() },
+    ["operator", "left", "right"],
+  );
+}
+
+function safeInteger(): Record<string, unknown> {
+  return {
+    type: "integer",
+    minimum: Number.MIN_SAFE_INTEGER,
+    maximum: Number.MAX_SAFE_INTEGER,
   };
 }
 

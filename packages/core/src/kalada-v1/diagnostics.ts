@@ -15,6 +15,11 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
   KALADA_ASYNC_UNSUPPORTED: "Kalada callbacks must return synchronously.",
   KALADA_INVALID_RESULT: "Kalada reference callback returned an invalid value.",
   KALADA_EVALUATION_LIMIT: "Kalada evaluation exceeded its configured step limit.",
+  KALADA_INSTANT_REQUIRED: "Kalada evaluation requires an explicit current Instant.",
+  KALADA_TEMPORAL_TYPE_MISMATCH: "Kalada temporal operation received incompatible values.",
+  KALADA_TEMPORAL_OVERFLOW: "Kalada temporal arithmetic exceeded safe integer milliseconds.",
+  KALADA_CLOCK_ERROR: "Kalada clock sampling failed.",
+  KALADA_INVALID_CLOCK: "Kalada clock returned an invalid Instant.",
 });
 
 export class KaladaFailure extends Error {

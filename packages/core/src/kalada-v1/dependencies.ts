@@ -20,13 +20,25 @@ function visit<R extends JsonValue>(
     addReference(node.ref, scope, output, identities);
     return;
   }
-  if (node.kind === "literal" || (node.kind === "option" && node.variant === "none")) return;
+  if (
+    node.kind === "literal" ||
+    node.kind === "instant" ||
+    node.kind === "duration" ||
+    node.kind === "current-instant" ||
+    (node.kind === "option" && node.variant === "none")
+  )
+    return;
   if (node.kind === "binding") {
     visitBinding(node, scope, output, identities);
     return;
   }
   if (node.kind === "match") {
     visitMatch(node.value, node.arms, scope, output, identities);
+    return;
+  }
+  if (node.kind === "temporal-arithmetic" || node.kind === "temporal-comparison") {
+    visit(node.left, scope, output, identities);
+    visit(node.right, scope, output, identities);
     return;
   }
   visit(node.value, scope, output, identities);

@@ -1,6 +1,7 @@
 import { cloneJson, cloneJsonWithStats, deepEqualJson, type JsonValue } from "./json.js";
+import { type DurationValue, type InstantValue, isDuration, isInstant } from "./temporal.js";
 
-export type KaladaValue = JsonValue | OptionValue | ResultValue;
+export type KaladaValue = JsonValue | OptionValue | ResultValue | InstantValue | DurationValue;
 export type OptionValue = SomeValue | NoneValue;
 export type ResultValue = OkValue | ErrValue;
 
@@ -49,7 +50,7 @@ function branded<T extends object>(brand: WeakSet<object>, value: T): T {
 }
 
 function snapshot(value: KaladaValue): KaladaValue {
-  if (isOption(value) || isResult(value)) return value;
+  if (isOption(value) || isResult(value) || isInstant(value) || isDuration(value)) return value;
   return cloneJson(value, DEFAULT_VALUE_LIMITS);
 }
 
@@ -94,6 +95,10 @@ export function isResult(value: unknown): value is ResultValue {
 }
 
 export function equalKaladaValues(left: KaladaValue, right: KaladaValue): boolean {
+  if (isInstant(left) || isInstant(right))
+    return isInstant(left) && isInstant(right) && left.milliseconds === right.milliseconds;
+  if (isDuration(left) || isDuration(right))
+    return isDuration(left) && isDuration(right) && left.milliseconds === right.milliseconds;
   if (isOption(left) || isOption(right)) return equalOptions(left, right);
   if (isResult(left) || isResult(right)) return equalResults(left, right);
   return deepEqualJson(left, right);
@@ -120,6 +125,10 @@ export function validateKaladaValueLimits(
     current = current.value;
     depth += 1;
   }
+  if (isInstant(current) || isDuration(current)) {
+    validateTemporalLeaf(depth, nodes, limits);
+    return;
+  }
   const remainingDepth = limits.maxDepth - depth;
   if (remainingDepth < 0) throw new RangeError("limit");
   cloneJsonWithStats(current, {
@@ -127,6 +136,14 @@ export function validateKaladaValueLimits(
     maxNodes: limits.maxNodes - nodes,
     maxStringLength: limits.maxStringLength,
   });
+}
+
+function validateTemporalLeaf(
+  depth: number,
+  nodes: number,
+  limits: { readonly maxDepth: number; readonly maxNodes: number },
+): void {
+  if (depth > limits.maxDepth || nodes + 1 > limits.maxNodes) throw new RangeError("limit");
 }
 
 function equalOptions(left: KaladaValue, right: KaladaValue): boolean {

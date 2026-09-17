@@ -1,31 +1,42 @@
-import { failure, KaladaFailure, success } from "./diagnostics.js";
 import {
-  canonicalJsonIdentity,
-  cloneJson,
-  cloneJsonWithStats,
-  dataValue,
-  type JsonValue,
-} from "./json.js";
+  bindingName,
+  count,
+  exact,
+  inspectJson,
+  type Path,
+  properties,
+  referenceLength,
+  type CanonicalState as State,
+  safeCanonicalize,
+  safeJson,
+  safeValidate,
+  strictArray,
+} from "./canonical-input.js";
+import { failure, KaladaFailure, success } from "./diagnostics.js";
+import type { JsonValue } from "./json.js";
 import { resolveLimits } from "./limits.js";
 import type {
   KaladaV1Expression,
-  KaladaV1Limits,
   KaladaV1Options,
   KaladaV1Outcome,
   KaladaV1Program,
   MatchArm,
 } from "./types.js";
 
-type Path = readonly (string | number)[];
-interface State<R extends JsonValue> {
-  readonly limits: KaladaV1Limits;
-  readonly options: KaladaV1Options<R>;
-  readonly active: WeakSet<object>;
-  astNodes: number;
-  valueNodes: number;
-}
-
-const NODE_KEYS = new Set(["kind", "value", "ref", "name", "body", "variant", "type", "arms"]);
+const NODE_KEYS = new Set([
+  "kind",
+  "value",
+  "ref",
+  "name",
+  "body",
+  "variant",
+  "type",
+  "arms",
+  "milliseconds",
+  "operator",
+  "left",
+  "right",
+]);
 const ARM_ORDER = Object.freeze({ Option: ["some", "none"], Result: ["ok", "err"] } as const);
 
 export function canonicalizeKaladaV1Program<R extends JsonValue = string>(
@@ -79,10 +90,66 @@ function canonicalNode<R extends JsonValue>(
     if (raw.kind === "option") return canonicalOption(raw, path, depth, state);
     if (raw.kind === "result") return canonicalResult(raw, path, depth, state);
     if (raw.kind === "match") return canonicalMatch(raw, path, depth, state);
+    if (raw.kind === "instant" || raw.kind === "duration") return canonicalTemporal(raw, path);
+    if (raw.kind === "current-instant") return canonicalCurrentInstant(raw, path);
+    if (raw.kind === "temporal-arithmetic") {
+      return canonicalTemporalOperation(raw, path, depth, state, ["add", "subtract"]);
+    }
+    if (raw.kind === "temporal-comparison") {
+      return canonicalTemporalOperation(raw, path, depth, state, [
+        "equal",
+        "not-equal",
+        "less-than",
+        "less-than-or-equal",
+        "greater-than",
+        "greater-than-or-equal",
+      ]);
+    }
     throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, "kind"]);
   } finally {
     state.active.delete(input);
   }
+}
+
+function canonicalTemporal(
+  raw: Record<string, unknown>,
+  path: Path,
+): Extract<KaladaV1Expression, { kind: "instant" | "duration" }> {
+  exact(raw, path, ["kind", "milliseconds"]);
+  if (!Number.isSafeInteger(raw.milliseconds)) {
+    throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, "milliseconds"]);
+  }
+  return Object.freeze({
+    kind: raw.kind,
+    milliseconds: Object.is(raw.milliseconds, -0) ? 0 : raw.milliseconds,
+  }) as Extract<KaladaV1Expression, { kind: "instant" | "duration" }>;
+}
+
+function canonicalCurrentInstant(
+  raw: Record<string, unknown>,
+  path: Path,
+): Extract<KaladaV1Expression, { kind: "current-instant" }> {
+  exact(raw, path, ["kind"]);
+  return Object.freeze({ kind: "current-instant" });
+}
+
+function canonicalTemporalOperation<R extends JsonValue>(
+  raw: Record<string, unknown>,
+  path: Path,
+  depth: number,
+  state: State<R>,
+  operators: readonly string[],
+): KaladaV1Expression<R> {
+  exact(raw, path, ["kind", "operator", "left", "right"]);
+  if (typeof raw.operator !== "string" || !operators.includes(raw.operator)) {
+    throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, "operator"]);
+  }
+  return Object.freeze({
+    kind: raw.kind,
+    operator: raw.operator,
+    left: canonicalNode(raw.left, [...path, "left"], depth + 1, state),
+    right: canonicalNode(raw.right, [...path, "right"], depth + 1, state),
+  }) as KaladaV1Expression<R>;
 }
 
 function canonicalLiteral<R extends JsonValue>(
@@ -253,132 +320,4 @@ function requiredArm<R extends JsonValue>(
   const arm = found.get(variant);
   if (!arm) throw new KaladaFailure("KALADA_MATCH_MISSING_ARM", [...path, "arms"]);
   return arm;
-}
-
-function properties(
-  input: unknown,
-  path: Path,
-  allowed: ReadonlySet<string>,
-  requireExact = true,
-): Record<string, unknown> {
-  if (typeof input !== "object" || input === null || Array.isArray(input))
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  let keys: PropertyKey[];
-  try {
-    keys = Reflect.ownKeys(input);
-  } catch {
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  }
-  const output: Record<string, unknown> = {};
-  for (const key of keys) {
-    if (typeof key !== "string" || !allowed.has(key))
-      throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, String(key)]);
-    try {
-      output[key] = dataValue(input, key);
-    } catch {
-      throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, key]);
-    }
-  }
-  if (requireExact && keys.length !== allowed.size)
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  return output;
-}
-
-function exact(
-  raw: Record<string, unknown>,
-  path: Path,
-  keys: readonly string[],
-  optionalLast = false,
-): void {
-  const minimum = optionalLast ? keys.length - 1 : keys.length;
-  if (Object.keys(raw).length < minimum || Object.keys(raw).length > keys.length)
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  for (let index = 0; index < minimum; index += 1) {
-    const key = keys[index];
-    if (key !== undefined && !(key in raw))
-      throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, key]);
-  }
-  for (const key of Object.keys(raw))
-    if (!keys.includes(key)) throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, key]);
-}
-
-function strictArray(input: unknown[], path: Path): unknown[] {
-  let keys: PropertyKey[];
-  try {
-    keys = Reflect.ownKeys(input);
-  } catch {
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  }
-  if (keys.length !== input.length + 1) throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  return Array.from({ length: input.length }, (_, index) => {
-    try {
-      return dataValue(input, String(index));
-    } catch {
-      throw new KaladaFailure("KALADA_INVALID_INPUT", [...path, index]);
-    }
-  });
-}
-
-function safeJson<R extends JsonValue>(input: unknown, path: Path, state: State<R>): JsonValue {
-  try {
-    const result = cloneJsonWithStats(input, {
-      maxDepth: state.limits.maxValueDepth,
-      maxNodes: state.limits.maxValueNodes - state.valueNodes,
-      maxStringLength: state.limits.maxStringLength,
-    });
-    state.valueNodes += result.nodes;
-    return result.value;
-  } catch (error) {
-    if (error instanceof RangeError) throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  }
-}
-
-function inspectJson<R extends JsonValue>(input: unknown, path: Path, state: State<R>): JsonValue {
-  try {
-    return cloneJson(input, {
-      maxDepth: state.limits.maxValueDepth,
-      maxNodes: state.limits.maxValueNodes,
-      maxStringLength: state.limits.maxStringLength,
-    });
-  } catch (error) {
-    if (error instanceof RangeError) throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  }
-}
-
-function referenceLength(reference: JsonValue): number {
-  return typeof reference === "string"
-    ? [...reference].length
-    : [...canonicalJsonIdentity(reference)].length;
-}
-
-function bindingName(input: unknown, path: Path, limits: KaladaV1Limits): string {
-  if (typeof input !== "string" || input.length === 0)
-    throw new KaladaFailure("KALADA_INVALID_INPUT", path);
-  if ([...input].length > limits.maxReferenceLength)
-    throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
-  return input;
-}
-
-function safeValidate<R>(validate: (input: unknown) => input is R, input: unknown): input is R {
-  try {
-    return validate(input) === true;
-  } catch {
-    return false;
-  }
-}
-
-function safeCanonicalize<R>(canonicalize: (input: R) => R, input: R, path: Path): R {
-  try {
-    return canonicalize(input);
-  } catch {
-    throw new KaladaFailure("KALADA_INVALID_REFERENCE", path);
-  }
-}
-
-function count<R extends JsonValue>(path: Path, depth: number, state: State<R>): void {
-  state.astNodes += 1;
-  if (depth > state.limits.maxAstDepth || state.astNodes > state.limits.maxAstNodes)
-    throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
 }
