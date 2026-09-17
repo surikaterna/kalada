@@ -13,7 +13,12 @@ type MutableException = RecordValue & {
   baseCommit: string;
   files: Array<RecordValue & { changeClass: string; headSha256: string; path: string }>;
   issue: string;
-  observedRegistryEvidence: RecordValue & { command: string; package: string; version: string };
+  observedRegistryEvidence: RecordValue & {
+    command: string;
+    package: string;
+    responseSha256: string;
+    version: string;
+  };
   package: RecordValue & { headManifestSha256: string };
   repository: string;
 };
@@ -54,6 +59,7 @@ function fixture(): Fixture {
   write(path, "packages/core/src/index.ts", "export const value = 1;\n");
   write(path, "packages/core/src/index.test.ts", "test('value', () => {});\n");
   write(path, "scripts/package-smoke.ts", "export const expected = true;\n");
+  write(path, "scripts/internal.ts", "export const internal = true;\n");
   write(path, ".changeset/config.json", "{}\n");
   write(path, ".changeset/existing.md", changeset("@other/package"));
   write(path, "release-exceptions/existing.json", "{}\n");
@@ -91,6 +97,7 @@ function validException(fix: Fixture, mutate?: (record: MutableException) => voi
   const afterManifest = `${JSON.stringify(manifest, null, 2)}\n`;
   const afterVerification =
     "export const expectedRepository = 'https://github.com/surikaterna/kalada';\n";
+  const registryResponse = '{"error":"Not found"}';
   write(fix.path, manifestPath, afterManifest);
   write(fix.path, verificationPath, afterVerification);
   const record: MutableException = {
@@ -129,7 +136,8 @@ function validException(fix: Fixture, mutate?: (record: MutableException) => voi
       httpStatus: 404,
       observedAt: "2026-09-17T12:00:00Z",
       command: "npm view @kalada/core@0.1.0 version --json",
-      responseSha256: "a".repeat(64),
+      response: registryResponse,
+      responseSha256: hash(registryResponse),
     },
   };
   mutate?.(record);
@@ -241,6 +249,12 @@ describe("ordinary Changeset policy", () => {
       },
     ],
     [
+      "evidence response hash",
+      (record: MutableException) => {
+        record.observedRegistryEvidence.responseSha256 = "b".repeat(64);
+      },
+    ],
+    [
       "change class",
       (record: MutableException) => {
         exceptionFile(record, 1).changeClass = "package-manifest-repository";
@@ -267,6 +281,21 @@ describe("ordinary Changeset policy", () => {
       exceptionFile(record, 0).headSha256 = hash(text);
     });
     expect(() => validate(fix, head)).toThrow(/name and version|Only the manifest/u);
+  });
+
+  it("rejects a broad script classified as package verification", () => {
+    const fix = fixture();
+    const head = validException(fix, (record) => {
+      const before = "export const internal = true;\n";
+      const after = "export const internal = false;\n";
+      write(fix.path, "scripts/package-smoke.ts", "export const expected = true;\n");
+      write(fix.path, "scripts/internal.ts", after);
+      const declaration = exceptionFile(record, 1);
+      declaration.path = "scripts/internal.ts";
+      declaration.baseSha256 = hash(before);
+      declaration.headSha256 = hash(after);
+    });
+    expect(() => validate(fix, head)).toThrow(/package-verification/u);
   });
 
   it("rejects an undeclared changed file", () => {

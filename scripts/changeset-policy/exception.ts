@@ -86,7 +86,7 @@ function assertChangeClass(path: string, changeClass: string, manifestPath: stri
 
 function isVerificationPath(path: string): boolean {
   return (
-    /^scripts\/[^/]+\.[cm]?[jt]s$/u.test(path) ||
+    /^scripts\/[^/]*(?:smoke|verif(?:y|ication))[^/]*\.[cm]?[jt]s$/iu.test(path) ||
     /(^|\/)(__tests__|tests?)\//u.test(path) ||
     /\.(test|spec)\.[cm]?[jt]sx?$/u.test(path)
   );
@@ -148,6 +148,9 @@ function validateEvidence(record: ReleaseException): void {
   }
   if (evidence.command !== `npm view ${evidence.package}@${evidence.version} version --json`) {
     throw new Error("Registry evidence command is not canonical");
+  }
+  if (sha256(Buffer.from(evidence.response, "utf8")) !== evidence.responseSha256) {
+    throw new Error("Registry evidence response hash does not match");
   }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(evidence.observedAt)) {
     throw new Error("Registry evidence timestamp must be UTC ISO-8601");

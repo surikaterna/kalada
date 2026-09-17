@@ -43,6 +43,7 @@ export type ReleaseException = {
     httpStatus: 404;
     observedAt: string;
     command: string;
+    response: string;
     responseSha256: string;
   };
 };
