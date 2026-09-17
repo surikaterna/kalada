@@ -104,6 +104,39 @@ describe("release integrity validation", () => {
     );
   });
 
+  it("rejects an unauthorized entry hidden before a duplicate category", async () => {
+    const { base, repository } = await createRepository();
+    await createRelease(repository);
+    await writeFile(
+      join(repository, "packages/one/CHANGELOG.md"),
+      "# @example/one\n\n## 0.1.0\n\n### Minor Changes\n\n" +
+        "- deadbee: Injected release note.\n\n### Minor Changes\n\n" +
+        "- abc1234: Add the public one API.\n",
+    );
+    git(repository, "add", ".");
+    git(repository, "commit", "-qm", "duplicate category");
+
+    expect(() => validateReleaseIntegrity(repository, base)).toThrow(
+      "changelog has malformed release categories",
+    );
+  });
+
+  it("rejects an empty recognized release category", async () => {
+    const { base, repository } = await createRepository();
+    await createRelease(repository);
+    await writeFile(
+      join(repository, "packages/one/CHANGELOG.md"),
+      "# @example/one\n\n## 0.1.0\n\n### Patch Changes\n\n" +
+        "### Minor Changes\n\n- abc1234: Add the public one API.\n",
+    );
+    git(repository, "add", ".");
+    git(repository, "commit", "-qm", "empty category");
+
+    expect(() => validateReleaseIntegrity(repository, base)).toThrow(
+      "changelog has malformed release categories",
+    );
+  });
+
   it("rejects unexpected source artifacts", async () => {
     const { base, repository } = await createRepository();
     await createRelease(repository);

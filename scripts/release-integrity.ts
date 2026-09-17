@@ -103,8 +103,7 @@ function parseReleaseLines(lines: string[], packageName: string): Map<string, st
   for (const line of lines) {
     const heading = /^### (Major|Minor|Patch) Changes$/u.exec(line)?.[1]?.toLowerCase();
     if (heading) {
-      category = heading;
-      entries.set(category, []);
+      category = startCategory(entries, category, heading, packageName);
     } else if (line.startsWith("- ") && category) {
       entries.get(category)?.push(line.replace(/^- (?:[0-9a-f]+: )?/u, ""));
     } else if (line.trim() && category && (entries.get(category)?.length ?? 0) > 0) {
@@ -114,7 +113,31 @@ function parseReleaseLines(lines: string[], packageName: string): Map<string, st
       throw new Error(`${packageName} changelog has unexpected release content`);
     }
   }
+  assertCategoryComplete(entries, category, packageName);
   return entries;
+}
+
+function startCategory(
+  entries: Map<string, string[]>,
+  current: string | undefined,
+  next: string,
+  packageName: string,
+): string {
+  if (entries.has(next))
+    throw new Error(`${packageName} changelog has malformed release categories`);
+  assertCategoryComplete(entries, current, packageName);
+  entries.set(next, []);
+  return next;
+}
+
+function assertCategoryComplete(
+  entries: Map<string, string[]>,
+  category: string | undefined,
+  packageName: string,
+): void {
+  if (category && entries.get(category)?.length === 0) {
+    throw new Error(`${packageName} changelog has malformed release categories`);
+  }
 }
 
 function assertChangelog(
