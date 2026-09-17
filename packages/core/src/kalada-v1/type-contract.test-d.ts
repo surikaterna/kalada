@@ -1,9 +1,19 @@
-import type { EncodedKaladaValueV1, OptionValue, ResultValue } from "./index.js";
+import type {
+  DurationValue,
+  EncodedKaladaValueV1,
+  InstantValue,
+  OptionValue,
+  ResultValue,
+} from "./index.js";
 
 // @ts-expect-error Runtime ADTs cannot be constructed structurally.
 const spoofedOption: OptionValue = { type: "Option", variant: "none" };
 // @ts-expect-error Runtime ADTs cannot be constructed structurally.
 const spoofedResult: ResultValue = { type: "Result", variant: "ok", value: 1 };
+// @ts-expect-error Runtime temporal values cannot be constructed structurally.
+const spoofedInstant: InstantValue = { type: "Instant", milliseconds: 1 };
+// @ts-expect-error Runtime temporal values cannot be constructed structurally.
+const spoofedDuration: DurationValue = { type: "Duration", milliseconds: 1 };
 const impossibleNone: EncodedKaladaValueV1 = {
   format: "kalada-value",
   version: 1,
@@ -30,6 +40,8 @@ const impossibleVariant: EncodedKaladaValueV1 = {
 
 void spoofedOption;
 void spoofedResult;
+void spoofedInstant;
+void spoofedDuration;
 void impossibleNone;
 void impossibleJson;
 void impossibleVariant;

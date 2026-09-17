@@ -1,5 +1,13 @@
 import { cloneJson, cloneJsonWithStats, dataValue, type JsonValue } from "./json.js";
 import { DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
+import {
+  Duration,
+  type DurationValue,
+  Instant,
+  type InstantValue,
+  isDuration,
+  isInstant,
+} from "./temporal.js";
 import { isOption, isResult, type KaladaValue, Option, Result } from "./values.js";
 
 interface EncodedHeader {
@@ -23,6 +31,11 @@ export type EncodedKaladaValueV1 =
       readonly type: "Result";
       readonly variant: "ok" | "err";
       readonly value: EncodedKaladaValueV1;
+    })
+  | (EncodedHeader & {
+      readonly type: "Instant" | "Duration";
+      readonly variant: "milliseconds";
+      readonly value: number;
     });
 
 type Frame =
@@ -54,6 +67,10 @@ export function encodeKaladaValue(value: KaladaValue): EncodedKaladaValueV1 {
     frames.push({ type: current.type, variant: current.variant } as Frame);
     current = current.value;
   }
+  if (isInstant(current) || isDuration(current)) {
+    charge(nodes, frames.length);
+    return wrapFrames(frozenTemporal(current.type, current.milliseconds), frames);
+  }
   const remaining = LIMITS.maxNodes - charge(nodes, frames.length);
   const json = cloneJsonWithStats(current, {
     ...LIMITS,
@@ -74,6 +91,8 @@ export function decodeKaladaValue(input: unknown): KaladaValue {
     if (active.has(envelope)) throw new TypeError(INVALID);
     active.add(envelope);
     const fields = envelopeFields(envelope);
+    const temporal = decodeTemporal(envelope, fields);
+    if (temporal) return wrapValues(temporal, frames);
     if (fields.type === "Json" && fields.variant === "value") {
       assertKeys(envelope, ["format", "version", "type", "variant", "value"]);
       const value = decodeJson(dataValue(envelope, "value"), nodes, frames.length);
@@ -87,6 +106,20 @@ export function decodeKaladaValue(input: unknown): KaladaValue {
     assertKeys(envelope, ["format", "version", "type", "variant", "value"]);
     current = dataValue(envelope, "value");
   }
+}
+
+function decodeTemporal(
+  envelope: object,
+  fields: { type: unknown; variant: unknown },
+): InstantValue | DurationValue | undefined {
+  if (fields.type !== "Instant" && fields.type !== "Duration") return undefined;
+  if (fields.variant !== "milliseconds") throw new TypeError(INVALID);
+  assertKeys(envelope, ["format", "version", "type", "variant", "value"]);
+  const value = dataValue(envelope, "value");
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new TypeError(INVALID);
+  return fields.type === "Instant"
+    ? Instant.fromMilliseconds(value)
+    : Duration.fromMilliseconds(value);
 }
 
 function decodeJson(input: unknown, nodes: number, depth: number): JsonValue {
@@ -188,6 +221,16 @@ function frozenJson(value: JsonValue): EncodedKaladaValueV1 {
     version: 1,
     type: "Json",
     variant: "value",
+    value,
+  });
+}
+
+function frozenTemporal(type: "Instant" | "Duration", value: number): EncodedKaladaValueV1 {
+  return Object.freeze({
+    format: "kalada-value",
+    version: 1,
+    type,
+    variant: "milliseconds",
     value,
   });
 }

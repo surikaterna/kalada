@@ -1,4 +1,5 @@
 import type { JsonValue } from "./json.js";
+import type { InstantValue } from "./temporal.js";
 import type { KaladaValue } from "./values.js";
 
 export type KaladaV1Expression<R extends JsonValue = string> =
@@ -7,7 +8,46 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | BindingExpression<R>
   | OptionExpression<R>
   | ResultExpression<R>
-  | MatchExpression<R>;
+  | MatchExpression<R>
+  | InstantExpression
+  | DurationExpression
+  | CurrentInstantExpression
+  | TemporalArithmeticExpression<R>
+  | TemporalComparisonExpression<R>;
+
+export interface InstantExpression {
+  readonly kind: "instant";
+  readonly milliseconds: number;
+}
+
+export interface DurationExpression {
+  readonly kind: "duration";
+  readonly milliseconds: number;
+}
+
+export interface CurrentInstantExpression {
+  readonly kind: "current-instant";
+}
+
+export interface TemporalArithmeticExpression<R extends JsonValue> {
+  readonly kind: "temporal-arithmetic";
+  readonly operator: "add" | "subtract";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
+export interface TemporalComparisonExpression<R extends JsonValue> {
+  readonly kind: "temporal-comparison";
+  readonly operator:
+    | "equal"
+    | "not-equal"
+    | "less-than"
+    | "less-than-or-equal"
+    | "greater-than"
+    | "greater-than-or-equal";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
 
 export interface BindingExpression<R extends JsonValue> {
   readonly kind: "binding";
@@ -60,7 +100,12 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_REFERENCE_DENIED"
   | "KALADA_ASYNC_UNSUPPORTED"
   | "KALADA_INVALID_RESULT"
-  | "KALADA_EVALUATION_LIMIT";
+  | "KALADA_EVALUATION_LIMIT"
+  | "KALADA_INSTANT_REQUIRED"
+  | "KALADA_TEMPORAL_TYPE_MISMATCH"
+  | "KALADA_TEMPORAL_OVERFLOW"
+  | "KALADA_CLOCK_ERROR"
+  | "KALADA_INVALID_CLOCK";
 
 export interface KaladaV1Diagnostic {
   readonly code: KaladaV1DiagnosticCode;
@@ -98,8 +143,21 @@ export type KaladaV1Resolution =
 
 export type KaladaV1Resolver<R extends JsonValue> = (reference: R) => KaladaV1Resolution;
 
+export interface KaladaV1EvaluationInputs {
+  readonly instant?: InstantValue;
+}
+
+export type KaladaV1Clock = () => InstantValue;
+
 export interface CompiledKaladaV1Program<R extends JsonValue> {
   readonly program: KaladaV1Program<R>;
   readonly dependencies: readonly R[];
-  evaluate(resolve: KaladaV1Resolver<R>): KaladaV1Outcome<KaladaValue>;
+  evaluate(
+    resolve: KaladaV1Resolver<R>,
+    inputs?: KaladaV1EvaluationInputs,
+  ): KaladaV1Outcome<KaladaValue>;
+  evaluateWithClock(
+    resolve: KaladaV1Resolver<R>,
+    clock: KaladaV1Clock,
+  ): KaladaV1Outcome<KaladaValue>;
 }

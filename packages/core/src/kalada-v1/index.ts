@@ -10,11 +10,24 @@ export {
   KALADA_VALUE_V1_SCHEMA,
   type KaladaV1JsonSchema,
 } from "./schemas.js";
+export {
+  Duration,
+  type DurationValue,
+  Instant,
+  type InstantValue,
+  isDuration,
+  isInstant,
+} from "./temporal.js";
 export type {
   BindingExpression,
   CompiledKaladaV1Program,
+  CurrentInstantExpression,
+  DurationExpression,
+  InstantExpression,
+  KaladaV1Clock,
   KaladaV1Diagnostic,
   KaladaV1DiagnosticCode,
+  KaladaV1EvaluationInputs,
   KaladaV1Expression,
   KaladaV1Limits,
   KaladaV1Options,
@@ -27,6 +40,8 @@ export type {
   MatchExpression,
   OptionExpression,
   ResultExpression,
+  TemporalArithmeticExpression,
+  TemporalComparisonExpression,
 } from "./types.js";
 export {
   type ErrValue,

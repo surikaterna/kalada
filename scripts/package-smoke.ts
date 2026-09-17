@@ -31,11 +31,12 @@ async function createConsumer(directory: string): Promise<void> {
     join(directory, "index.mjs"),
     'import * as root from "@kalada/core";\n' +
       'import { ExpressionProfile, standardV1 } from "@kalada/core/kuery-v1";\n' +
-      'import { Option, isOption } from "@kalada/core/kalada-v1";\n' +
+      'import { Instant, Option, isInstant, isOption } from "@kalada/core/kalada-v1";\n' +
       'const again = await import("@kalada/core/kuery-v1");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("ESM root surface mismatch");\n' +
       'if (standardV1 !== again.standardV1 || !(standardV1 instanceof ExpressionProfile)) throw new Error("ESM identity mismatch");\n' +
-      'if (!isOption(Option.some(1))) throw new Error("ESM kalada-v1 mismatch");\n',
+      'if (!isOption(Option.some(1))) throw new Error("ESM kalada-v1 mismatch");\n' +
+      'if (!isInstant(Instant.fromMilliseconds(-1))) throw new Error("ESM temporal mismatch");\n',
   );
   await writeFile(
     join(directory, "index.cjs"),
@@ -45,18 +46,19 @@ async function createConsumer(directory: string): Promise<void> {
       'const kalada = require("@kalada/core/kalada-v1");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("CJS root surface mismatch");\n' +
       'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n' +
-      'if (!kalada.isResult(kalada.Result.ok(1))) throw new Error("CJS kalada-v1 mismatch");\n',
+      'if (!kalada.isResult(kalada.Result.ok(1))) throw new Error("CJS kalada-v1 mismatch");\n' +
+      'if (!kalada.isDuration(kalada.Duration.fromMilliseconds(-1))) throw new Error("CJS temporal mismatch");\n',
   );
   await writeFile(
     join(directory, "types.mts"),
     'import { fromKueryExpression, type KaladaProgramV1 } from "@kalada/core";\n' +
       'import { compileExpression, standardV1, type ValueExpression } from "@kalada/core/kuery-v1";\n' +
-      'import { KaladaV1, compileKaladaV1Program, type KaladaV1Program } from "@kalada/core/kalada-v1";\n' +
+      'import { Instant, KaladaV1, compileKaladaV1Program, type KaladaV1Program } from "@kalada/core/kalada-v1";\n' +
       'const expression: ValueExpression = { kind: "literal", value: true };\n' +
       "const result = fromKueryExpression(expression);\n" +
       "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: KaladaV1Program = KaladaV1.program(KaladaV1.Option.none());\n" +
-      "void compileKaladaV1Program(native);\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program;\n",
+      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program;\n",
   );
   await writeFile(
     join(directory, "types.cts"),
@@ -67,7 +69,7 @@ async function createConsumer(directory: string): Promise<void> {
       "const result = core.fromKueryExpression(expression);\n" +
       "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: kalada.KaladaV1Program = kalada.KaladaV1.program(kalada.KaladaV1.Option.none());\n" +
-      "void kalada.compileKaladaV1Program(native);\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
+      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 

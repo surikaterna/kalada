@@ -1,7 +1,10 @@
 import { rejectCallbackPromise } from "../kuery-v1/callback-promise.js";
 import { failure, KaladaFailure, success } from "./diagnostics.js";
 import { cloneJson, dataValue, type JsonValue } from "./json.js";
+import { type InstantValue, isDuration, isInstant } from "./temporal.js";
+import { evaluateTemporalExpression, isTemporalExpression } from "./temporal-evaluation.js";
 import type {
+  KaladaV1EvaluationInputs,
   KaladaV1Expression,
   KaladaV1Limits,
   KaladaV1Outcome,
@@ -21,6 +24,7 @@ type Path = readonly (string | number)[];
 interface State<R extends JsonValue> {
   readonly resolve: KaladaV1Resolver<R>;
   readonly limits: KaladaV1Limits;
+  readonly instant?: InstantValue;
   steps: number;
 }
 
@@ -28,10 +32,12 @@ export function evaluateKaladaV1<R extends JsonValue>(
   expression: KaladaV1Expression<R>,
   resolve: KaladaV1Resolver<R>,
   limits: KaladaV1Limits,
+  inputs: KaladaV1EvaluationInputs = {},
 ): KaladaV1Outcome<KaladaValue> {
   try {
+    const instant = evaluationInstant(inputs);
     return success(
-      evaluateNode(expression, ["expression"], new Map(), { resolve, limits, steps: 0 }),
+      evaluateNode(expression, ["expression"], new Map(), { resolve, limits, instant, steps: 0 }),
     );
   } catch (error) {
     const problem =
@@ -48,6 +54,11 @@ function evaluateNode<R extends JsonValue>(
 ): KaladaValue {
   charge(path, state);
   if (node.kind === "literal") return node.value;
+  if (isTemporalExpression(node)) {
+    return evaluateTemporalExpression(node, path, state.instant, (child, childPath) =>
+      evaluateNode(child, childPath, scope, state),
+    );
+  }
   if (node.kind === "ref") return evaluateReference(node.ref, path, scope, state);
   if (node.kind === "binding") return evaluateBinding(node, path, scope, state);
   if (node.kind === "option") {
@@ -60,6 +71,31 @@ function evaluateNode<R extends JsonValue>(
     return node.variant === "ok" ? Result.ok(value) : Result.err(value);
   }
   return evaluateMatch(node, path, scope, state);
+}
+
+function evaluationInstant(inputs: KaladaV1EvaluationInputs): State<JsonValue>["instant"] {
+  let keys: readonly PropertyKey[];
+  try {
+    if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))
+      throw new TypeError();
+    keys = Reflect.ownKeys(inputs);
+  } catch {
+    throw new KaladaFailure("KALADA_INVALID_INPUT", ["inputs", "instant"]);
+  }
+  const unexpected = keys.find((key) => key !== "instant");
+  if (unexpected !== undefined)
+    throw new KaladaFailure("KALADA_INVALID_INPUT", ["inputs", String(unexpected)]);
+  if (!keys.includes("instant")) return undefined;
+  let instant: unknown;
+  try {
+    instant = dataValue(inputs, "instant");
+  } catch {
+    throw new KaladaFailure("KALADA_INVALID_INPUT", ["inputs", "instant"]);
+  }
+  if (instant !== undefined && !isInstant(instant)) {
+    throw new KaladaFailure("KALADA_INVALID_INPUT", ["inputs", "instant"]);
+  }
+  return instant;
 }
 
 function evaluateBinding<R extends JsonValue>(
@@ -155,7 +191,7 @@ function missingResolution(input: object, keys: readonly PropertyKey[], path: Pa
 
 function safeValue(input: unknown, path: Path, limits: KaladaV1Limits): KaladaValue {
   try {
-    if (isOption(input) || isResult(input)) {
+    if (isOption(input) || isResult(input) || isInstant(input) || isDuration(input)) {
       validateKaladaValueLimits(input, {
         maxDepth: limits.maxValueDepth,
         maxNodes: limits.maxValueNodes,
