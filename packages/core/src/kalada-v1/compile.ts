@@ -45,9 +45,9 @@ export function compileKaladaV1Program<R extends JsonValue = string>(
       dependencies,
       functions,
       evaluate: (resolve: KaladaV1Resolver<R>, inputs?: KaladaV1EvaluationInputs) =>
-        evaluateKaladaV1(program.expression, resolve, limits, inputs),
+        evaluateKaladaV1(program.expression, resolve, limits, functions, inputs),
       evaluateWithClock: (resolve: KaladaV1Resolver<R>, clock: KaladaV1Clock) =>
-        evaluateWithClock(program.expression, resolve, limits, clock),
+        evaluateWithClock(program.expression, resolve, limits, functions, clock),
     }),
   );
 }
@@ -56,6 +56,7 @@ function evaluateWithClock<R extends JsonValue>(
   expression: Parameters<typeof evaluateKaladaV1<R>>[0],
   resolve: KaladaV1Resolver<R>,
   limits: ResolvedKaladaV1Limits,
+  functions: readonly KaladaV1FunctionCapture[],
   clock: KaladaV1Clock,
 ): ReturnType<typeof evaluateKaladaV1<R>> {
   let sample: unknown;
@@ -66,5 +67,5 @@ function evaluateWithClock<R extends JsonValue>(
   }
   if (rejectCallbackPromise(sample)) return failure("KALADA_ASYNC_UNSUPPORTED", ["clock"]);
   if (!isInstant(sample)) return failure("KALADA_INVALID_CLOCK", ["clock"]);
-  return evaluateKaladaV1(expression, resolve, limits, { instant: sample });
+  return evaluateKaladaV1(expression, resolve, limits, functions, { instant: sample });
 }

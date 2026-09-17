@@ -18,6 +18,40 @@ type TemporalExpression<R extends JsonValue> = Extract<
 >;
 type TemporalValue = InstantValue | DurationValue;
 
+export function temporalLeaf(
+  node: Extract<
+    TemporalExpression<JsonValue>,
+    { kind: "instant" | "duration" | "current-instant" }
+  >,
+  path: Path,
+  instant: InstantValue | undefined,
+): TemporalValue {
+  if (node.kind === "instant") return Instant.fromMilliseconds(node.milliseconds);
+  if (node.kind === "duration") return Duration.fromMilliseconds(node.milliseconds);
+  if (!instant) throw new KaladaFailure("KALADA_INSTANT_REQUIRED", path);
+  return instant;
+}
+
+export function applyTemporalBinary(
+  kind: "temporal-arithmetic" | "temporal-comparison",
+  operator: string,
+  left: KaladaValue,
+  right: KaladaValue,
+  rightPath: Path,
+): KaladaValue {
+  if (!isInstant(left) && !isDuration(left)) mismatch(rightPath.slice(0, -1).concat("left"));
+  if (!isInstant(right) && !isDuration(right)) mismatch(rightPath);
+  if (kind === "temporal-comparison") {
+    assertSameType(left, right, rightPath);
+    return compare(
+      operator as Parameters<typeof compare>[0],
+      left.milliseconds,
+      right.milliseconds,
+    );
+  }
+  return operator === "add" ? add(left, right, rightPath) : subtract(left, right, rightPath);
+}
+
 export function isTemporalExpression<R extends JsonValue>(
   node: KaladaV1Expression<R>,
 ): node is TemporalExpression<R> {
