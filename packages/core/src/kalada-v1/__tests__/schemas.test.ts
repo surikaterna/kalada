@@ -2,6 +2,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { expect, it } from "vitest";
 import {
   encodeKaladaValue,
+  Instant,
   KALADA_V1_PROGRAM_SCHEMA,
   KALADA_VALUE_V1_SCHEMA,
   KaladaV1,
@@ -12,6 +13,28 @@ it("publishes deeply frozen canonical schemas", () => {
   expect(Object.isFrozen(KALADA_V1_PROGRAM_SCHEMA)).toBe(true);
   expect(Object.isFrozen(KALADA_VALUE_V1_SCHEMA)).toBe(true);
   expect(Object.isFrozen(KALADA_V1_PROGRAM_SCHEMA.$defs)).toBe(true);
+});
+
+it("validates bounded temporal programs and value envelopes", () => {
+  const programs = new Ajv2020({ strict: true }).compile(KALADA_V1_PROGRAM_SCHEMA);
+  const values = new Ajv2020({ strict: true }).compile(KALADA_VALUE_V1_SCHEMA);
+  const expression = KaladaV1.temporalArithmetic(
+    "add",
+    KaladaV1.currentInstant(),
+    KaladaV1.duration(Number.MIN_SAFE_INTEGER),
+  );
+  expect(programs(KaladaV1.program(expression))).toBe(true);
+  expect(programs(KaladaV1.program(KaladaV1.instant(Number.MAX_SAFE_INTEGER + 1)))).toBe(false);
+  expect(values(encodeKaladaValue(Instant.fromMilliseconds(Number.MAX_SAFE_INTEGER)))).toBe(true);
+  expect(
+    values({
+      format: "kalada-value",
+      version: 1,
+      type: "Duration",
+      variant: "milliseconds",
+      value: 0.5,
+    }),
+  ).toBe(false);
 });
 
 it("validates canonical programs and rejects noncanonical arm order", () => {
