@@ -32,4 +32,9 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bun run package:smoke
-      - run: bun x changeset status --since origin/main
+      - name: Validate ordinary PR Changesets
+        if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
+        run: bun x changeset status --since origin/main
+      - name: Validate generated release integrity
+        if: github.head_ref == 'changeset-release/main' && github.event.pull_request.head.repo.full_name == github.repository
+        run: bun scripts/validate-release-pr.ts origin/main
