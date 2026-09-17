@@ -254,6 +254,7 @@ it("enforces continuation and step boundaries inclusively", () => {
     ok: false,
     diagnostic: { code: "KALADA_EVALUATION_LIMIT" },
   });
+  expect(run(call, { limits: { maxEvaluationSteps: 10 } })).toEqual({ ok: true, value: 1 });
   const nested = KaladaV1.call(identity, [KaladaV1.call(identity, [literal(1)])]);
   expect(run(nested, { limits: { maxContinuationFrames: 1 } })).toMatchObject({
     ok: false,
@@ -266,6 +267,16 @@ it("enforces continuation and step boundaries inclusively", () => {
     diagnostic: { code: "KALADA_CONTINUATION_LIMIT" },
   });
   expect(run(triple, { limits: { maxContinuationFrames: 3 } })).toEqual({ ok: true, value: 1 });
+});
+
+it("enforces active call depth at minus-one, equal, and plus-one boundaries", () => {
+  const finite = recursiveGroup(countdownBody("loop"), KaladaV1.Option.some(literal(1)));
+  expect(run(finite, { limits: { maxCallDepth: 1 } })).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_CALL_DEPTH_LIMIT" },
+  });
+  expect(run(finite, { limits: { maxCallDepth: 2 } })).toEqual({ ok: true, value: 7 });
+  expect(run(finite, { limits: { maxCallDepth: 3 } })).toEqual({ ok: true, value: 7 });
 });
 
 it("retains deterministic call context and samples the clock once through calls", () => {
