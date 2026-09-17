@@ -81,109 +81,84 @@ callable object.
 
 ### Common dispatch and order
 
-There is one callable dispatcher for user closures and the four core functions. For a call,
-the authoritative order is the continuation machine below: charge the call node; reserve the
-callee continuation; evaluate and deliver the callee; check callability and arity; reserve one
-argument continuation; evaluate and immediately type-check arguments left-to-right; then check
-call depth, reserve the dispatch continuation, and dispatch. A failure stops all later work.
-User bodies run in the captured definition environment extended with the complete recursive
-group and then parameters in declaration order. The returned value is checked against the
-declared return type before the caller resumes.
+There is one callable dispatcher for user closures and the four core functions. The continuation
+machine below is the sole runtime-order authority; later accounting text only identifies which
+of its transitions charge. Evaluation has one current state (`evaluate` an expression or
+`deliver` a value), one current lexical environment, and one LIFO stack. Evaluator code never
+recursively evaluates a child, and there is no hidden administrative stack. Direct, mutual,
+callback, and non-tail recursion therefore never grow the JavaScript stack.
 
-Evaluation uses an explicit iterative continuation/trampoline. Entering a user or core call
-never invokes the evaluator recursively on the JavaScript stack. Direct, mutual, callback, and
-non-tail recursion use the same mechanism. No tail-call-elimination guarantee changes the
-observable call-depth charge.
+Each frame has only the listed phases and payload. Paths and expression arrays are canonical;
+environments and partial values are evaluator-internal immutable snapshots.
 
-The trampoline has one current state (evaluate an expression or deliver a completed value), one
-lexical environment, and one LIFO continuation stack. Evaluator code never recursively evaluates
-a child. Every child-evaluating expression switches the current state only through one of these
-canonical frames:
+| Frame | Closed phases | Exact retained payload | Capacity-failure path |
+| --- | --- | --- | --- |
+| `binding` | `value`, `body` | node path, name, body, outer environment | child `value` |
+| `constructor` | `payload` | node path, ADT type and variant | child `value` |
+| `match` | `scrutinee`, `arm` | node path, declared type, arms, outer environment, scrutinee or null, selected arm index or null | child `value` |
+| `temporal-binary` | `left`, `right` | node path, arithmetic/comparison kind, operator, right expression, left value or null | child `left` |
+| `function-group-body` | `body` | node path, body, outer environment, group environment | group `body` |
+| `call-callee` | `callee` | call path, argument expressions | call `callee` |
+| `call-arguments` | `argument` | call path, callable, argument expressions, completed values, current index | call `arguments` array |
+| `user-return` | `body` | call path, callable name or null, declared return type, caller environment | call node; core callback uses callback expression `arguments[1]` |
+| `core-iteration` | `ready`, `callback` | call path, operator, callback, input array, next index, partial result | call node |
 
-| Frame | Created before | Retained until | Successful-delivery step |
-| --- | --- | --- | ---: |
-| `binding` | binding `value` | binding `body` returns | 0 |
-| `constructor` | `Option.some` or `Result` payload | payload returns | 0 |
-| `match` | match `value` | selected arm body returns | 0 |
-| `temporal-binary` | arithmetic/comparison `left` | `right` returns | 0 |
-| `function-group-body` | group `body` | body returns | 0 |
-| `call-callee` | call `callee` | callee returns | 1 |
-| `call-arguments` | first call argument | final argument returns | 1 per argument |
-| `user-return` | user body dispatch | body returns | 1 |
-| `core-iteration` | core collection dispatch | result or short-circuit | 1 per callback result |
+Every listed frame counts as one live frame toward `maxContinuationFrames`. A push is allowed
+exactly when the resulting count is at most the configured limit; otherwise
+`KALADA_CONTINUATION_LIMIT` occurs at the table path before the child or dispatch starts. A phase
+change retains the same frame and needs no capacity check. Pop and unwind discard the complete
+payload. A future child-evaluating node is invalid until this table and the delivery table define
+its frame. Literals, references, `Option.none`, instants, durations, current-instant, function
+expressions, and core-function expressions require none.
 
-Every listed frame is one live frame for `maxContinuationFrames`, including the five uncharged
-administrative frames. There is no excluded evaluator recursion or second administrative stack.
-A future child-evaluating node cannot be accepted without adding its frame and observable rules
-to this table. Literals, references, `Option.none`, instants, durations, current-instant,
-function expressions, and core-function expressions evaluate without a child frame.
+The following table is the complete successful-delivery transition function. “Charge” occurs
+while the frame is live and before validation, mutation, or pop.
 
-For `binding`, `constructor`, `match`, and `temporal-binary`, entering the parent first charges
-its existing ordinary AST-node step, then checks capacity and pushes the table's frame, then
-starts the first listed child. Capacity failure therefore precedes every child step and resolver
-interaction. The parent frame stays live while any nested calls and their frames run above it.
+| Frame.phase receiving a value | Charge | Canonical transition |
+| --- | ---: | --- |
+| `binding.value` | 0 | Store no initializer in the frame; switch to `body`, extend the current environment with `(name, value)`, evaluate retained body. |
+| `binding.body` | 0 | Pop, restore outer environment, deliver value. |
+| `constructor.payload` | 0 | Pop, construct retained ADT type/variant with value, deliver result. |
+| `match.scrutinee` | 0 | Validate declared ADT type, store scrutinee and selected canonical arm index, switch to `arm`, extend the environment only for that arm's payload binding, evaluate its body. |
+| `match.arm` | 0 | Pop, restore outer environment, deliver value. |
+| `temporal-binary.left` | 0 | Validate left operand, store it, switch to `right`, evaluate retained right expression. |
+| `temporal-binary.right` | 0 | Validate right operand, pop, apply retained typed operator to stored left and delivered right, deliver result. |
+| `function-group-body.body` | 0 | Pop, restore outer environment, deliver value. |
+| `call-callee.callee` | 1 | Pop, check callability and arity; dispatch immediately if arguments are empty, otherwise capacity-check/push `call-arguments` at index zero and evaluate argument zero. |
+| `call-arguments.argument` | 1 | Immediately type-check and append value; if another argument exists, increment index and evaluate it with this frame retained; otherwise pop and dispatch. |
+| `user-return.body` | 1 | Pop, restore caller environment, decrement active call depth, validate return type, deliver value. |
+| `core-iteration.callback` | 1 | Validate callback result; update partial result, then either short-circuit/finish by pop, depth decrement, and result delivery, or increment index, retain frame, charge next visited element, and dispatch its callback. |
 
-On `binding`, the frame retains the outer environment. Initializer delivery changes the same
-frame to its body phase and evaluates `body` in the environment extended by the immutable
-binding; body delivery pops the frame, restores the outer environment, and delivers its value.
-`constructor` pops and constructs after payload delivery. `match` first receives and validates
-the scrutinee, selects exactly one arm, then retains the same frame while evaluating that arm in
-its optional payload-binding environment; arm delivery pops and restores the outer environment.
-`temporal-binary` validates the left operand before changing the same frame to its right phase;
-right delivery pops and performs the typed operation. These transitions preserve 0.3.0's one
-step per evaluated AST node: their successful deliveries have no additional step charge.
+Entering `binding`, `constructor`, `match`, or `temporal-binary` first charges its existing AST
+node, then capacity-checks/pushes its first phase, then evaluates the first child. Parent frames
+remain live below every nested frame. Function-group entry charges its node, validates the whole
+group, snapshots captures, creates members left-to-right, then capacity-checks/pushes
+`function-group-body` and evaluates body in the group environment. Pre-push failure starts no
+child; closure/capture failure starts no group body.
 
-Function-group construction validates the whole group, snapshots captures, and creates members
-left-to-right before checking capacity and pushing `function-group-body`. The frame retains the
-outer environment while `body` runs in the group environment; body delivery pops, restores, and
-delivers without a resume charge. A closure, capture, or capacity failure prevents body
-evaluation.
+Call entry charges its node, capacity-checks/pushes `call-callee`, then evaluates the callee. The
+callee delivery transition above is conditional: zero arguments create no `call-arguments`
+frame; one argument creates one frame for one delivery; two or more create the same single frame
+and retain it sequentially. Thus argument count never creates simultaneous argument frames. At a
+top-level call with leaf callee/arguments, a continuation limit of one permits each sequential
+stage; a nested child needing its own frame while a parent is retained requires two, and another
+nested suspension requires three. The limit measures maximum simultaneous occupancy, not total
+pushes.
 
-Entering a call node charges its ordinary expression step, checks capacity, pushes
-`call-callee`, and evaluates `callee`. Successful delivery charges one resume step while the
-frame is live, pops it, then checks callability and arity. A zero-argument call proceeds to
-dispatch. Otherwise the machine checks capacity, pushes one `call-arguments` frame, and
-evaluates argument zero. Each successful argument delivery charges one resume step while the
-same frame is live, immediately type-checks and appends the value, then either starts the next
-argument with that frame retained or pops after the final argument. There is never one frame per
-remaining argument. Child failure unwinds retained frames without a delivery charge and
-evaluates no later argument.
+User dispatch first checks call depth, then continuation capacity, then charges one dispatcher
+step, increments depth, pushes `user-return`, and evaluates the body in the closure's captured
+definition environment extended by its recursive group and parameters. Core dispatch follows
+the collection-length gate below, then the same depth/capacity/dispatcher order, increments
+depth, and pushes `core-iteration.ready`. Empty input immediately pops, decrements depth, and
+delivers the operator's empty result with no delivery charge. Non-empty input changes the same
+frame to `callback`, charges one visited-element step, and dispatches the callback with already
+evaluated `(element, index)` values; these values create no argument frame.
 
-After arguments, user dispatch first checks call depth, then capacity, charges the dispatcher
-step, increments active call depth, pushes one `user-return` frame, and evaluates the body.
-Successful body delivery resumes and charges that frame, pops it, decrements call depth, validates the
-declared return type, then delivers to the next frame. Return-type failure occurs after the pop
-and decrement. A body failure unwinds the frame and decrements depth without a resume charge.
-The caller's frame remains below `user-return` throughout. This transition, rather than a
-JavaScript evaluator call, is the only way to enter a user body.
-
-Core dispatch performs the same ordered call-depth-then-capacity checks and dispatcher charge,
-increments depth, and pushes exactly one `core-iteration` frame. Empty input pops it immediately,
-decrements depth, and delivers the operator's empty result without a resume charge because no child ran.
-For a visited element the retained frame first charges the element step, then invokes the
-callback through common dispatch with the already evaluated `(element, index)` values; callback
-values create no argument-expression frame. Successful callback delivery resumes and charges
-`core-iteration`, validates the operator-specific result, and either retains the same frame for
-the next index or pops it, decrements depth, and delivers the completed/short-circuit result.
-`some(true)` and `every(false)` pop immediately after that callback resume. Callback failure
-unwinds the core frame, decrements depth, and performs no resume, later-element, or result charge.
-
-A push is allowed exactly when the resulting total listed-frame count is at most
-`maxContinuationFrames`; otherwise `KALADA_CONTINUATION_LIMIT` occurs before the child or
-dispatch starts. Push, pop, failure unwind, frame phase changes, and value delivery itself cost
-no step. Only the four charged deliveries in the table charge a resume step, while their frame
-is still live and before any validation or pop. Failure delivery unwinds all affected frames,
-restores their environments and call-depth counters, and charges no resume. Delivery with no
-frame completes the top-level evaluation.
-
-Capacity failure paths are fixed: `binding`, `constructor`, `match`, and `temporal-binary` use
-the child path (`value` or `left`) they could not start; `function-group-body` uses the group's
-`body`; `call-callee`, `user-return`, and `core-iteration` use the canonical call-node path;
-`call-arguments` uses that call's `arguments` array. A core callback dispatch from already
-evaluated values uses the callback expression path (`arguments[1]`) for its `user-return`
-capacity failure. Retaining a frame or changing its phase requires no new capacity check. These
-rules make occupancy, diagnostics, and steps independent of loop structure and the JavaScript
-stack.
+Any child diagnostic performs no successful-delivery charge. It unwinds all live frames,
+discarding every payload and partial result, restoring each saved environment, and decrementing
+each active user/core call depth exactly once. No later child or collection element runs. A
+delivery with no frame is the top-level result. Tail calls receive no occupancy or charging
+exception.
 
 ### Core collection functions
 
@@ -193,6 +168,18 @@ index)`, where index is the zero-based finite integer. They accept only dense ca
 arrays. Callbacks for `map` return JSON, while callbacks for `filter`, `some`, and `every` return
 boolean. `map` and `filter` produce new frozen JSON arrays in input order; `some` and `every`
 produce booleans. Thus no callable can enter an input array or collection result.
+
+The collection-length gate runs after both call arguments have been evaluated, immediately
+type-checked, appended, and the `call-arguments` frame has popped, but before core call-depth or
+continuation-capacity checks, dispatcher charge, depth increment, or `core-iteration` push. An
+input length equal to `maxCollectionLength` passes. A larger input fails with
+`KALADA_COLLECTION_LIMIT` at the exact path `callPath.concat(["arguments", 0])`, where
+`callPath` denotes the call node's canonical path segments. The diagnostic context contains only
+already-active outer calls, innermost first; at top level it is empty, and the rejected core call
+adds no `core-call` frame. The gate itself charges no step, call, continuation, callback, result,
+or value operation. On failure there is no core depth/frame to undo; ordinary diagnostic
+propagation unwinds any outer frames under the machine rule above. A non-array fails immediate
+argument type validation first and never reaches this gate.
 
 Elements are visited from index zero upward. Each callback fully completes before the next
 index. `some` stops after the first `true`; `every` stops after the first `false`; skipped
