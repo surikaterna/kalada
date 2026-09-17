@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "exceptionClass": "already-versioned-unpublished-correction",
+  "issue": "https://github.com/surikaterna/kalada/issues/3",
+  "repository": "surikaterna/kalada",
+  "baseCommit": "9906fcd26bc04bbacdbd298c28574740b44b52ca",
+  "package": {
+    "name": "@kalada/core",
+    "path": "packages/core/package.json",
+    "version": "0.1.0",
+    "baseManifestSha256": "8ecf6194ce8cb7fe2679418d7855c9f35a89961ae747cdc8f3d85dcc5c16e038",
+    "headManifestSha256": "7e716b7783759802c6c7c610c29f6b2bfd355921a6e54a779729ae8f67013b2d",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/surikaterna/kalada",
+      "directory": "packages/core"
+    }
+  },
+  "files": [
+    {
+      "path": "packages/core/package.json",
+      "changeClass": "package-manifest-repository",
+      "baseSha256": "8ecf6194ce8cb7fe2679418d7855c9f35a89961ae747cdc8f3d85dcc5c16e038",
+      "headSha256": "7e716b7783759802c6c7c610c29f6b2bfd355921a6e54a779729ae8f67013b2d"
+    },
+    {
+      "path": "scripts/package-smoke.ts",
+      "changeClass": "package-verification",
+      "baseSha256": "f1ea1bcbc8df070ee5a6b174105a5544c6ae6237b4194cc3cb4be4eff1bc7b5a",
+      "headSha256": "c6f0bc6bddb84df953b7414189391830ed9d2c09255208f59aa253e19a9cfe06"
+    }
+  ],
+  "observedRegistryEvidence": {
+    "registry": "https://registry.npmjs.org",
+    "package": "@kalada/core",
+    "version": "0.1.0",
+    "status": "not-found",
+    "httpStatus": 404,
+    "capturedAt": "2026-09-17T08:04:55.066Z",
+    "command": "npm view @kalada/core@0.1.0 version --json",
+    "response": "{\n  \"error\": {\n    \"code\": \"E404\",\n    \"summary\": \"No match found for version 0.1.0\",\n    \"detail\": \"'@kalada/core@0.1.0' is not in this registry.\\n\\nNote that you can also install from a\\ntarball, folder, http url, or git url.\"\n  }\n}\n",
+    "responseSha256": "544862c7e9689af28e077480f3fc90f7f994edf31470748ac96f9e280cfdd05c"
+  }
+}

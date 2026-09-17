@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const expectedRepositoryUrl = "https://github.com/surikaterna/kalada";
 
 function run(command: string[], cwd: string): string {
   const [executable, ...args] = command;
@@ -62,6 +63,17 @@ async function createConsumer(directory: string): Promise<void> {
   );
 }
 
+function assertPackedRepository(archive: string): void {
+  const manifest = JSON.parse(run(["tar", "-xOf", archive, "package/package.json"], root)) as {
+    repository?: { url?: unknown };
+  };
+  if (manifest.repository?.url !== expectedRepositoryUrl) {
+    throw new Error(
+      `Packed repository.url must be ${expectedRepositoryUrl}; received ${String(manifest.repository?.url)}`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-package-smoke-"));
   try {
@@ -72,6 +84,7 @@ async function main(): Promise<void> {
     const [{ filename }] = JSON.parse(output) as [{ filename: string }];
     const archive = join(directory, filename);
     await readFile(archive);
+    assertPackedRepository(archive);
     await createConsumer(directory);
     run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", archive], directory);
     run(["node", "index.mjs"], directory);
