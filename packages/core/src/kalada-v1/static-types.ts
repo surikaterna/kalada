@@ -228,7 +228,16 @@ function assignable(actual: StaticType, expected: KaladaType): boolean {
       assignable(actual.ok, expected.ok) &&
       assignable(actual.error, expected.error)
     );
+  if (expected.kind === "primitive-type" && expected.name === "json" && !isShape(actual)) {
+    return isJsonType(actual);
+  }
   return equalType(actual, expected);
+}
+
+function isJsonType(type: KaladaType): boolean {
+  if (type.kind === "array-type") return isJsonType(type.element);
+  if (type.kind !== "primitive-type") return false;
+  return ["null", "boolean", "number", "string", "json"].includes(type.name);
 }
 
 function join(types: readonly StaticType[]): StaticType {

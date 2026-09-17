@@ -74,7 +74,7 @@ export type EvaluationFrame<R extends JsonValue> =
       callback: RuntimeValue;
       input: readonly JsonValue[];
       index: number;
-      partial: RuntimeValue;
+      partial: JsonValue[] | boolean;
     };
 
 export interface EvaluationTask<R extends JsonValue> {

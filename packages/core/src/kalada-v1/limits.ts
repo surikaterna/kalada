@@ -21,6 +21,7 @@ export const DEFAULT_KALADA_V1_FUNCTION_LIMITS: KaladaV1FunctionLimits = Object.
   maxCallDepth: 256,
   maxContinuationFrames: 1_000,
   maxCollectionLength: 10_000,
+  maxCollectionIterations: 10_000,
 });
 
 const MAXIMUM: ResolvedKaladaV1Limits = Object.freeze({
@@ -39,6 +40,7 @@ const MAXIMUM: ResolvedKaladaV1Limits = Object.freeze({
   maxCallDepth: 4_096,
   maxContinuationFrames: 100_000,
   maxCollectionLength: 100_000,
+  maxCollectionIterations: 100_000,
 });
 
 export function resolveLimits(input?: Partial<ResolvedKaladaV1Limits>): ResolvedKaladaV1Limits {
