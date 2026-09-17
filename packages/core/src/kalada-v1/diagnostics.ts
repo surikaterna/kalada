@@ -20,6 +20,18 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
   KALADA_TEMPORAL_OVERFLOW: "Kalada temporal arithmetic exceeded safe integer milliseconds.",
   KALADA_CLOCK_ERROR: "Kalada clock sampling failed.",
   KALADA_INVALID_CLOCK: "Kalada clock returned an invalid Instant.",
+  KALADA_DUPLICATE_BINDING: "Kalada function contains a duplicate binding.",
+  KALADA_INVALID_FUNCTION_TYPE: "Kalada function type is invalid.",
+  KALADA_CAPTURE_LIMIT: "Kalada function captures exceed a configured limit.",
+  KALADA_NOT_CALLABLE: "Kalada call target is not callable.",
+  KALADA_FUNCTION_ARITY: "Kalada call has the wrong number of arguments.",
+  KALADA_FUNCTION_TYPE_MISMATCH: "Kalada function type does not match.",
+  KALADA_CLOSURE_LIMIT: "Kalada closure count exceeds a configured limit.",
+  KALADA_CALL_DEPTH_LIMIT: "Kalada call depth exceeds a configured limit.",
+  KALADA_CONTINUATION_LIMIT: "Kalada continuation count exceeds a configured limit.",
+  KALADA_COLLECTION_TYPE_MISMATCH: "Kalada collection function received an incompatible value.",
+  KALADA_COLLECTION_LIMIT: "Kalada collection exceeds a configured limit.",
+  KALADA_FUNCTION_ESCAPE: "Kalada callable cannot escape evaluation.",
 });
 
 export class KaladaFailure extends Error {

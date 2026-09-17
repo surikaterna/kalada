@@ -2,9 +2,24 @@ import type {
   DurationValue,
   EncodedKaladaValueV1,
   InstantValue,
+  KaladaFunctionType,
+  KaladaV1DiagnosticContextFrame,
   OptionValue,
   ResultValue,
 } from "./index.js";
+
+const functionType: KaladaFunctionType = {
+  kind: "function-type",
+  parameters: [{ kind: "primitive-type", name: "number" }],
+  returns: { kind: "primitive-type", name: "boolean" },
+};
+const context: KaladaV1DiagnosticContextFrame = {
+  kind: "function-call",
+  name: null,
+  path: ["expression"],
+};
+// @ts-expect-error Function types require an explicit return descriptor.
+const missingReturn: KaladaFunctionType = { kind: "function-type", parameters: [] };
 
 // @ts-expect-error Runtime ADTs cannot be constructed structurally.
 const spoofedOption: OptionValue = { type: "Option", variant: "none" };
@@ -45,3 +60,6 @@ void spoofedDuration;
 void impossibleNone;
 void impossibleJson;
 void impossibleVariant;
+void functionType;
+void context;
+void missingReturn;

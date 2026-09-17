@@ -1,5 +1,13 @@
 import type { JsonValue } from "./json.js";
-import type { KaladaV1Expression, KaladaV1Program, MatchArm } from "./types.js";
+import type {
+  KaladaCoreFunctionName,
+  KaladaFunctionParameter,
+  KaladaType,
+  KaladaV1Expression,
+  KaladaV1Program,
+  MatchArm,
+  NamedFunction,
+} from "./types.js";
 
 const literal = <R extends JsonValue = string>(value: JsonValue): KaladaV1Expression<R> => ({
   kind: "literal",
@@ -64,6 +72,47 @@ const temporalComparison = <R extends JsonValue>(
   left: KaladaV1Expression<R>,
   right: KaladaV1Expression<R>,
 ): KaladaV1Expression<R> => ({ kind: "temporal-comparison", operator, left, right });
+const functionExpression = <R extends JsonValue>(
+  parameters: readonly KaladaFunctionParameter[],
+  returns: KaladaType,
+  body: KaladaV1Expression<R>,
+): KaladaV1Expression<R> =>
+  Object.freeze({ kind: "function", parameters: Object.freeze([...parameters]), returns, body });
+const call = <R extends JsonValue>(
+  callee: KaladaV1Expression<R>,
+  args: readonly KaladaV1Expression<R>[],
+): KaladaV1Expression<R> =>
+  Object.freeze({ kind: "call", callee, arguments: Object.freeze([...args]) });
+const functionGroup = <R extends JsonValue>(
+  functions: readonly NamedFunction<R>[],
+  body: KaladaV1Expression<R>,
+): KaladaV1Expression<R> =>
+  Object.freeze({ kind: "function-group", functions: Object.freeze([...functions]), body });
+const coreFunction = <R extends JsonValue = string>(
+  name: KaladaCoreFunctionName,
+): KaladaV1Expression<R> => Object.freeze({ kind: "core-function", name });
+const parameter = (name: string, type: KaladaType): KaladaFunctionParameter =>
+  Object.freeze({ name, type });
+const namedFunction = <R extends JsonValue>(
+  name: string,
+  parameters: readonly KaladaFunctionParameter[],
+  returns: KaladaType,
+  body: KaladaV1Expression<R>,
+): NamedFunction<R> =>
+  Object.freeze({ name, parameters: Object.freeze([...parameters]), returns, body });
+const primitiveType = (name: Extract<KaladaType, { kind: "primitive-type" }>["name"]): KaladaType =>
+  Object.freeze({ kind: "primitive-type", name });
+const optionType = (value: KaladaType): KaladaType => Object.freeze({ kind: "option-type", value });
+const resultType = (ok: KaladaType, error: KaladaType): KaladaType =>
+  Object.freeze({
+    kind: "result-type",
+    ok,
+    error,
+  });
+const arrayType = (element: KaladaType): KaladaType =>
+  Object.freeze({ kind: "array-type", element });
+const functionType = (parameters: readonly KaladaType[], returns: KaladaType): KaladaType =>
+  Object.freeze({ kind: "function-type", parameters: Object.freeze([...parameters]), returns });
 
 export const KaladaV1 = Object.freeze({
   literal,
@@ -78,6 +127,19 @@ export const KaladaV1 = Object.freeze({
   currentInstant,
   temporalArithmetic,
   temporalComparison,
+  function: functionExpression,
+  call,
+  functionGroup,
+  coreFunction,
+  parameter,
+  namedFunction,
+  Type: Object.freeze({
+    primitive: primitiveType,
+    option: optionType,
+    result: resultType,
+    array: arrayType,
+    function: functionType,
+  }),
   program<R extends JsonValue = string>(expression: KaladaV1Expression<R>): KaladaV1Program<R> {
     return { format: "kalada-program", version: 1, profile: "kalada-v1", expression };
   },

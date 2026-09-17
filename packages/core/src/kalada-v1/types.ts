@@ -13,7 +13,71 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | DurationExpression
   | CurrentInstantExpression
   | TemporalArithmeticExpression<R>
-  | TemporalComparisonExpression<R>;
+  | TemporalComparisonExpression<R>
+  | FunctionExpression<R>
+  | CallExpression<R>
+  | FunctionGroupExpression<R>
+  | CoreFunctionExpression;
+
+export type KaladaPrimitiveTypeName =
+  | "null"
+  | "boolean"
+  | "number"
+  | "string"
+  | "json"
+  | "Instant"
+  | "Duration";
+
+export type KaladaType =
+  | { readonly kind: "primitive-type"; readonly name: KaladaPrimitiveTypeName }
+  | { readonly kind: "option-type"; readonly value: KaladaType }
+  | { readonly kind: "result-type"; readonly ok: KaladaType; readonly error: KaladaType }
+  | { readonly kind: "array-type"; readonly element: KaladaType }
+  | KaladaFunctionType;
+
+export interface KaladaFunctionType {
+  readonly kind: "function-type";
+  readonly parameters: readonly KaladaType[];
+  readonly returns: KaladaType;
+}
+
+export interface KaladaFunctionParameter {
+  readonly name: string;
+  readonly type: KaladaType;
+}
+
+export interface FunctionExpression<R extends JsonValue> {
+  readonly kind: "function";
+  readonly parameters: readonly KaladaFunctionParameter[];
+  readonly returns: KaladaType;
+  readonly body: KaladaV1Expression<R>;
+}
+
+export interface CallExpression<R extends JsonValue> {
+  readonly kind: "call";
+  readonly callee: KaladaV1Expression<R>;
+  readonly arguments: readonly KaladaV1Expression<R>[];
+}
+
+export interface NamedFunction<R extends JsonValue> {
+  readonly name: string;
+  readonly parameters: readonly KaladaFunctionParameter[];
+  readonly returns: KaladaType;
+  readonly body: KaladaV1Expression<R>;
+}
+
+export interface FunctionGroupExpression<R extends JsonValue> {
+  readonly kind: "function-group";
+  readonly functions: readonly NamedFunction<R>[];
+  readonly body: KaladaV1Expression<R>;
+}
+
+export type KaladaCoreFunctionName = "map" | "filter" | "some" | "every";
+
+export interface CoreFunctionExpression {
+  readonly kind: "core-function";
+  readonly name: KaladaCoreFunctionName;
+}
 
 export interface InstantExpression {
   readonly kind: "instant";
@@ -105,12 +169,31 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_TEMPORAL_TYPE_MISMATCH"
   | "KALADA_TEMPORAL_OVERFLOW"
   | "KALADA_CLOCK_ERROR"
-  | "KALADA_INVALID_CLOCK";
+  | "KALADA_INVALID_CLOCK"
+  | "KALADA_DUPLICATE_BINDING"
+  | "KALADA_INVALID_FUNCTION_TYPE"
+  | "KALADA_CAPTURE_LIMIT"
+  | "KALADA_NOT_CALLABLE"
+  | "KALADA_FUNCTION_ARITY"
+  | "KALADA_FUNCTION_TYPE_MISMATCH"
+  | "KALADA_CLOSURE_LIMIT"
+  | "KALADA_CALL_DEPTH_LIMIT"
+  | "KALADA_CONTINUATION_LIMIT"
+  | "KALADA_COLLECTION_TYPE_MISMATCH"
+  | "KALADA_COLLECTION_LIMIT"
+  | "KALADA_FUNCTION_ESCAPE";
+
+export interface KaladaV1DiagnosticContextFrame {
+  readonly kind: "function-call" | "core-call";
+  readonly name: string | null;
+  readonly path: readonly (string | number)[];
+}
 
 export interface KaladaV1Diagnostic {
   readonly code: KaladaV1DiagnosticCode;
   readonly path: readonly (string | number)[];
   readonly message: string;
+  readonly context?: readonly KaladaV1DiagnosticContextFrame[];
 }
 
 export type KaladaV1Outcome<T> =
@@ -127,6 +210,23 @@ export interface KaladaV1Limits {
   readonly maxEvaluationSteps: number;
 }
 
+export interface KaladaV1FunctionLimits {
+  readonly maxFunctionParameters: number;
+  readonly maxFunctionGroupSize: number;
+  readonly maxCapturesPerClosure: number;
+  readonly maxCapturedBindings: number;
+  readonly maxClosures: number;
+  readonly maxCallDepth: number;
+  readonly maxContinuationFrames: number;
+  readonly maxCollectionLength: number;
+}
+
+export interface KaladaV1FunctionCapture {
+  readonly path: readonly (string | number)[];
+  readonly name: string | null;
+  readonly captures: readonly string[];
+}
+
 export interface KaladaV1ReferenceCodec<R extends JsonValue> {
   readonly validate: (input: unknown) => input is R;
   readonly canonicalize?: (reference: R) => R;
@@ -134,7 +234,7 @@ export interface KaladaV1ReferenceCodec<R extends JsonValue> {
 
 export interface KaladaV1Options<R extends JsonValue> {
   readonly reference?: KaladaV1ReferenceCodec<R>;
-  readonly limits?: Partial<KaladaV1Limits>;
+  readonly limits?: Partial<KaladaV1Limits & KaladaV1FunctionLimits>;
 }
 
 export type KaladaV1Resolution =
@@ -152,6 +252,7 @@ export type KaladaV1Clock = () => InstantValue;
 export interface CompiledKaladaV1Program<R extends JsonValue> {
   readonly program: KaladaV1Program<R>;
   readonly dependencies: readonly R[];
+  readonly functions: readonly KaladaV1FunctionCapture[];
   evaluate(
     resolve: KaladaV1Resolver<R>,
     inputs?: KaladaV1EvaluationInputs,

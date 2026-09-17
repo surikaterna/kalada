@@ -1,4 +1,4 @@
-import { DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
+import { DEFAULT_KALADA_V1_FUNCTION_LIMITS, DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
 
 export type KaladaV1JsonSchema = Readonly<Record<string, unknown>>;
 
@@ -74,8 +74,78 @@ const expression = {
     ]),
     matchNode("Option", [arm("some", true), arm("none", false)]),
     matchNode("Result", [arm("ok", true), arm("err", true)]),
+    node(
+      "function",
+      { parameters: parametersSchema(), returns: typeRef(), body: expressionRef() },
+      ["parameters", "returns", "body"],
+    ),
+    node(
+      "call",
+      {
+        callee: expressionRef(),
+        arguments: {
+          type: "array",
+          maxItems: DEFAULT_KALADA_V1_LIMITS.maxAstNodes,
+          items: expressionRef(),
+        },
+      },
+      ["callee", "arguments"],
+    ),
+    node(
+      "function-group",
+      {
+        functions: {
+          type: "array",
+          maxItems: DEFAULT_KALADA_V1_FUNCTION_LIMITS.maxFunctionGroupSize,
+          items: { $ref: "#/$defs/namedFunction" },
+        },
+        body: expressionRef(),
+      },
+      ["functions", "body"],
+    ),
+    node("core-function", { name: { enum: ["map", "filter", "some", "every"] } }, ["name"]),
   ],
 };
+
+export const KALADA_V1_FUNCTION_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://kalada.dev/schema/program/kalada-v1-functions",
+  $comment:
+    "The schema enforces canonical shape and local string/container bounds. Aggregate AST depth, AST nodes, value nodes, and evaluation steps remain runtime-authoritative.",
+  type: "object",
+  properties: {
+    format: { const: "kalada-program" },
+    version: { const: 1 },
+    profile: { const: "kalada-v1" },
+    expression: expressionRef(),
+  },
+  required: ["format", "version", "profile", "expression"],
+  additionalProperties: false,
+  $defs: {
+    jsonValue,
+    expression,
+    kaladaType: typeSchema(),
+    parameter: {
+      type: "object",
+      properties: { name: bindingName(), type: typeRef() },
+      required: ["name", "type"],
+      additionalProperties: false,
+    },
+    namedFunction: {
+      type: "object",
+      properties: {
+        name: bindingName(),
+        parameters: parametersSchema(),
+        returns: typeRef(),
+        body: expressionRef(),
+      },
+      required: ["name", "parameters", "returns", "body"],
+      additionalProperties: false,
+    },
+  },
+});
+
+const legacyExpression = { oneOf: expression.oneOf.slice(0, 13) };
 
 export const KALADA_V1_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -91,7 +161,7 @@ export const KALADA_V1_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   },
   required: ["format", "version", "profile", "expression"],
   additionalProperties: false,
-  $defs: { jsonValue, expression },
+  $defs: { jsonValue, expression: legacyExpression },
 });
 
 export const KALADA_VALUE_V1_SCHEMA: KaladaV1JsonSchema = deepFreeze({
@@ -193,6 +263,46 @@ function expressionRef(): Record<string, string> {
 
 function bindingName(): Record<string, unknown> {
   return { type: "string", minLength: 1, maxLength: DEFAULT_KALADA_V1_LIMITS.maxReferenceLength };
+}
+
+function parametersSchema(): Record<string, unknown> {
+  return {
+    type: "array",
+    maxItems: DEFAULT_KALADA_V1_FUNCTION_LIMITS.maxFunctionParameters,
+    items: { $ref: "#/$defs/parameter" },
+  };
+}
+
+function typeRef(): Record<string, string> {
+  return { $ref: "#/$defs/kaladaType" };
+}
+
+function typeSchema(): Record<string, unknown> {
+  const primitive = node(
+    "primitive-type",
+    { name: { enum: ["null", "boolean", "number", "string", "json", "Instant", "Duration"] } },
+    ["name"],
+  );
+  return {
+    oneOf: [
+      primitive,
+      node("option-type", { value: typeRef() }, ["value"]),
+      node("result-type", { ok: typeRef(), error: typeRef() }, ["ok", "error"]),
+      node("array-type", { element: typeRef() }, ["element"]),
+      node(
+        "function-type",
+        {
+          parameters: {
+            type: "array",
+            maxItems: DEFAULT_KALADA_V1_FUNCTION_LIMITS.maxFunctionParameters,
+            items: typeRef(),
+          },
+          returns: typeRef(),
+        },
+        ["parameters", "returns"],
+      ),
+    ],
+  };
 }
 
 function deepFreeze<T>(value: T): T {

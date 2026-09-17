@@ -6,11 +6,12 @@ import {
   dataValue,
   type JsonValue,
 } from "./json.js";
+import type { ResolvedKaladaV1Limits } from "./limits.js";
 import type { KaladaV1Limits, KaladaV1Options } from "./types.js";
 
 export type Path = readonly (string | number)[];
 export interface CanonicalState<R extends JsonValue> {
-  readonly limits: KaladaV1Limits;
+  readonly limits: ResolvedKaladaV1Limits;
   readonly options: KaladaV1Options<R>;
   readonly active: WeakSet<object>;
   astNodes: number;

@@ -53,6 +53,14 @@ function evaluateNode<R extends JsonValue>(
   state: State<R>,
 ): KaladaValue {
   charge(path, state);
+  if (
+    node.kind === "function" ||
+    node.kind === "call" ||
+    node.kind === "function-group" ||
+    node.kind === "core-function"
+  ) {
+    throw new KaladaFailure("KALADA_FUNCTION_ESCAPE", path);
+  }
   if (node.kind === "literal") return node.value;
   if (isTemporalExpression(node)) {
     return evaluateTemporalExpression(node, path, state.instant, (child, childPath) =>
