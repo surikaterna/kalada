@@ -31,35 +31,43 @@ async function createConsumer(directory: string): Promise<void> {
     join(directory, "index.mjs"),
     'import * as root from "@kalada/core";\n' +
       'import { ExpressionProfile, standardV1 } from "@kalada/core/kuery-v1";\n' +
+      'import { Option, isOption } from "@kalada/core/kalada-v1";\n' +
       'const again = await import("@kalada/core/kuery-v1");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("ESM root surface mismatch");\n' +
-      'if (standardV1 !== again.standardV1 || !(standardV1 instanceof ExpressionProfile)) throw new Error("ESM identity mismatch");\n',
+      'if (standardV1 !== again.standardV1 || !(standardV1 instanceof ExpressionProfile)) throw new Error("ESM identity mismatch");\n' +
+      'if (!isOption(Option.some(1))) throw new Error("ESM kalada-v1 mismatch");\n',
   );
   await writeFile(
     join(directory, "index.cjs"),
     'const root = require("@kalada/core");\n' +
       'const first = require("@kalada/core/kuery-v1");\n' +
       'const again = require("@kalada/core/kuery-v1");\n' +
+      'const kalada = require("@kalada/core/kalada-v1");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("CJS root surface mismatch");\n' +
-      'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n',
+      'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n' +
+      'if (!kalada.isResult(kalada.Result.ok(1))) throw new Error("CJS kalada-v1 mismatch");\n',
   );
   await writeFile(
     join(directory, "types.mts"),
     'import { fromKueryExpression, type KaladaProgramV1 } from "@kalada/core";\n' +
       'import { compileExpression, standardV1, type ValueExpression } from "@kalada/core/kuery-v1";\n' +
+      'import { KaladaV1, compileKaladaV1Program, type KaladaV1Program } from "@kalada/core/kalada-v1";\n' +
       'const expression: ValueExpression = { kind: "literal", value: true };\n' +
       "const result = fromKueryExpression(expression);\n" +
       "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
-      "void compileExpression(expression, { profile: standardV1 });\nvoid program;\n",
+      "const native: KaladaV1Program = KaladaV1.program(KaladaV1.Option.none());\n" +
+      "void compileKaladaV1Program(native);\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program;\n",
   );
   await writeFile(
     join(directory, "types.cts"),
     'import core = require("@kalada/core");\n' +
       'import kuery = require("@kalada/core/kuery-v1");\n' +
+      'import kalada = require("@kalada/core/kalada-v1");\n' +
       'const expression: kuery.ValueExpression = { kind: "literal", value: true };\n' +
       "const result = core.fromKueryExpression(expression);\n" +
       "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
-      "void kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
+      "const native: kalada.KaladaV1Program = kalada.KaladaV1.program(kalada.KaladaV1.Option.none());\n" +
+      "void kalada.compileKaladaV1Program(native);\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 

@@ -1,3 +1,4 @@
+import { rejectCallbackPromise } from "../kuery-v1/callback-promise.js";
 import { failure, KaladaFailure, success } from "./diagnostics.js";
 import { cloneJson, dataValue, type JsonValue } from "./json.js";
 import type {
@@ -117,7 +118,7 @@ function evaluateReference<R extends JsonValue>(
   } catch {
     throw new KaladaFailure("KALADA_REFERENCE_ERROR", path);
   }
-  if (input instanceof Promise) throw new KaladaFailure("KALADA_ASYNC_UNSUPPORTED", path);
+  if (rejectCallbackPromise(input)) throw new KaladaFailure("KALADA_ASYNC_UNSUPPORTED", path);
   return parseResolution(input, path, state.limits);
 }
 

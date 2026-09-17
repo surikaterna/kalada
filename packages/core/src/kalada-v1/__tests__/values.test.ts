@@ -43,7 +43,9 @@ it("uses an explicit versioned codec and never implicitly decodes JSON", () => {
   expect(isOption(decoded)).toBe(true);
   expect(equalKaladaValues(decoded, Option.some(Result.err({ reason: "bad" })))).toBe(true);
   const opaque = { format: "kalada-value", version: 2, type: "Option", variant: "none" };
-  expect(decodeKaladaValue(opaque)).toEqual(opaque);
+  expect(() => decodeKaladaValue(opaque)).toThrow();
+  const collision = { format: "kalada-value", version: 1, type: "Option", variant: "none" };
+  expect(decodeKaladaValue(encodeKaladaValue(collision))).toEqual(collision);
 });
 
 it("rejects malformed v1 envelopes and hostile descriptors", () => {

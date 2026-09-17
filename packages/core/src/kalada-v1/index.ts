@@ -5,6 +5,11 @@ export { collectKaladaV1Dependencies } from "./dependencies.js";
 export { KaladaV1 } from "./factories.js";
 export type { JsonPrimitive, JsonValue } from "./json.js";
 export { DEFAULT_KALADA_V1_LIMITS } from "./limits.js";
+export {
+  KALADA_V1_PROGRAM_SCHEMA,
+  KALADA_VALUE_V1_SCHEMA,
+  type KaladaV1JsonSchema,
+} from "./schemas.js";
 export type {
   BindingExpression,
   CompiledKaladaV1Program,

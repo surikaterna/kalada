@@ -1,8 +1,8 @@
 # Kalada
 
 Kalada is a deterministic, expression-oriented language designed for portable, versioned
-evaluation contracts. This repository currently contains only the architecture and the
-`@kalada/core` package shell.
+evaluation contracts. The `@kalada/core` package exposes the extracted Kuery compatibility kernel
+and the additive native `@kalada/core/kalada-v1` Option, Result, and exhaustive-match profile.
 
 Language semantics are intentionally deferred. See
 [ADR-0001](docs/adr/0001-kalada-language-architecture.md) for the accepted boundaries and
