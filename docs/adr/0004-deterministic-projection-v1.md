@@ -5,8 +5,8 @@
 - Decision sources: [Kalada #33](https://github.com/surikaterna/kalada/issues/33), parent
   [Kalada #7](https://github.com/surikaterna/kalada/issues/7), and
   [Formbar #93](https://github.com/surikaterna/formbar/issues/93)
-- Runtime baseline: `@kalada/core@0.4.0`, release merge
-  `f51df60aed35673cef50aaf5e79a627022a96830`
+- Runtime baseline: canonical-root `@kalada/core@^0.5.0`, migrated atomically by
+  [Kalada #46](https://github.com/surikaterna/kalada/issues/46)
 - Deferred module/import authority: [Kalada #21](https://github.com/surikaterna/kalada/issues/21)
 
 ## Context
@@ -19,7 +19,7 @@ and composition features that are intentionally outside Kalada.
 This ADR supersedes ADR-0001's deferred projection details only. It freezes a data contract before
 the projection package and runtime exist. The executable fixture manifest and schema are
 `tests/fixtures/projection-v1-contract.json` and `projection-v1.schema.json`; their JSON Lines case
-files sit beside them. `core-0.4.0-compatibility.json` freezes the runtime baseline.
+files sit beside them. Packed-consumer tests freeze the runtime boundary.
 
 ## Canonical contract
 
@@ -224,7 +224,7 @@ expressions, truthiness omission, implicit loops, merge, flatten, include, templ
 and arbitrary JavaScript are not. Explicit nested `if` and `map` replace conditional chains and
 ordered loops.
 
-Future `@kalada/projection` depends one-way on public `@kalada/core/kalada-v1`; core never imports
+`@kalada/projection` depends one-way on the public `@kalada/core` root; core never imports
 projection. It must have no runtime dependency on SelectTransform and no prototype mutation,
 ambient globals, hooks, dynamic code, or source parser. Modules/imports/hooks belong exclusively to
 #21, and source syntax/parser/CST/formatter work to #8.

@@ -6,7 +6,7 @@ import type {
   KaladaV1Limits,
   KaladaV1Program,
   KaladaV1Resolver,
-} from "@kalada/core/kalada-v1";
+} from "@kalada/core";
 
 export type ProjectionPath = readonly (string | number)[];
 

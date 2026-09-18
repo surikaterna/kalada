@@ -1,4 +1,4 @@
-import { rejectCallbackPromise } from "../kuery-v1/callback-promise.js";
+import { rejectCallbackPromise } from "./callback-promise.js";
 import { KaladaFailure } from "./diagnostics.js";
 import type { Path } from "./evaluation-frames.js";
 import { cloneJson, dataValue, type JsonValue } from "./json.js";

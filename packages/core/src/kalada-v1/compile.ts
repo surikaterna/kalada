@@ -1,4 +1,4 @@
-import { rejectCallbackPromise } from "../kuery-v1/callback-promise.js";
+import { rejectCallbackPromise } from "./callback-promise.js";
 import { canonicalizeKaladaV1Program } from "./canonicalize.js";
 import { collectKaladaV1Dependencies } from "./dependencies.js";
 import { failure, KaladaFailure, success } from "./diagnostics.js";

@@ -1,4 +1,4 @@
-import { KaladaV1, type KaladaV1Resolution } from "@kalada/core/kalada-v1";
+import { KaladaV1, type KaladaV1Resolution } from "@kalada/core";
 import {
   compileProjectionV1,
   type ProjectionEvaluationOutcome,

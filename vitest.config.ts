@@ -4,10 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@kalada/core/kalada-v1": resolve(
-        import.meta.dirname,
-        "packages/core/src/kalada-v1/index.ts",
-      ),
+      "@kalada/core": resolve(import.meta.dirname, "packages/core/src/index.ts"),
     },
   },
 });

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@kalada/core/kalada-v1";
+import type { JsonValue } from "@kalada/core";
 import { ProjectionFailure } from "./diagnostics.js";
 import type { ProjectionPath, ProjectionV1Limits } from "./types.js";
 import { utf8ByteLength } from "./utf8-byte-length.js";

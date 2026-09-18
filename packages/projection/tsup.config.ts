@@ -5,7 +5,7 @@ export default defineConfig({
   clean: true,
   dts: true,
   entry: ["src/index.ts"],
-  external: ["@kalada/core/kalada-v1"],
+  external: ["@kalada/core"],
   format: ["esm", "cjs"],
   outExtension({ format }) {
     return { js: format === "cjs" ? ".cjs" : ".js" };

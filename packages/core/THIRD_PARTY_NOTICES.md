@@ -1,7 +1,7 @@
 # Third-party notices
 
-`@kalada/core/kuery-v1` contains code derived from Kuery 2.1.0. Kuery's package metadata declares
-the ISC license, while the release repository's `LICENSE` file contains the MIT text below.
+The private native Promise hardening helper contains code derived from Kuery 2.1.0. Kuery's package
+metadata declares the ISC license, while the release repository's `LICENSE` file contains the MIT text below.
 Because these two upstream declarations differ, Kalada conservatively reproduces both notices.
 This does not alter Kalada's own MIT license or package metadata.
 

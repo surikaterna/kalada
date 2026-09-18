@@ -263,15 +263,17 @@ Truncation keeps the innermost frames and is deterministic. Static diagnostics a
 outside a call use an empty context. Messages remain stable, generic, and contain no host error,
 captured value, resolver detail, or source-syntax text.
 
-## Compatibility baseline and delivery gates
+## Historical compatibility baseline and delivery gates
 
 The fixtures in `tests/fixtures/core-0.3.0-compatibility.json` were captured from the npm artifact
 with SHA-1 `c963824e9e5470d461b10cfae944d1b1378a29c2` and SHA-512 integrity
 `sha512-viBoDxOSef4qYV3sHh3ik67tfssKMdChpFrUvOOzuDui+itTELqwmZ7zae9ajJXaNUaaUnAtiNeOwRBaoJnyGw==`.
-They freeze root and `kuery-v1` ESM/CJS exports and declarations, package identity/exports and
+Before the breaking cleanup in #46, they froze root and `kuery-v1` ESM/CJS exports and declarations, package identity/exports and
 zero runtime dependencies, plus canonicalization, dependencies, diagnostics, ADTs, temporal
 values, schemas, limits, and representative outcomes. Root and `kuery-v1` permit no drift;
-general-function work is additive only under `kalada-v1`.
+general-function work was additive only under `kalada-v1`. #46 removed those fixtures and made the
+native API the sole package root; this historical description remains the rationale for the 0.3
+delivery sequence, not a current compatibility promise.
 
 Delivery follows #22 (this ADR/baseline) → #23 (contracts/captures) → #24
 (closures/recursion/trampoline) → #25 (collection functions) → #26 (hardening/package/minor
