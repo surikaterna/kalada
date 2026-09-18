@@ -1,8 +1,11 @@
 import type {
+  InstantValue,
+  JsonValue,
   KaladaV1Diagnostic,
   KaladaV1FunctionLimits,
   KaladaV1Limits,
   KaladaV1Program,
+  KaladaV1Resolver,
 } from "@kalada/core/kalada-v1";
 
 export type ProjectionPath = readonly (string | number)[];
@@ -99,7 +102,27 @@ export type ProjectionOutcome<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly diagnostic: ProjectionDiagnostic };
 
+export type ProjectionEvaluationOutcome =
+  | { readonly ok: true; readonly value: JsonValue }
+  | { readonly ok: true; readonly omitted: true }
+  | { readonly ok: false; readonly diagnostic: ProjectionDiagnostic };
+
+export interface ProjectionEvaluationInputs {
+  readonly instant?: InstantValue;
+}
+
+export type ProjectionResolver = KaladaV1Resolver<string>;
+export type ProjectionClock = () => InstantValue;
+
 export interface CompiledProjection {
   readonly projection: ProjectionProgram;
   readonly dependencies: readonly string[];
+  evaluate(
+    resolve: ProjectionResolver,
+    inputs?: ProjectionEvaluationInputs,
+  ): ProjectionEvaluationOutcome;
+  evaluateWithClock(
+    resolve: ProjectionResolver,
+    clock: ProjectionClock,
+  ): ProjectionEvaluationOutcome;
 }
