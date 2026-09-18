@@ -17,6 +17,7 @@ const fixtures = resolve(root, "tests/consumers/projection");
 const forbiddenRuntime = [
   [/\bnode:[a-z][a-z0-9_/-]*/u, "node built-in"],
   [/\bprocess\s*\./u, "process global"],
+  [/\bBuffer\b/u, "Buffer global"],
   [/\beval\s*\(/u, "eval"],
   [/\bFunction\s*\(/u, "Function constructor"],
   [/\bimport\s*\(/u, "dynamic import"],
@@ -123,7 +124,14 @@ async function createConsumer(directory: string): Promise<void> {
     join(directory, "package.json"),
     JSON.stringify({ name: "projection-packed-consumer", private: true, type: "module" }),
   );
-  for (const file of ["esm.mjs", "cjs.cjs", "types.mts", "types.cts", "browser.mjs"]) {
+  for (const file of [
+    "esm.mjs",
+    "cjs.cjs",
+    "types.mts",
+    "types.cts",
+    "browser.mjs",
+    "browser-runner.cjs",
+  ]) {
     await copyFile(join(fixtures, file), join(directory, file));
   }
 }
@@ -171,7 +179,12 @@ async function runConsumer(directory: string, archives: string[]): Promise<void>
   run(["node", "cjs.cjs"], directory);
   runTypeConsumers(directory);
   run(["bun", "build", "browser.mjs", "--target=browser", "--outfile=browser.js"], directory);
-  assertRuntimeText(await readFile(join(directory, "browser.js"), "utf8"), "browser bundle");
+  const browserBundle = await readFile(join(directory, "browser.js"), "utf8");
+  assertRuntimeText(browserBundle, "browser bundle");
+  for (const pattern of [/\brequire\s*\(/u, /\bmodule\s*\./u]) {
+    if (pattern.test(browserBundle)) throw new Error("Browser bundle contains a Node module hook");
+  }
+  run(["node", "browser-runner.cjs"], directory);
 }
 
 async function main(): Promise<void> {
