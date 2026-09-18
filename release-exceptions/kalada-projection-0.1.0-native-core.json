@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "exceptionKind": "unpublished-package-correction",
+  "repository": "surikaterna/kalada",
+  "reason": "Owner-authorized #44/#46 correction of the unpublished projection 0.1.0 candidate to the canonical core 0.5 root; this record does not authorize publication.",
+  "authorization": {
+    "issueUrl": "https://github.com/surikaterna/kalada/issues/44",
+    "baseCommit": "0284795fa55c6628d41a1337aecd461d2a692645"
+  },
+  "reviewIssueUrl": "https://github.com/surikaterna/kalada/issues/46",
+  "removalIssueUrl": "https://github.com/surikaterna/kalada/issues/49",
+  "expiresAt": "2026-09-19T20:00:00.000Z",
+  "package": {
+    "name": "@kalada/projection",
+    "path": "packages/projection/package.json",
+    "version": "0.1.0"
+  },
+  "files": [
+    { "path": "packages/projection/CHANGELOG.md", "status": "mod", "baseSha256": "502030204bf79a470ecdb81bde4cc0ecac950b880cdb39c3b4a268e034ce0c9b", "headSha256": "81296d77b65966d3e4baee7c758c83c32d53cfbd5154c37252d058902eeb7d1e" },
+    { "path": "packages/projection/README.md", "status": "mod", "baseSha256": "f9e8f880be6984a1133684792a4e588598d8e99ffcf8d8674c7a136bff5a5627", "headSha256": "df08fa2473f6c172698a44c70af83e6d66bc3967dfc9368eca6815cd74bdfd18" },
+    { "path": "packages/projection/package.json", "status": "mod", "baseSha256": "b1d7d841e9ace28a8d4f7aa6ccda4df2e91dcc27e2c724fb755a6918b8e1710c", "headSha256": "e4ebc7d724b141808b81af282abc720aa1944050a2f9a223352e86a6f5f651b9" },
+    { "path": "packages/projection/src/canonical-expression.ts", "status": "mod", "baseSha256": "f817bc43976159582ab22adbce8a02c242662abcb237ad790b6a08bd228a94d8", "headSha256": "517b5937f05a38eea565670554b8d575d0fc3bb8b3d5bc782f3f7a77d2a8a4d6" },
+    { "path": "packages/projection/src/canonical-machine.ts", "status": "mod", "baseSha256": "8cb49033463524f1a752e2a7ad6105a3c999822f6cd3a61f022f336ac231c089", "headSha256": "32895c0e23a1557950b291746e22a65baac8c94757bddff6eaee2eac006bad19" },
+    { "path": "packages/projection/src/diagnostics.ts", "status": "mod", "baseSha256": "5fe6e93ff591bd6986e55fe02d51f36af558e32ad944abe02492a78e94c3de7f", "headSha256": "fb857b71eb2041245ad6a520296a3b4b6c1e9dc74195e7e945d6f513367726de" },
+    { "path": "packages/projection/src/evaluate-map.test.ts", "status": "mod", "baseSha256": "967b063e2939190424487a6ababb750c052c4ac1b0256e3b01ffb1db54ec22e1", "headSha256": "1a89604dd40864ca296a7e6981b5a2ac0e54d404cff504938502453c925e9250" },
+    { "path": "packages/projection/src/evaluate.test.ts", "status": "mod", "baseSha256": "14a77e0c68b4a6f5161e02859777cb2e4d57e22db503a9b60c833f77c5292f", "headSha256": "acda67dfe1746d6bfee8e444190ab2558b6ad1f48d2d539cd569be32e6cffae9" },
+    { "path": "packages/projection/src/evaluate.ts", "status": "mod", "baseSha256": "61ffa1ee509a93c39934480eb3a9963b94005ad21c6304be9a6804917fa0a6f6", "headSha256": "250d968b3e83f771fa967b27981cb3e4c2dd9364b04d5aeb64ac2f12b49cc0f5" },
+    { "path": "packages/projection/src/factories.ts", "status": "mod", "baseSha256": "956c1fb39b7e46db2703b7360941a83badaeb6c0531bf62640776051a24ee618", "headSha256": "b34f12e4559c636b313de3264d98dd47363feea258d0e408851b5d3be3d203f1" },
+    { "path": "packages/projection/src/migration.test.ts", "status": "mod", "baseSha256": "505b227d0288722611907316cf26d4c15d72ec558a727a101fdfb1c55a9a0086", "headSha256": "1dc2efe67652183fc992a8e944cb7e538770385efd674594e42bd7caaeaaefe9" },
+    { "path": "packages/projection/src/output-accounting.test.ts", "status": "mod", "baseSha256": "98aeb224c33a832305ad7c4f8e8d1767d6a7c5fa6f9b7fc4051094e7ea2e9cb1", "headSha256": "8d7c489d6554999565659fd4cf8c9bef48d81409ac222d3dda7050c3983dde62" },
+    { "path": "packages/projection/src/output-accounting.ts", "status": "mod", "baseSha256": "a9fa51d953dcff32459987132b28db9a44fb4396bf09b5eddabeeb5c573a93a2", "headSha256": "a0fe95fe678a253419a2c20dac58f29708caccd6d5680f8f8d182fe9e063a435" },
+    { "path": "packages/projection/src/projection.test.ts", "status": "mod", "baseSha256": "0b15d64721d58f7c7cf911efb172dd3484c360796d15977272580828529868f6", "headSha256": "d56c3e54fe9fa1d28869698cf0608083bafbd648a4cabbdf04a437b2a8682d18" },
+    { "path": "packages/projection/src/types.ts", "status": "mod", "baseSha256": "564931279a888f8bbcc749f9a40fb737c35da46132979dbe178a14540447c3da", "headSha256": "9c37b16598666681ffaf52f284d40048dc32b0d5aec86a673be3a5af40f48d2f" },
+    { "path": "packages/projection/src/value-output.ts", "status": "mod", "baseSha256": "6c2d0e37dde178a08f9380c7f4902054407adac1c6aaffd8b42b8d879852121b", "headSha256": "ddc9dbb91cd0fe882d23c56478a196cdb0a0bbf446743ac776cd6f2a0684f395" },
+    { "path": "packages/projection/tsconfig.json", "status": "mod", "baseSha256": "b1929128aede0866980dc31084e3893ea332875ff344a0581608fae3f929e733", "headSha256": "4255126c49ebe7c7f77c78035fddf32c86c6787f7e75c980a67700122dd417ab" },
+    { "path": "packages/projection/tsup.config.ts", "status": "mod", "baseSha256": "b8a47568f725f4990212906e851023c5e32ec9b65c4cb6311b78d0b316318a67", "headSha256": "aec1223b4da048b3092dccdd426f03b93ecad52af535f9d5a98fc8d8a601807b" },
+    { "path": "packages/projection/vitest.config.ts", "status": "mod", "baseSha256": "090ce5097fc4c49f34a1ad967baafccc3b3b407fb75dbdeba372857c03187f2e", "headSha256": "b39767b44b7bf4b9b25f75263c191d86a24ca1e2e7977ea589a4f92a7ba92668" }
+  ],
+  "registryEvidence": {
+    "registry": "https://registry.npmjs.org",
+    "package": "@kalada/projection",
+    "version": "0.1.0",
+    "status": "not-found",
+    "httpStatus": 404,
+    "capturedAt": "2026-09-18T20:17:14.455Z",
+    "command": "npm view @kalada/projection@0.1.0 version --json --registry=https://registry.npmjs.org",
+    "response": "{\n  \"error\": {\n    \"code\": \"E404\",\n    \"summary\": \"Not Found - GET https://registry.npmjs.org/@kalada%2fprojection - Not found\",\n    \"detail\": \"The requested resource '@kalada/projection@0.1.0' could not be found or you do not have permission to access it.\\n\\nNote that you can also install from a\\ntarball, folder, http url, or git url.\"\n  }\n}\n",
+    "responseSha256": "c2394873b2cded83f1c9b2ab4ddc22242da38c03f0aed262e467bf5cd0061a01"
+  }
+}
