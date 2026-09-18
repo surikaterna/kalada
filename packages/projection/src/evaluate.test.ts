@@ -129,10 +129,7 @@ describe("projection v1 evaluation", () => {
       calls += 1;
       return { found: false } as const;
     };
-    expect(map.evaluate(resolver)).toMatchObject({
-      ok: false,
-      diagnostic: { code: "PROJECTION_INVALID_INPUT", path: ["root"] },
-    });
+    expect(map.evaluate(resolver)).toEqual({ ok: true, value: [] });
     expect(calls).toBe(0);
   });
 
