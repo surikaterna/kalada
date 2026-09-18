@@ -48,7 +48,7 @@ async function createConsumer(directory: string): Promise<void> {
       'const loop=K.functionGroup([K.namedFunction("loop",[K.parameter("x",K.Type.option(n))],n,K.match("Option",K.ref("x"),[K.arm("some",K.call(K.ref("loop"),[K.Option.none()])),K.arm("none",K.literal(7))]))],K.call(K.ref("loop"),[K.Option.some(K.literal(1))]));\n' +
       'const map=K.call(K.coreFunction("map"),[K.literal([8,9]),K.function([K.parameter("x",j),K.parameter("i",n)],j,K.ref("i"))]);\n' +
       'for (const [e,w] of [[read,7],[loop,7],[map,[0,1]]]) { const p=compile(K.program(e)); const o=p.ok&&p.value.evaluate(()=>({found:false})); if (!o.ok||JSON.stringify(o.value)!==JSON.stringify(w)) throw new Error("ESM function execution mismatch"); }\n' +
-      'const projection=compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!projection.ok||projection.value.dependencies[0]!=="x"||"evaluate" in projection.value) throw new Error("ESM projection mismatch");\n',
+      'const projection=compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!projection.ok||projection.value.dependencies[0]!=="x") throw new Error("ESM projection mismatch"); const projected=projection.value.evaluate(()=>({found:true,value:4})); if(!projected.ok||!("value" in projected)||projected.value!==4) throw new Error("ESM projection evaluation mismatch");\n',
   );
   await writeFile(
     join(directory, "index.cjs"),
@@ -65,7 +65,7 @@ async function createConsumer(directory: string): Promise<void> {
       'if (!kalada.isDuration(kalada.Duration.fromMilliseconds(-1))) throw new Error("CJS temporal mismatch");\n' +
       'if (kalada.Option.none() !== kalada.Option.none()) throw new Error("CJS singleton mismatch");\n' +
       'const K=kalada.KaladaV1,n=K.Type.primitive("number"),e=K.call(K.function([],n,K.literal(4)),[]),p=kalada.compileKaladaV1Program(K.program(e)),o=p.ok&&p.value.evaluate(()=>({found:false})); if(!o.ok||o.value!==4) throw new Error("CJS closure execution mismatch");\n' +
-      'const P=projection.ProjectionV1,cp=projection.compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!cp.ok||cp.value.dependencies[0]!=="x") throw new Error("CJS projection mismatch");\n',
+      'const P=projection.ProjectionV1,cp=projection.compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!cp.ok||cp.value.dependencies[0]!=="x") throw new Error("CJS projection mismatch"); const projected=cp.value.evaluate(()=>({found:true,value:4})); if(!projected.ok||!("value" in projected)||projected.value!==4) throw new Error("CJS projection evaluation mismatch");\n',
   );
   await writeFile(
     join(directory, "types.mts"),
@@ -79,7 +79,7 @@ async function createConsumer(directory: string): Promise<void> {
       "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: KaladaV1Program = KaladaV1.program(KaladaV1.Option.none());\n" +
       'const coreName: KaladaCoreFunctionName = "map";\nconst functionType: KaladaFunctionType = { kind: "function-type", parameters: [], returns: { kind: "primitive-type", name: "number" } };\n' +
-      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nconst projection: ProjectionProgram = ProjectionV1.program(ProjectionV1.value(native));\nvoid compileProjectionV1(projection);\nvoid schema.$id;\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
+      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nconst projection: ProjectionProgram = ProjectionV1.program(ProjectionV1.value(native));\nconst compiledProjection = compileProjectionV1(projection);\nif (compiledProjection.ok) compiledProjection.value.evaluate(() => ({ found: false }));\nvoid schema.$id;\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
   );
   await writeFile(
     join(directory, "types.cts"),
@@ -92,7 +92,7 @@ async function createConsumer(directory: string): Promise<void> {
       "const result = core.fromKueryExpression(expression);\n" +
       "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: kalada.KaladaV1Program = kalada.KaladaV1.program(kalada.KaladaV1.Option.none());\n" +
-      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nconst projectionProgram: projection.ProjectionProgram = projection.ProjectionV1.program(projection.ProjectionV1.value(native));\nvoid projection.compileProjectionV1(projectionProgram);\nvoid schema.$id;\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
+      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nconst projectionProgram: projection.ProjectionProgram = projection.ProjectionV1.program(projection.ProjectionV1.value(native));\nconst compiledProjection = projection.compileProjectionV1(projectionProgram);\nif (compiledProjection.ok) compiledProjection.value.evaluate(() => ({ found: false }));\nvoid schema.$id;\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 

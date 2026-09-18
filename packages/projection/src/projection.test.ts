@@ -41,7 +41,7 @@ describe("projection v1 canonical contracts", () => {
     expect(outcome).toMatchObject({ ok: true, value: { dependencies: ["a", "b"] } });
     if (!outcome.ok) return;
     expect(Object.isFrozen(outcome.value.dependencies)).toBe(true);
-    expect("evaluate" in outcome.value).toBe(false);
+    expect(typeof outcome.value.evaluate).toBe("function");
   });
 
   it("excludes direct map locals only from body dependencies", () => {
