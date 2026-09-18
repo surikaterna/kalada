@@ -158,6 +158,24 @@ describe("projection v1 output accounting vectors", () => {
     }
   }
 
+  it.each([
+    ["ASCII", 7],
+    ["é", 4],
+    ["😀", 6],
+    ["\ud800", 8],
+    ["\udc00", 8],
+  ] as const)("accepts exact UTF-8 bytes and rejects +1 for %j", (output, bytes) => {
+    const node = value(output);
+    const exact = compileProjectionV1(P.program(node), { limits: { maxOutputBytes: bytes } });
+    const below = compileProjectionV1(P.program(node), { limits: { maxOutputBytes: bytes - 1 } });
+    if (!exact.ok || !below.ok) throw new Error("test projection did not compile");
+    expect(exact.value.evaluate(() => ({ found: false }))).toEqual({ ok: true, value: output });
+    expect(below.value.evaluate(() => ({ found: false }))).toMatchObject({
+      ok: false,
+      diagnostic: { code: "PROJECTION_OUTPUT_LIMIT", path: expression() },
+    });
+  });
+
   it("charges a shared resolver identity once per output occurrence", () => {
     const shared = Option.some({ x: 1 });
     const node = P.array([

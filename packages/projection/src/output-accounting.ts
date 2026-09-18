@@ -1,6 +1,7 @@
 import type { JsonValue } from "@kalada/core/kalada-v1";
 import { ProjectionFailure } from "./diagnostics.js";
 import type { ProjectionPath, ProjectionV1Limits } from "./types.js";
+import { utf8ByteLength } from "./utf8-byte-length.js";
 
 export interface OutputTree {
   readonly value: JsonValue;
@@ -62,7 +63,7 @@ export class OutputAccounting {
 
   token(token: string, path: ProjectionPath): void {
     if (this.pending) return;
-    const bytes = Buffer.byteLength(token);
+    const bytes = utf8ByteLength(token);
     if (this.bytes + bytes > this.limits.maxOutputBytes) {
       this.pending = new ProjectionFailure("PROJECTION_OUTPUT_LIMIT", path);
       return;
