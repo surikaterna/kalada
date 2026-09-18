@@ -133,7 +133,9 @@ function evaluateObject(
   depth: number,
   state: EvaluationState,
 ): OutputTree {
+  const containerCheckpoint = state.output.checkpoint();
   state.output.startContainer(depth, path, "{");
+  state.output.failIfChanged(containerCheckpoint);
   const emitted: OutputEntry[] = [];
   for (const [index, entry] of entries.entries()) {
     const keyPath = [...path, "entries", index, "key"];
@@ -158,7 +160,9 @@ function evaluateArray(
   depth: number,
   state: EvaluationState,
 ): OutputTree {
+  const containerCheckpoint = state.output.checkpoint();
   state.output.startContainer(depth, path, "[");
+  state.output.failIfChanged(containerCheckpoint);
   const emitted: OutputTree[] = [];
   for (const [index, item] of items.entries()) {
     const itemPath = [...path, "items", index];
@@ -205,7 +209,9 @@ function evaluateMap(
   if (collection.length > state.limits.maxCollectionLength) {
     throw new ProjectionFailure("PROJECTION_LIMIT_EXCEEDED", collectionPath);
   }
+  const containerCheckpoint = state.output.checkpoint();
   state.output.startContainer(depth, path, "[");
+  state.output.failIfChanged(containerCheckpoint);
   const emitted: OutputTree[] = [];
   for (const [index, item] of collection.entries()) {
     const itemPath = [...path, "body", index];

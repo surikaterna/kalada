@@ -204,6 +204,58 @@ describe("bounded projection map", () => {
     });
   });
 
+  it.each([
+    ["node", { maxOutputNodes: 1 }],
+    ["depth", { maxOutputDepth: 1 }],
+    ["byte", { maxOutputBytes: 1 }],
+  ] as const)("stops at a nested map container %s failure", (_case, limits) => {
+    const bodyMap = P.map(literal([1, 2, 3]), "inner", "innerIndex", P.value(reference("body")));
+    const nestedBody =
+      _case === "depth" ? P.map(literal([0]), "middle", "middleIndex", bodyMap) : bodyMap;
+    const nested = P.map(literal([0]), "outer", "outerIndex", nestedBody);
+    const compiled = compile(nested, { limits });
+    const expected = {
+      ok: false,
+      diagnostic: {
+        code: "PROJECTION_OUTPUT_LIMIT",
+        path: _case === "depth" ? ["root", "body", 0, "body", 0] : ["root", "body", 0],
+        message: "Projection output limit exceeded.",
+      },
+    } as const;
+    let calls = 0;
+    const resolver = () => {
+      calls += 1;
+      return { found: true, value: calls } as const;
+    };
+    expect(compiled.evaluate(resolver)).toEqual(expected);
+    expect(calls).toBe(0);
+    expect(compiled.evaluate(resolver)).toEqual(expected);
+    expect(calls).toBe(0);
+  });
+
+  it("also stops nested object and array containers before child resolution", () => {
+    const containers = [
+      [P.array([P.array([P.value(reference("child"))])]), ["root", "items", 0]],
+      [
+        P.object([P.entry("nested", P.object([P.entry("child", P.value(reference("child")))]))]),
+        ["root", "entries", 0, "value"],
+      ],
+    ] as const;
+    for (const [node, path] of containers) {
+      let calls = 0;
+      const outcome = compile(node, { limits: { maxOutputNodes: 1 } }).evaluate(() => {
+        calls += 1;
+        return { found: true, value: 1 };
+      });
+      expect(outcome).toMatchObject({
+        ok: false,
+        diagnostic: { code: "PROJECTION_OUTPUT_LIMIT", path },
+      });
+      expect(calls).toBe(0);
+      expect("value" in outcome).toBe(false);
+    }
+  });
+
   it("fails fast before later items and shares one clock sample", () => {
     const failed = compile(P.map(literal([1, 2, 3]), "item", "index", P.value(reference("host"))));
     let calls = 0;
