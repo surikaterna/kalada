@@ -21,9 +21,15 @@ compiler/evaluator. Typed functions are lexical values and execute through an it
 continuation machine. Core `map`, `filter`, `some`, and `every` callbacks preserve input order and
 are bounded by configured limits.
 
-Resolvers and clocks are synchronous. Throws, Promises (including cross-realm and hostile
-Promise-shaped values), accessors, proxies, cycles, sparse arrays, and invalid values are contained
-as frozen diagnostics. `evaluateWithClock` samples its clock exactly once per evaluation.
+Resolvers and clocks are synchronous. An ordinary, unmodified current-realm Promise is rejected as
+`KALADA_ASYNC_UNSUPPORTED`; its rejection is consumed through a captured intrinsic. Cross-realm,
+subclassed, proxied, and spoofed candidates are contained without a general attachment guarantee.
+A hostile or unusable own constructor receives the same deterministic diagnostic without attachment,
+reading getters, invoking `then` or constructors, mutating descriptors, or intercepting host-global
+rejection handling. The host that created such a candidate remains responsible for any pre-existing
+rejection. Other throws, accessors, proxies, cycles, sparse arrays,
+and invalid values are contained as frozen diagnostics. `evaluateWithClock` samples its clock
+exactly once per evaluation.
 
 The package has no parser, module loader, imports, I/O, effects, scheduling, host-language function
 interop, or async callbacks. Modules and imports remain deferred to

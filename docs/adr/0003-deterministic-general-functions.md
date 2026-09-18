@@ -282,6 +282,19 @@ runtime or publishable API and therefore has no Changeset.
 
 ## Non-goals
 
+### Promise attachment capability boundary
+
+Native evaluation does not claim a general genuine-Promise brand check. It consumes rejection only
+for an ordinary, unmodified current-realm Promise whose trusted constructor path permits attachment
+through the captured intrinsic. Cross-realm Promises, subclasses, species overrides, Proxies,
+spoofs, and thenables remain unsupported candidates without a general attachment guarantee. A
+hostile or unusable own constructor is explicitly not attached. Evaluation returns
+`KALADA_ASYNC_UNSUPPORTED` where the candidate is safely
+recognized, does not read getters, invoke `then` or constructors, mutate descriptors, or intercept
+host-global rejection handling, and leaves any pre-existing rejection under its creator's control.
+This portability boundary is an approved exception to rejection consumption, not an asynchronous
+evaluation feature.
+
 This decision does not implement runtime behavior. It adds no modules, imports, module resolver,
 manifest, hook, native intrinsic, capability, effect, mutation, async behavior, host function,
 parser syntax, CST, formatter rule, or additional collection function. Modules and imports are
