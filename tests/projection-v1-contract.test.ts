@@ -79,6 +79,7 @@ const auditVectors = {
   diagnostics: await readJsonLines<DiagnosticCase>(manifest.diagnosticFixture),
   accounting: await readJsonLines<AccountingCase>(manifest.accountingFixture),
 };
+const outputLimitMaximum = { depth: 256, nodes: 100_000, bytes: 16_777_216 } as const;
 
 interface ProjectionNode {
   readonly kind: string;
@@ -281,6 +282,20 @@ describe("projection-v1 frozen contract fixtures", () => {
     expect(byId.get("diagnostic-unsafe-key")?.precedence).toBeLessThan(
       byId.get("diagnostic-duplicate-key")?.precedence ?? 0,
     );
+  });
+
+  it("uses valid positive output limits for every boundary", () => {
+    for (const entry of auditVectors.accounting) {
+      for (const [name, boundary] of Object.entries(entry.boundaries)) {
+        const maximum = outputLimitMaximum[name as keyof typeof outputLimitMaximum];
+        expect(Number.isSafeInteger(boundary.equalLimit), `${entry.id} ${name} equal`).toBe(true);
+        expect(boundary.equalLimit, `${entry.id} ${name} equal`).toBeGreaterThanOrEqual(1);
+        expect(boundary.equalLimit, `${entry.id} ${name} equal`).toBeLessThanOrEqual(maximum);
+        expect(Number.isSafeInteger(boundary.plusOneLimit), `${entry.id} ${name} +1`).toBe(true);
+        expect(boundary.plusOneLimit, `${entry.id} ${name} +1`).toBeGreaterThanOrEqual(1);
+        expect(boundary.plusOneLimit, `${entry.id} ${name} +1`).toBeLessThanOrEqual(maximum);
+      }
+    }
   });
 
   it("pins preorder once-per-occurrence output boundaries", () => {
