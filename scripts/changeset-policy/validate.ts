@@ -8,8 +8,9 @@ export function validateChangesetPolicy(
   base: string,
   head: string,
   repositoryName: string,
+  validationTime = Date.now(),
 ): void {
-  assertInputs(base, head, repositoryName);
+  assertInputs(base, head, repositoryName, validationTime);
   assertCommit(repository, base, "Base");
   assertCommit(repository, head, "Head");
   const entries = diffEntries(repository, base, head);
@@ -25,16 +26,31 @@ export function validateChangesetPolicy(
     throw new Error(`Missing Changeset for ${[...uncovered].join(", ")}`);
   if (uncovered.size > 1) throw new Error("One exception may authorize exactly one package");
   if (exception)
-    validateException(repository, base, head, repositoryName, entries, exception, uncovered);
+    validateException(
+      repository,
+      base,
+      head,
+      repositoryName,
+      entries,
+      exception,
+      uncovered,
+      validationTime,
+    );
 }
 
-function assertInputs(base: string, head: string, repository: string): void {
+function assertInputs(
+  base: string,
+  head: string,
+  repository: string,
+  validationTime: number,
+): void {
   if (!/^[0-9a-f]{40}$/u.test(base) || !/^[0-9a-f]{40}$/u.test(head)) {
     throw new Error("Base and head must be immutable 40-character commit SHAs");
   }
   if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/u.test(repository)) {
     throw new Error("Repository must be the immutable PR repository full name");
   }
+  if (!Number.isFinite(validationTime)) throw new Error("Validation time must be finite");
 }
 
 function mergedPackages(repository: string, base: string, head: string) {

@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/surikaterna/kalada/blob/main/release-exceptions/schema.v2.json",
+  "title": "Kalada unpublished-package correction exception v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "exceptionKind",
+    "repository",
+    "reason",
+    "authorization",
+    "reviewIssueUrl",
+    "removalIssueUrl",
+    "expiresAt",
+    "package",
+    "files",
+    "registryEvidence"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "exceptionKind": { "const": "unpublished-package-correction" },
+    "repository": { "$ref": "#/definitions/repository" },
+    "reason": { "type": "string", "minLength": 1 },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issueUrl", "baseCommit"],
+      "properties": {
+        "issueUrl": { "$ref": "#/definitions/issueUrl" },
+        "baseCommit": { "$ref": "#/definitions/commit" }
+      }
+    },
+    "reviewIssueUrl": { "$ref": "#/definitions/issueUrl" },
+    "removalIssueUrl": { "$ref": "#/definitions/issueUrl" },
+    "expiresAt": { "$ref": "#/definitions/timestamp" },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "pattern": "^packages/[^/*?\\[\\]{}]+/package\\.json$" },
+        "version": { "$ref": "#/definitions/version" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/file" }
+    },
+    "registryEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry",
+        "package",
+        "version",
+        "status",
+        "httpStatus",
+        "capturedAt",
+        "command",
+        "response",
+        "responseSha256"
+      ],
+      "properties": {
+        "registry": { "const": "https://registry.npmjs.org" },
+        "package": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/definitions/version" },
+        "status": { "const": "not-found" },
+        "httpStatus": { "const": 404 },
+        "capturedAt": { "$ref": "#/definitions/timestamp" },
+        "command": {
+          "type": "string",
+          "pattern": "^npm view .+ version --json --registry=https://registry\\.npmjs\\.org$"
+        },
+        "response": { "type": "string", "minLength": 1 },
+        "responseSha256": { "$ref": "#/definitions/sha256" }
+      }
+    }
+  },
+  "definitions": {
+    "repository": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$" },
+    "issueUrl": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/issues/[1-9][0-9]*$"
+    },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "baseSha256", "headSha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^packages/[^/*?\\[\\]{}]+/.+$" },
+        "status": { "enum": ["add", "mod", "del"] },
+        "baseSha256": { "oneOf": [{ "$ref": "#/definitions/sha256" }, { "type": "null" }] },
+        "headSha256": { "oneOf": [{ "$ref": "#/definitions/sha256" }, { "type": "null" }] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "add" } } },
+          "then": {
+            "properties": {
+              "baseSha256": { "type": "null" },
+              "headSha256": { "$ref": "#/definitions/sha256" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "mod" } } },
+          "then": {
+            "properties": {
+              "baseSha256": { "$ref": "#/definitions/sha256" },
+              "headSha256": { "$ref": "#/definitions/sha256" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "del" } } },
+          "then": {
+            "properties": {
+              "baseSha256": { "$ref": "#/definitions/sha256" },
+              "headSha256": { "type": "null" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

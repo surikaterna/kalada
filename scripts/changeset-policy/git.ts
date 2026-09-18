@@ -17,6 +17,13 @@ export function assertCommit(repository: string, commit: string, label: string):
   if (actual !== commit) throw new Error(`${label} must be an immutable 40-character commit SHA`);
 }
 
+export function commitTimestamp(repository: string, commit: string): number {
+  const value = git(repository, ["show", "-s", "--format=%cI", commit]).toString().trim();
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new Error(`Commit ${commit} has an invalid timestamp`);
+  return timestamp;
+}
+
 export function diffEntries(repository: string, base: string, head: string): DiffEntry[] {
   const fields = git(repository, ["diff", "--raw", "--no-renames", "-z", base, head])
     .toString()
