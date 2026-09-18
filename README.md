@@ -6,11 +6,18 @@ compatibility kernel and the additive native `@kalada/core/kalada-v1` profile. T
 supports typed lexical functions, bounded recursion, and the `map`, `filter`, `some`, and `every`
 core function values in addition to Option, Result, temporal values, and exhaustive matches.
 
-See the [package API guide](packages/core/README.md) for executable examples, limits, and public
-entry points. Modules and imports remain explicitly deferred to [#21](https://github.com/surikaterna/kalada/issues/21);
-this release does not add module loading, host callbacks, effects, or asynchronous evaluation. See
+See the [core API guide](packages/core/README.md) and
+[projection API and migration guide](packages/projection/README.md) for executable examples,
+limits, security boundaries, omission semantics, and public entry points. Projection v1 constructs
+JSON with explicit core expression ASTs and the five bounded `value`, `object`, `array`, `if`, and
+`map` nodes. It does not execute source strings, interpolation, arbitrary JavaScript, truthiness,
+merge/flatten/include/let, or implicit loops.
+
+Modules and imports remain explicitly deferred to
+[#21](https://github.com/surikaterna/kalada/issues/21); this release does not add module loading,
+host effects, or asynchronous evaluation. See
 [ADR-0001](docs/adr/0001-kalada-language-architecture.md) for the accepted boundaries and
-[ADR-0004](docs/adr/0004-deterministic-projection-v1.md) for the projection-v1 contract.
+[ADR-0004](docs/adr/0004-deterministic-projection-v1.md) for the complete projection-v1 contract.
 
 ## Development
 
@@ -23,6 +30,7 @@ bun run typecheck
 bun run test
 bun run build
 bun run package:smoke
+bun run projection:smoke
 ```
 
 Changes to publishable packages require a Changeset. Publication is owned by the protected
