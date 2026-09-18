@@ -1,4 +1,4 @@
-const core = require("@kalada/core/kalada-v1");
+const core = require("@kalada/core");
 const projection = require("@kalada/projection");
 const schema = require("@kalada/projection/projection-v1.schema.json");
 

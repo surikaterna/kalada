@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -49,6 +49,19 @@ function pack(workspace: string, destination: string): PackResult {
   return result;
 }
 
+async function packCoreCandidate(destination: string): Promise<PackResult> {
+  const candidate = join(destination, "core-0.5.0");
+  await cp(join(root, "packages/core"), candidate, { recursive: true });
+  const path = join(candidate, "package.json");
+  const manifest = JSON.parse(await readFile(path, "utf8"));
+  manifest.version = "0.5.0";
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  const output = run(["npm", "pack", "--json", candidate, "--pack-destination", destination], root);
+  const [result] = JSON.parse(output) as PackResult[];
+  if (!result) throw new Error("npm pack returned no core candidate");
+  return result;
+}
+
 function assertProjectionManifest(archive: string): void {
   const manifest = JSON.parse(run(["tar", "-xOf", archive, "package/package.json"], root));
   const expectedExports = [".", "./projection-v1.schema.json", "./package.json"];
@@ -58,7 +71,7 @@ function assertProjectionManifest(archive: string): void {
   if (JSON.stringify(Object.keys(manifest.exports)) !== JSON.stringify(expectedExports)) {
     throw new Error("Projection package exports unintended entry points");
   }
-  if (JSON.stringify(manifest.dependencies) !== JSON.stringify({ "@kalada/core": "^0.4.0" })) {
+  if (JSON.stringify(manifest.dependencies) !== JSON.stringify({ "@kalada/core": "^0.5.0" })) {
     throw new Error("Projection runtime dependency boundary drifted");
   }
   for (const field of ["devDependencies", "optionalDependencies", "peerDependencies"]) {
@@ -103,7 +116,7 @@ function assertPackedRuntime(archive: string): void {
     const imports = [...text.matchAll(/(?:from\s*|require\()["']([^"']+)["']/gu)].map(
       (match) => match[1],
     );
-    if (imports.some((dependency) => dependency !== "@kalada/core/kalada-v1")) {
+    if (imports.some((dependency) => dependency !== "@kalada/core")) {
       throw new Error(`${file} imports an unintended runtime dependency: ${imports.join(", ")}`);
     }
   }
@@ -190,7 +203,7 @@ async function runConsumer(directory: string, archives: string[]): Promise<void>
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-projection-smoke-"));
   try {
-    const core = pack("@kalada/core", directory);
+    const core = await packCoreCandidate(directory);
     const projection = pack("@kalada/projection", directory);
     const projectionArchive = join(directory, projection.filename);
     assertProjectionManifest(projectionArchive);

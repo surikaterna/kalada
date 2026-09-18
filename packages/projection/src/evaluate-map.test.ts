@@ -1,9 +1,4 @@
-import {
-  Instant,
-  type JsonValue,
-  KaladaV1 as K,
-  type KaladaV1Resolution,
-} from "@kalada/core/kalada-v1";
+import { Instant, type JsonValue, KaladaV1 as K, type KaladaV1Resolution } from "@kalada/core";
 import { describe, expect, it } from "vitest";
 import { compileProjectionV1, ProjectionV1 as P } from "./index.js";
 import type { CompiledProjection, ProjectionNode, ProjectionV1Options } from "./types.js";

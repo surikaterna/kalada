@@ -5,7 +5,7 @@ import {
   KaladaV1 as K,
   type KaladaV1Resolution,
   Result,
-} from "@kalada/core/kalada-v1";
+} from "@kalada/core";
 import { describe, expect, it } from "vitest";
 import { compileProjectionV1, ProjectionV1 as P } from "./index.js";
 import type { CompiledProjection, ProjectionNode, ProjectionV1Options } from "./types.js";

@@ -1,4 +1,4 @@
-import type { KaladaV1Program } from "@kalada/core/kalada-v1";
+import type { KaladaV1Program } from "@kalada/core";
 import type { ProjectionNode, ProjectionObjectEntry, ProjectionProgram } from "./types.js";
 
 const program = (root: ProjectionNode): ProjectionProgram => ({

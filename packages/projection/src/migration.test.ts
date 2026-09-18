@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { KaladaV1 as K } from "@kalada/core/kalada-v1";
+import { KaladaV1 as K } from "@kalada/core";
 import { describe, expect, it } from "vitest";
 import { canonicalizeProjectionV1, compileProjectionV1, ProjectionV1 as P } from "./index.js";
 

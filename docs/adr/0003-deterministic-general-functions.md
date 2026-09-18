@@ -263,15 +263,17 @@ Truncation keeps the innermost frames and is deterministic. Static diagnostics a
 outside a call use an empty context. Messages remain stable, generic, and contain no host error,
 captured value, resolver detail, or source-syntax text.
 
-## Compatibility baseline and delivery gates
+## Historical compatibility baseline and delivery gates
 
 The fixtures in `tests/fixtures/core-0.3.0-compatibility.json` were captured from the npm artifact
 with SHA-1 `c963824e9e5470d461b10cfae944d1b1378a29c2` and SHA-512 integrity
 `sha512-viBoDxOSef4qYV3sHh3ik67tfssKMdChpFrUvOOzuDui+itTELqwmZ7zae9ajJXaNUaaUnAtiNeOwRBaoJnyGw==`.
-They freeze root and `kuery-v1` ESM/CJS exports and declarations, package identity/exports and
+Before the breaking cleanup in #46, they froze root and `kuery-v1` ESM/CJS exports and declarations, package identity/exports and
 zero runtime dependencies, plus canonicalization, dependencies, diagnostics, ADTs, temporal
 values, schemas, limits, and representative outcomes. Root and `kuery-v1` permit no drift;
-general-function work is additive only under `kalada-v1`.
+general-function work was additive only under `kalada-v1`. #46 removed those fixtures and made the
+native API the sole package root; this historical description remains the rationale for the 0.3
+delivery sequence, not a current compatibility promise.
 
 Delivery follows #22 (this ADR/baseline) → #23 (contracts/captures) → #24
 (closures/recursion/trampoline) → #25 (collection functions) → #26 (hardening/package/minor
@@ -279,6 +281,19 @@ Changeset). A successor starts only after its predecessor is verified. This issu
 runtime or publishable API and therefore has no Changeset.
 
 ## Non-goals
+
+### Promise attachment capability boundary
+
+Native evaluation does not claim a general genuine-Promise brand check. It consumes rejection only
+for an ordinary, unmodified current-realm Promise whose trusted constructor path permits attachment
+through the captured intrinsic. Cross-realm Promises, subclasses, species overrides, Proxies,
+spoofs, and thenables remain unsupported candidates without a general attachment guarantee. A
+hostile or unusable own constructor is explicitly not attached. Evaluation returns
+`KALADA_ASYNC_UNSUPPORTED` where the candidate is safely
+recognized, does not read getters, invoke `then` or constructors, mutate descriptors, or intercept
+host-global rejection handling, and leaves any pre-existing rejection under its creator's control.
+This portability boundary is an approved exception to rejection consumption, not an asynchronous
+evaluation feature.
 
 This decision does not implement runtime behavior. It adds no modules, imports, module resolver,
 manifest, hook, native intrinsic, capability, effect, mutation, async behavior, host function,

@@ -1,5 +1,9 @@
 # ADR-0001: Kalada language architecture and extraction contract
 
+> Current package note: Kalada #46 completed the breaking native-root migration and removed the
+> temporary Kuery compatibility surface. The extraction sequence below is retained as historical
+> decision context; `@kalada/core` now exports only the native API from its root.
+
 - Status: Accepted
 - Date: 2026-09-16
 - Decision sources: [Kalada #1](https://github.com/surikaterna/kalada/issues/1) and

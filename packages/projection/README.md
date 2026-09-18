@@ -1,16 +1,16 @@
 # `@kalada/projection`
 
 `@kalada/projection` compiles a canonical projection-v1 data structure into a deterministic,
-bounded JSON projection. It uses explicit `@kalada/core/kalada-v1` expression ASTs; strings in a
+bounded JSON projection. It uses explicit `@kalada/core` expression ASTs; strings in a
 projection are always literal strings, never source expressions or interpolation templates.
 
 The package is side-effect free and works in ESM, CommonJS, strict NodeNext TypeScript, and browser
-bundles. Its only runtime dependency is `@kalada/core@^0.4.0`.
+bundles. Its only runtime dependency is `@kalada/core@^0.5.0`.
 
 ## Construct and evaluate a projection
 
 ```ts
-import { KaladaV1 as K } from "@kalada/core/kalada-v1";
+import { KaladaV1 as K } from "@kalada/core";
 import { ProjectionV1 as P, compileProjectionV1 } from "@kalada/projection";
 
 const expression = (name: string) => K.program(K.ref(name));

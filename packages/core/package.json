@@ -30,30 +30,10 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./kuery-v1": {
-      "import": {
-        "types": "./dist/kuery-v1/index.d.ts",
-        "default": "./dist/kuery-v1/index.js"
-      },
-      "require": {
-        "types": "./dist/kuery-v1/index.d.cts",
-        "default": "./dist/kuery-v1/index.cjs"
-      }
-    },
-    "./kalada-v1": {
-      "import": {
-        "types": "./dist/kalada-v1/index.d.ts",
-        "default": "./dist/kalada-v1/index.js"
-      },
-      "require": {
-        "types": "./dist/kalada-v1/index.d.cts",
-        "default": "./dist/kalada-v1/index.cjs"
-      }
-    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && bun ../../scripts/write-core-esm-wrapper.ts",
     "test": "vitest run src",
     "typecheck": "tsc --noEmit"
   },

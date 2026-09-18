@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { type JsonValue, KaladaV1 as K } from "@kalada/core/kalada-v1";
+import { type JsonValue, KaladaV1 as K } from "@kalada/core";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {

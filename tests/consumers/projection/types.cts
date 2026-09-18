@@ -1,4 +1,4 @@
-import core = require("@kalada/core/kalada-v1");
+import core = require("@kalada/core");
 import projection = require("@kalada/projection");
 import schema = require("@kalada/projection/projection-v1.schema.json");
 

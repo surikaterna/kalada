@@ -5,7 +5,7 @@ import {
   type JsonValue,
   type KaladaV1Program,
   type KaladaV1Resolution,
-} from "@kalada/core/kalada-v1";
+} from "@kalada/core";
 import { frozenRecord } from "./canonical-output.js";
 import { ProjectionFailure, projectionFailure } from "./diagnostics.js";
 import { OutputAccounting, type OutputEntry, type OutputTree } from "./output-accounting.js";

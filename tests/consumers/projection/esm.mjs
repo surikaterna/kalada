@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { Instant, KaladaV1 as K, Option } from "@kalada/core/kalada-v1";
+import { Instant, KaladaV1 as K, Option } from "@kalada/core";
 import {
   canonicalizeProjectionV1,
   compileProjectionV1,
@@ -11,7 +11,7 @@ import {
 import schema from "@kalada/projection/projection-v1.schema.json" with { type: "json" };
 
 const require = createRequire(import.meta.url);
-const cjsCore = require("@kalada/core/kalada-v1");
+const cjsCore = require("@kalada/core");
 const cjsProjection = require("@kalada/projection");
 const expectedExports = [
   "DEFAULT_PROJECTION_V1_LIMITS",

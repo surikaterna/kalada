@@ -1,8 +1,8 @@
 # Kalada
 
 Kalada is a deterministic, expression-oriented language designed for portable, versioned
-evaluation contracts. The dependency-free `@kalada/core` package exposes the extracted Kuery
-compatibility kernel and the additive native `@kalada/core/kalada-v1` profile. The native profile
+evaluation contracts. The dependency-free `@kalada/core` package exposes the native Kalada v1 API
+at its canonical root. The native profile
 supports typed lexical functions, bounded recursion, and the `map`, `filter`, `some`, and `every`
 core function values in addition to Option, Result, temporal values, and exhaustive matches.
 

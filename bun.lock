@@ -10,7 +10,6 @@
         "@changesets/parse": "1.0.0",
         "@types/node": "22.20.3",
         "ajv": "8.17.1",
-        "kuery": "2.1.0",
         "tsup": "8.5.1",
         "typescript": "5.9.3",
         "vitest": "5.0.1",
@@ -24,7 +23,7 @@
       "name": "@kalada/projection",
       "version": "0.0.0",
       "dependencies": {
-        "@kalada/core": "^0.4.0",
+        "@kalada/core": "^0.5.0",
       },
     },
   },
@@ -312,8 +311,6 @@
     "json-schema-traverse": ["json-schema-traverse@1.0.0", "", {}, "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="],
 
     "jsonc-parser": ["jsonc-parser@3.3.1", "", {}, "sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ=="],
-
-    "kuery": ["kuery@2.1.0", "", {}, "sha512-L7H1oOAJApFQvgAuwBGvUsUcYmqsg04LxfpiCHSrYqDKecOzPDT4X2Yz5YrqrJDJevlZTCmsafV3JcBvAdxnJA=="],
 
     "launch-editor": ["launch-editor@2.14.1", "", { "dependencies": { "picocolors": "^1.1.1", "shell-quote": "^1.8.4" } }, "sha512-QWBrQsMpH7gPr965dsKD/3cKWiNoTjpATQf++Xq63N6sKRGMwlVXz41O1IZTMfZQgBctD/K5Zt06+/I6pP6+HA=="],
 

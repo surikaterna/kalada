@@ -43,19 +43,16 @@ function inspectPromisePrototype(prototype: object): PromiseShape {
     const then = getDescriptor(prototype, "then");
     if (!isNativeFunction(then, thenSource)) return "none";
     const constructorDescriptor = getDescriptor(prototype, "constructor");
-    if (
-      !constructorDescriptor ||
-      !("value" in constructorDescriptor) ||
-      typeof constructorDescriptor.value !== "function"
-    )
+    if (!constructorDescriptor || !("value" in constructorDescriptor)) return "suspicious";
+    const promiseConstructor = constructorDescriptor.value;
+    if (typeof promiseConstructor !== "function") return "suspicious";
+    const ownPrototype = getDescriptor(promiseConstructor, "prototype");
+    if (!ownPrototype || !("value" in ownPrototype) || ownPrototype.value !== prototype) {
       return "suspicious";
-    const ownPrototype = getDescriptor(constructorDescriptor.value, "prototype");
-    if (!ownPrototype || !("value" in ownPrototype) || ownPrototype.value !== prototype)
-      return "suspicious";
-    const species = getDescriptor(constructorDescriptor.value, Symbol.species);
+    }
+    const species = getDescriptor(promiseConstructor, Symbol.species);
     if (!species?.get || species.set !== undefined) return "suspicious";
-    const constructorNative =
-      apply(functionToString, constructorDescriptor.value, []) === promiseSource;
+    const constructorNative = apply(functionToString, promiseConstructor, []) === promiseSource;
     const speciesNative = apply(functionToString, species.get, []) === speciesSource;
     return constructorNative && speciesNative ? "safe" : "suspicious";
   } catch {

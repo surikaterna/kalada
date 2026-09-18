@@ -1,4 +1,4 @@
-import { type JsonValue, KaladaV1 as K, Option } from "@kalada/core/kalada-v1";
+import { type JsonValue, KaladaV1 as K, Option } from "@kalada/core";
 import { describe, expect, it } from "vitest";
 import { compileProjectionV1, ProjectionV1 as P } from "./index.js";
 import type {

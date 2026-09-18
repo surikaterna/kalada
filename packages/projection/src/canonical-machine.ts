@@ -3,7 +3,7 @@ import type {
   KaladaV1FunctionLimits,
   KaladaV1Limits,
   KaladaV1Program,
-} from "@kalada/core/kalada-v1";
+} from "@kalada/core";
 import { compileProjectionExpression } from "./canonical-expression.js";
 import { type PreparedProjectionEntry, prepareProjectionEntry } from "./canonical-object.js";
 import { frozenRecord } from "./canonical-output.js";

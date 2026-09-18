@@ -1,4 +1,4 @@
-import type { KaladaV1Diagnostic } from "@kalada/core/kalada-v1";
+import type { KaladaV1Diagnostic } from "@kalada/core";
 import type {
   ProjectionDiagnostic,
   ProjectionDiagnosticCode,

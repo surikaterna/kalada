@@ -4,7 +4,7 @@ import {
   type KaladaV1FunctionLimits,
   type KaladaV1Limits,
   type KaladaV1Program,
-} from "@kalada/core/kalada-v1";
+} from "@kalada/core";
 import { ProjectionFailure } from "./diagnostics.js";
 import { invalid } from "./inspect.js";
 import type { ProjectionPath } from "./types.js";

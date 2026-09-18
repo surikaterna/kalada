@@ -15,8 +15,6 @@
     "build": "bun run --filter '*' build",
     "changeset": "changeset",
     "changeset:check": "bun scripts/check-changesets.ts",
-    "compatibility:0.3.0": "bun run build && bun scripts/check-core-0.3.0-compatibility.ts",
-    "compatibility:0.4.0": "bun run build && bun scripts/check-core-0.4.0-compatibility.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",
@@ -31,7 +29,6 @@
     "@changesets/parse": "1.0.0",
     "@types/node": "22.20.3",
     "ajv": "8.17.1",
-    "kuery": "2.1.0",
     "tsup": "8.5.1",
     "typescript": "5.9.3",
     "vitest": "5.0.1"
