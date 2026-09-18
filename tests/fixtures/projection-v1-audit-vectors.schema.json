@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalada.dev/fixtures/projection-v1-audit-vectors.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["keys", "diagnostics", "accounting"],
+  "properties": {
+    "keys": { "type": "array", "minItems": 10, "items": { "$ref": "#/$defs/key" } },
+    "diagnostics": {
+      "type": "array",
+      "minItems": 14,
+      "items": { "$ref": "#/$defs/diagnostic" }
+    },
+    "accounting": {
+      "type": "array",
+      "minItems": 8,
+      "items": { "$ref": "#/$defs/accounting" }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "array",
+      "items": { "oneOf": [{ "type": "string" }, { "type": "integer" }] }
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "key", "accepted", "reason", "path"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "key": { "type": "string", "minLength": 1 },
+        "accepted": { "type": "boolean" },
+        "reason": { "enum": ["ordinary", "noncanonical-numeric", "array-index", "named-unsafe"] },
+        "path": { "$ref": "#/$defs/path" }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "failure", "code", "message", "path", "cause", "frozen", "precedence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "failure": { "type": "string", "minLength": 1 },
+        "code": { "$ref": "#/$defs/code" },
+        "message": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/path" },
+        "cause": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "path", "message"],
+              "properties": {
+                "code": { "type": "string" },
+                "path": { "$ref": "#/$defs/path" },
+                "message": { "type": "string" }
+              }
+            }
+          ]
+        },
+        "frozen": { "const": true },
+        "precedence": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "shape", "output", "stats", "boundaries", "invariants"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "shape": {
+          "enum": [
+            "nested-value",
+            "constructed-object",
+            "constructed-array",
+            "constructed-map",
+            "utf8",
+            "repeated-identity",
+            "no-reattachment",
+            "omission-rollback"
+          ]
+        },
+        "output": true,
+        "sharedIdentity": { "type": "boolean" },
+        "discarded": true,
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["depth", "nodes", "bytes"],
+          "properties": {
+            "depth": { "type": "integer", "minimum": 0 },
+            "nodes": { "type": "integer", "minimum": 1 },
+            "bytes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "boundaries": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["depth", "nodes", "bytes"],
+          "properties": {
+            "depth": { "$ref": "#/$defs/boundary" },
+            "nodes": { "$ref": "#/$defs/boundary" },
+            "bytes": { "$ref": "#/$defs/boundary" }
+          }
+        },
+        "invariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "preorder",
+              "once-per-occurrence",
+              "utf8-tokens",
+              "identity-not-deduplicated",
+              "attachment-not-recharged",
+              "omission-rolled-back"
+            ]
+          }
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["equalLimit", "plusOneLimit", "failurePath"],
+      "properties": {
+        "equalLimit": { "type": "integer", "minimum": 1 },
+        "plusOneLimit": { "type": "integer", "minimum": 1 },
+        "failurePath": { "$ref": "#/$defs/path" }
+      }
+    },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "code": {
+      "enum": [
+        "PROJECTION_INVALID_INPUT",
+        "PROJECTION_LIMIT_EXCEEDED",
+        "PROJECTION_DUPLICATE_KEY",
+        "PROJECTION_UNSAFE_KEY",
+        "PROJECTION_CONDITION_TYPE",
+        "PROJECTION_COLLECTION_TYPE",
+        "PROJECTION_VALUE_TYPE",
+        "PROJECTION_OUTPUT_LIMIT",
+        "PROJECTION_CORE_ERROR",
+        "PROJECTION_CLOCK_ERROR"
+      ]
+    }
+  }
+}

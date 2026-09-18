@@ -9,7 +9,8 @@ core function values in addition to Option, Result, temporal values, and exhaust
 See the [package API guide](packages/core/README.md) for executable examples, limits, and public
 entry points. Modules and imports remain explicitly deferred to [#21](https://github.com/surikaterna/kalada/issues/21);
 this release does not add module loading, host callbacks, effects, or asynchronous evaluation. See
-[ADR-0001](docs/adr/0001-kalada-language-architecture.md) for the accepted boundaries.
+[ADR-0001](docs/adr/0001-kalada-language-architecture.md) for the accepted boundaries and
+[ADR-0004](docs/adr/0004-deterministic-projection-v1.md) for the projection-v1 contract.
 
 ## Development
 

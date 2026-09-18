@@ -1,0 +1,30 @@
+{
+  "$schema": "./projection-v1.schema.json",
+  "contract": {
+    "format": "kalada-projection",
+    "version": 1,
+    "profile": "projection-v1",
+    "nodeKinds": ["value", "object", "array", "if", "map"],
+    "classifications": ["supported-equivalence", "intentional-divergence", "excluded-legacy"]
+  },
+  "limits": {
+    "maxProjectionDepth": { "default": 64, "maximum": 256 },
+    "maxProjectionNodes": { "default": 10000, "maximum": 100000 },
+    "maxObjectEntries": { "default": 10000, "maximum": 100000 },
+    "maxArrayItems": { "default": 10000, "maximum": 100000 },
+    "maxNameLength": { "default": 128, "maximum": 1024 },
+    "maxKeyLength": { "default": 1000, "maximum": 10000 },
+    "maxExpressionInvocations": { "default": 10000, "maximum": 100000 },
+    "maxCollectionLength": { "default": 10000, "maximum": 100000 },
+    "maxCollectionIterations": { "default": 10000, "maximum": 100000 },
+    "maxOutputDepth": { "default": 64, "maximum": 256 },
+    "maxOutputNodes": { "default": 10000, "maximum": 100000 },
+    "maxOutputBytes": { "default": 1048576, "maximum": 16777216 }
+  },
+  "exampleFixture": "projection-v1-examples.jsonl",
+  "differentialFixture": "selecttransform-differential.jsonl",
+  "auditSchema": "projection-v1-audit-vectors.schema.json",
+  "keyFixture": "projection-v1-keys.jsonl",
+  "diagnosticFixture": "projection-v1-diagnostics.jsonl",
+  "accountingFixture": "projection-v1-accounting.jsonl"
+}

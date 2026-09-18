@@ -1,0 +1,12 @@
+{"id":"key-index-zero","key":"0","accepted":false,"reason":"array-index","path":["root","entries",0,"key"]}
+{"id":"key-index-two","key":"2","accepted":false,"reason":"array-index","path":["root","entries",0,"key"]}
+{"id":"key-index-maximum","key":"4294967294","accepted":false,"reason":"array-index","path":["root","entries",0,"key"]}
+{"id":"key-named-unsafe","key":"__proto__","accepted":false,"reason":"named-unsafe","path":["root","entries",0,"key"]}
+{"id":"key-leading-zero","key":"00","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-leading-zero-one","key":"01","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-negative-zero","key":"-0","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-positive-zero","key":"+0","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-decimal","key":"1.0","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-exponent","key":"1e0","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-uint32-maximum","key":"4294967295","accepted":true,"reason":"noncanonical-numeric","path":["root","entries",0,"key"]}
+{"id":"key-ordinary","key":"field","accepted":true,"reason":"ordinary","path":["root","entries",0,"key"]}

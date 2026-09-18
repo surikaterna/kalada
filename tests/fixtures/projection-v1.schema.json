@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalada.dev/fixtures/projection-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "limits", "examples", "differentialMatrix"],
+  "properties": {
+    "$schema": { "const": "./projection-v1.schema.json" },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "version", "profile", "nodeKinds", "classifications"],
+      "properties": {
+        "format": { "const": "kalada-projection" },
+        "version": { "const": 1 },
+        "profile": { "const": "projection-v1" },
+        "nodeKinds": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            { "const": "value" },
+            { "const": "object" },
+            { "const": "array" },
+            { "const": "if" },
+            { "const": "map" }
+          ],
+          "items": false
+        },
+        "classifications": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "const": "supported-equivalence" },
+            { "const": "intentional-divergence" },
+            { "const": "excluded-legacy" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "minProperties": 12,
+      "maxProperties": 12,
+      "additionalProperties": { "$ref": "#/$defs/limit" }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 10,
+      "items": { "$ref": "#/$defs/example" }
+    },
+    "differentialMatrix": {
+      "type": "array",
+      "minItems": 25,
+      "items": { "$ref": "#/$defs/matrixCase" }
+    }
+  },
+  "$defs": {
+    "limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default", "maximum"],
+      "properties": {
+        "default": { "type": "integer", "minimum": 1 },
+        "maximum": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "version", "profile", "expression"],
+      "properties": {
+        "format": { "const": "kalada-program" },
+        "version": { "const": 1 },
+        "profile": { "const": "kalada-v1" },
+        "expression": { "type": "object" }
+      }
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/valueNode" },
+        { "$ref": "#/$defs/objectNode" },
+        { "$ref": "#/$defs/arrayNode" },
+        { "$ref": "#/$defs/ifNode" },
+        { "$ref": "#/$defs/mapNode" }
+      ]
+    },
+    "valueNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expression"],
+      "properties": {
+        "kind": { "const": "value" },
+        "expression": { "$ref": "#/$defs/program" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "$ref": "#/$defs/node" }
+      }
+    },
+    "objectNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "entries"],
+      "properties": {
+        "kind": { "const": "object" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+      }
+    },
+    "arrayNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": { "const": "array" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "ifNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "condition", "then"],
+      "properties": {
+        "kind": { "const": "if" },
+        "condition": { "$ref": "#/$defs/program" },
+        "then": { "$ref": "#/$defs/node" },
+        "else": { "$ref": "#/$defs/node" }
+      }
+    },
+    "mapNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "collection", "item", "index", "body"],
+      "properties": {
+        "kind": { "const": "map" },
+        "collection": { "$ref": "#/$defs/program" },
+        "item": { "type": "string", "minLength": 1 },
+        "index": { "type": "string", "minLength": 1 },
+        "body": { "$ref": "#/$defs/node" }
+      }
+    },
+    "expected": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": { "status": { "const": "value" }, "value": true }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "outcome"],
+          "properties": {
+            "status": { "const": "omitted" },
+            "outcome": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "omitted"],
+              "properties": { "ok": { "const": true }, "omitted": { "const": true } }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "code", "path"],
+          "properties": {
+            "status": { "const": "error" },
+            "code": { "type": "string" },
+            "path": {
+              "type": "array",
+              "items": { "oneOf": [{ "type": "string" }, { "type": "integer" }] }
+            },
+            "causeCode": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "example": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "projection", "expected"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "description": { "type": "string", "minLength": 1 },
+        "projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "version", "profile", "root"],
+          "properties": {
+            "format": { "const": "kalada-projection" },
+            "version": { "const": 1 },
+            "profile": { "const": "projection-v1" },
+            "root": { "$ref": "#/$defs/node" }
+          }
+        },
+        "expected": { "$ref": "#/$defs/expected" }
+      }
+    },
+    "matrixCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "topics", "classification", "legacy", "projection", "migration"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "topics": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "classification": {
+          "enum": ["supported-equivalence", "intentional-divergence", "excluded-legacy"]
+        },
+        "legacy": { "type": "string", "minLength": 1 },
+        "projection": { "type": "string", "minLength": 1 },
+        "migration": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

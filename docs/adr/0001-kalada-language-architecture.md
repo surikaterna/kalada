@@ -108,6 +108,9 @@ substitution versus interpolation; conditional chains; iteration scope; optional
 merge/flatten/include/let behavior; and host packaging. Existing truthiness and arbitrary
 JavaScript behavior must not be inherited accidentally.
 
+ADR-0004 resolves these projection details. This ADR's package direction and separation from the
+core evaluator remain in force.
+
 ### Extraction and compatibility direction
 
 Extraction follows released artifacts rather than in-repository substitution:
