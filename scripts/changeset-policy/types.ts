@@ -73,7 +73,7 @@ export type V2ReleaseException = {
     status: "not-found";
     httpStatus: 404;
     capturedAt: string;
-    command: string;
+    command: `npm view ${string} version --json --registry=https://registry.npmjs.org`;
     response: string;
     responseSha256: string;
   };

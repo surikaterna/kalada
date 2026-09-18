@@ -17,13 +17,15 @@ correction. Release approval remains a separate owner decision and release workf
 Immediately before use, run the canonical command recorded by the schema:
 
 ```sh
-npm view <package>@<version> version --json
+npm view <package>@<version> version --json --registry=https://registry.npmjs.org
 ```
 
-Capture the complete JSON E404 response and its SHA-256 digest. Evidence must be newer than the PR
-base, expire no more than 24 hours after capture, and remain unexpired when CI validates it. Mutable
-registry output is an observation, not permanent proof. The owner and Auditor must re-check npm
-before merge and again before any later release or manual bootstrap.
+The explicit `--registry` makes ambient npm configuration irrelevant and must not be omitted or
+replaced. Capture the complete JSON E404 response and its SHA-256 digest. Evidence must be newer
+than the PR base, must not be captured after the validation time, must expire no more than 24 hours
+after capture, and must remain unexpired when CI validates it. Mutable registry output is an
+observation, not permanent proof. The owner and Auditor must re-check npm before merge and again
+before any later release or manual bootstrap.
 
 ## Machine-enforced boundary
 

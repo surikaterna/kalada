@@ -32,11 +32,22 @@ export function validateException(
   entries: DiffEntry[],
   exception: { path: string; record: ReleaseException },
   affected: Set<string>,
+  validationTime: number,
 ): void {
   const { path, record } = exception;
   if (record.schemaVersion === 1) {
     validateV1Exception(repository, base, head, repositoryName, entries, path, record, affected);
     return;
   }
-  validateV2Exception(repository, base, head, repositoryName, entries, path, record, affected);
+  validateV2Exception(
+    repository,
+    base,
+    head,
+    repositoryName,
+    entries,
+    path,
+    record,
+    affected,
+    validationTime,
+  );
 }

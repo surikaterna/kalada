@@ -70,7 +70,10 @@
         "status": { "const": "not-found" },
         "httpStatus": { "const": 404 },
         "capturedAt": { "$ref": "#/definitions/timestamp" },
-        "command": { "type": "string", "minLength": 1 },
+        "command": {
+          "type": "string",
+          "pattern": "^npm view .+ version --json --registry=https://registry\\.npmjs\\.org$"
+        },
         "response": { "type": "string", "minLength": 1 },
         "responseSha256": { "$ref": "#/definitions/sha256" }
       }

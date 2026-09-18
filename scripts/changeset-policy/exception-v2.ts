@@ -14,6 +14,7 @@ export function validateV2Exception(
   recordPath: string,
   record: V2ReleaseException,
   affected: Set<string>,
+  validationTime: number,
 ): void {
   assertAuthorization(record, base, repositoryName);
   assertPackageIdentity(repository, base, head, record);
@@ -24,7 +25,7 @@ export function validateV2Exception(
   assertNoPackageRenames(repository, base, head, packageRoot);
   const packageEntries = entries.filter(({ path }) => path.startsWith(`${packageRoot}/`));
   assertFileManifest(repository, base, head, packageEntries, record);
-  assertEvidence(repository, base, record);
+  assertEvidence(repository, base, record, validationTime);
   if (entries.some(({ path }) => path === recordPath && path.startsWith(`${packageRoot}/`))) {
     throw new Error("Exception records must be outside the package workspace");
   }
@@ -143,19 +144,32 @@ function assertPackageIdentity(
   }
 }
 
-function assertEvidence(repository: string, base: string, record: V2ReleaseException): void {
+function assertEvidence(
+  repository: string,
+  base: string,
+  record: V2ReleaseException,
+  validationTime: number,
+): void {
   const evidence = record.registryEvidence;
   if (evidence.package !== record.package.name || evidence.version !== record.package.version) {
     throw new Error("Registry evidence must identify the exact exception package and version");
   }
-  if (evidence.command !== `npm view ${evidence.package}@${evidence.version} version --json`) {
+  const command =
+    `npm view ${evidence.package}@${evidence.version} version --json ` +
+    "--registry=https://registry.npmjs.org";
+  if (evidence.command !== command) {
     throw new Error("Registry evidence command is not canonical");
   }
   if (sha256(Buffer.from(evidence.response, "utf8")) !== evidence.responseSha256) {
     throw new Error("Registry evidence response hash does not match");
   }
   assertNotFoundResponse(evidence.response);
-  assertEvidenceWindow(commitTimestamp(repository, base), evidence.capturedAt, record.expiresAt);
+  assertEvidenceWindow(
+    commitTimestamp(repository, base),
+    validationTime,
+    evidence.capturedAt,
+    record.expiresAt,
+  );
 }
 
 function assertNotFoundResponse(response: string): void {
@@ -171,17 +185,24 @@ function assertNotFoundResponse(response: string): void {
   }
 }
 
-function assertEvidenceWindow(baseTime: number, capturedAt: string, expiresAt: string): void {
+function assertEvidenceWindow(
+  baseTime: number,
+  validationTime: number,
+  capturedAt: string,
+  expiresAt: string,
+): void {
   if (!isUtcRfc3339(capturedAt) || !isUtcRfc3339(expiresAt)) {
     throw new Error("Evidence and expiry must be valid UTC RFC3339 timestamps");
   }
   const captured = Date.parse(capturedAt);
   const expiry = Date.parse(expiresAt);
   if (captured <= baseTime) throw new Error("Registry evidence must be captured after the PR base");
+  if (captured > validationTime)
+    throw new Error("Registry evidence cannot be captured in the future");
   if (expiry <= captured || expiry - captured > maximumEvidenceLifetime) {
     throw new Error("Registry evidence expiry must be within 24 hours of capture");
   }
-  if (Date.now() >= expiry) throw new Error("Registry evidence is stale");
+  if (validationTime >= expiry) throw new Error("Registry evidence is stale");
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

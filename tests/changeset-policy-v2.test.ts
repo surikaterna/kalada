@@ -39,6 +39,7 @@ type Fixture = { base: string; path: string };
 
 const repositories: string[] = [];
 const validResponse = JSON.stringify({ error: { code: "E404", summary: "Not found" } });
+const validationTime = Date.parse("2026-09-18T14:00:00.000Z");
 
 function run(repository: string, executable: string, args: string[]): string {
   return execFileSync(executable, args, {
@@ -112,7 +113,7 @@ function firstFile(value: ExceptionRecord): ExceptionFile {
 }
 
 function record(fix: Fixture, files: ExceptionFile[]): ExceptionRecord {
-  const captured = new Date(Date.now() - 60_000);
+  const captured = new Date(validationTime - 60_000);
   const expires = new Date(captured.getTime() + 60 * 60 * 1000);
   return {
     schemaVersion: 2,
@@ -139,7 +140,9 @@ function record(fix: Fixture, files: ExceptionFile[]): ExceptionRecord {
       status: "not-found",
       httpStatus: 404,
       capturedAt: captured.toISOString(),
-      command: "npm view @kalada/projection@0.1.0 version --json",
+      command:
+        "npm view @kalada/projection@0.1.0 version --json " +
+        "--registry=https://registry.npmjs.org",
       response: validResponse,
       responseSha256: hash(validResponse),
     },
@@ -160,7 +163,7 @@ function correction(
 }
 
 function validate(fix: Fixture, head: string): void {
-  validateChangesetPolicy(fix.path, fix.base, head, "surikaterna/kalada");
+  validateChangesetPolicy(fix.path, fix.base, head, "surikaterna/kalada", validationTime);
 }
 
 function changeset(name: string): string {
@@ -227,10 +230,6 @@ describe("unpublished-package correction schema v2", () => {
     ],
     ["evidence version", (value: ExceptionRecord) => (value.registryEvidence.version = "0.1.1")],
     [
-      "evidence command",
-      (value: ExceptionRecord) => (value.registryEvidence.command = "npm view latest"),
-    ],
-    [
       "response hash",
       (value: ExceptionRecord) => (value.registryEvidence.responseSha256 = "a".repeat(64)),
     ],
@@ -248,6 +247,21 @@ describe("unpublished-package correction schema v2", () => {
   ])("rejects mismatched %s", (_name, mutate) => {
     const fix = fixture();
     expect(() => validate(fix, correction(fix, mutate))).toThrow();
+  });
+
+  it.each([
+    ["unpinned", "npm view @kalada/projection@0.1.0 version --json"],
+    [
+      "alternate registry",
+      "npm view @kalada/projection@0.1.0 version --json --registry=https://example.invalid",
+    ],
+    ["noncanonical", "npm view latest"],
+  ])("rejects %s registry evidence commands", (_name, command) => {
+    const fix = fixture();
+    const head = correction(fix, (value) => {
+      value.registryEvidence.command = command;
+    });
+    expect(() => validate(fix, head)).toThrow(/schema|canonical/u);
   });
 
   it("rejects duplicate and undeclared file entries", () => {
@@ -280,8 +294,8 @@ describe("unpublished-package correction schema v2", () => {
     ["expired", "2026-01-02T00:00:00.000Z", "2026-01-02T01:00:00.000Z"],
     [
       "over 24 hours",
-      new Date().toISOString(),
-      new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(),
+      new Date(validationTime).toISOString(),
+      new Date(validationTime + 25 * 60 * 60 * 1000).toISOString(),
     ],
   ])("rejects evidence that is %s", (_name, capturedAt, expiresAt) => {
     const fix = fixture();
@@ -290,6 +304,15 @@ describe("unpublished-package correction schema v2", () => {
       value.expiresAt = expiresAt;
     });
     expect(() => validate(fix, head)).toThrow(/after the PR base|stale|24 hours/u);
+  });
+
+  it("rejects evidence captured after the validation time", () => {
+    const fix = fixture();
+    const head = correction(fix, (value) => {
+      value.registryEvidence.capturedAt = new Date(validationTime + 1).toISOString();
+      value.expiresAt = new Date(validationTime + 60 * 60 * 1000).toISOString();
+    });
+    expect(() => validate(fix, head)).toThrow(/future/u);
   });
 
   it("rejects name or version changes in the package manifest", () => {
