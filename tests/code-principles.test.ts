@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const sourceRoots = [
   resolve(import.meta.dirname, "../packages/core/src"),
+  resolve(import.meta.dirname, "../packages/projection/src"),
   resolve(import.meta.dirname, "../scripts/changeset-policy"),
 ];
 const nestedKinds = new Set([
@@ -26,7 +27,10 @@ async function sourceFiles(directory: string): Promise<string[]> {
       return entry.isDirectory() ? sourceFiles(path) : [path];
     }),
   );
-  return paths.flat().filter((path) => [".ts", ".tsx"].includes(extname(path)));
+  return paths
+    .flat()
+    .filter((path) => [".ts", ".tsx"].includes(extname(path)))
+    .filter((path) => !path.endsWith(".test.ts") && !path.includes("/__tests__/"));
 }
 
 function nestingDepth(node: ts.Node, depth = 0): number {

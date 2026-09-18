@@ -33,6 +33,7 @@ async function createConsumer(directory: string): Promise<void> {
       'import * as root from "@kalada/core";\n' +
       'import { ExpressionProfile, standardV1 } from "@kalada/core/kuery-v1";\n' +
       'import { Instant, KaladaV1 as K, Option, compileKaladaV1Program as compile, isInstant, isOption } from "@kalada/core/kalada-v1";\n' +
+      'import { ProjectionV1 as P, compileProjectionV1 } from "@kalada/projection";\n' +
       'const again = await import("@kalada/core/kuery-v1");\n' +
       'const cjs = createRequire(import.meta.url)("@kalada/core/kalada-v1");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("ESM root surface mismatch");\n' +
@@ -44,7 +45,8 @@ async function createConsumer(directory: string): Promise<void> {
       'const read=K.binding("x",K.literal(7),K.call(K.function([],n,K.ref("x")),[]));\n' +
       'const loop=K.functionGroup([K.namedFunction("loop",[K.parameter("x",K.Type.option(n))],n,K.match("Option",K.ref("x"),[K.arm("some",K.call(K.ref("loop"),[K.Option.none()])),K.arm("none",K.literal(7))]))],K.call(K.ref("loop"),[K.Option.some(K.literal(1))]));\n' +
       'const map=K.call(K.coreFunction("map"),[K.literal([8,9]),K.function([K.parameter("x",j),K.parameter("i",n)],j,K.ref("i"))]);\n' +
-      'for (const [e,w] of [[read,7],[loop,7],[map,[0,1]]]) { const p=compile(K.program(e)); const o=p.ok&&p.value.evaluate(()=>({found:false})); if (!o.ok||JSON.stringify(o.value)!==JSON.stringify(w)) throw new Error("ESM function execution mismatch"); }\n',
+      'for (const [e,w] of [[read,7],[loop,7],[map,[0,1]]]) { const p=compile(K.program(e)); const o=p.ok&&p.value.evaluate(()=>({found:false})); if (!o.ok||JSON.stringify(o.value)!==JSON.stringify(w)) throw new Error("ESM function execution mismatch"); }\n' +
+      'const projection=compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!projection.ok||projection.value.dependencies[0]!=="x"||"evaluate" in projection.value) throw new Error("ESM projection mismatch");\n',
   );
   await writeFile(
     join(directory, "index.cjs"),
@@ -52,35 +54,39 @@ async function createConsumer(directory: string): Promise<void> {
       'const first = require("@kalada/core/kuery-v1");\n' +
       'const again = require("@kalada/core/kuery-v1");\n' +
       'const kalada = require("@kalada/core/kalada-v1");\n' +
+      'const projection = require("@kalada/projection");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("CJS root surface mismatch");\n' +
       'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n' +
       'if (!kalada.isResult(kalada.Result.ok(1))) throw new Error("CJS kalada-v1 mismatch");\n' +
       'if (!kalada.isDuration(kalada.Duration.fromMilliseconds(-1))) throw new Error("CJS temporal mismatch");\n' +
       'if (kalada.Option.none() !== kalada.Option.none()) throw new Error("CJS singleton mismatch");\n' +
-      'const K=kalada.KaladaV1,n=K.Type.primitive("number"),e=K.call(K.function([],n,K.literal(4)),[]),p=kalada.compileKaladaV1Program(K.program(e)),o=p.ok&&p.value.evaluate(()=>({found:false})); if(!o.ok||o.value!==4) throw new Error("CJS closure execution mismatch");\n',
+      'const K=kalada.KaladaV1,n=K.Type.primitive("number"),e=K.call(K.function([],n,K.literal(4)),[]),p=kalada.compileKaladaV1Program(K.program(e)),o=p.ok&&p.value.evaluate(()=>({found:false})); if(!o.ok||o.value!==4) throw new Error("CJS closure execution mismatch");\n' +
+      'const P=projection.ProjectionV1,cp=projection.compileProjectionV1(P.program(P.value(K.program(K.ref("x"))))); if(!cp.ok||cp.value.dependencies[0]!=="x") throw new Error("CJS projection mismatch");\n',
   );
   await writeFile(
     join(directory, "types.mts"),
     'import { fromKueryExpression, type KaladaProgramV1 } from "@kalada/core";\n' +
       'import { compileExpression, standardV1, type ValueExpression } from "@kalada/core/kuery-v1";\n' +
       'import { Instant, KaladaV1, compileKaladaV1Program, type KaladaCoreFunctionName, type KaladaFunctionType, type KaladaV1Program } from "@kalada/core/kalada-v1";\n' +
+      'import { ProjectionV1, compileProjectionV1, type ProjectionProgram } from "@kalada/projection";\n' +
       'const expression: ValueExpression = { kind: "literal", value: true };\n' +
       "const result = fromKueryExpression(expression);\n" +
       "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: KaladaV1Program = KaladaV1.program(KaladaV1.Option.none());\n" +
       'const coreName: KaladaCoreFunctionName = "map";\nconst functionType: KaladaFunctionType = { kind: "function-type", parameters: [], returns: { kind: "primitive-type", name: "number" } };\n' +
-      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
+      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nconst projection: ProjectionProgram = ProjectionV1.program(ProjectionV1.value(native));\nvoid compileProjectionV1(projection);\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
   );
   await writeFile(
     join(directory, "types.cts"),
     'import core = require("@kalada/core");\n' +
       'import kuery = require("@kalada/core/kuery-v1");\n' +
       'import kalada = require("@kalada/core/kalada-v1");\n' +
+      'import projection = require("@kalada/projection");\n' +
       'const expression: kuery.ValueExpression = { kind: "literal", value: true };\n' +
       "const result = core.fromKueryExpression(expression);\n" +
       "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: kalada.KaladaV1Program = kalada.KaladaV1.program(kalada.KaladaV1.Option.none());\n" +
-      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
+      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nconst projectionProgram: projection.ProjectionProgram = projection.ProjectionV1.program(projection.ProjectionV1.value(native));\nvoid projection.compileProjectionV1(projectionProgram);\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 
@@ -104,10 +110,31 @@ async function main(): Promise<void> {
     );
     const [{ filename }] = JSON.parse(output) as [{ filename: string }];
     const archive = join(directory, filename);
-    await readFile(archive);
+    const projectionOutput = run(
+      [
+        "npm",
+        "pack",
+        "--json",
+        "--workspace",
+        "@kalada/projection",
+        "--pack-destination",
+        directory,
+      ],
+      root,
+    );
+    const [{ filename: projectionFilename }] = JSON.parse(projectionOutput) as [
+      { filename: string },
+    ];
+    const projectionArchive = join(directory, projectionFilename);
+    await Promise.all([readFile(archive), readFile(projectionArchive)]);
     assertPackedRepository(archive);
+    assertPackedRepository(projectionArchive);
     await createConsumer(directory);
     run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", archive], directory);
+    run(
+      ["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", projectionArchive],
+      directory,
+    );
     run(["node", "index.mjs"], directory);
     run(["node", "index.cjs"], directory);
     for (const file of ["types.mts", "types.cts"]) {

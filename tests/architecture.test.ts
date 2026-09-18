@@ -11,10 +11,11 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 }
 
 describe("package boundaries", () => {
-  it("creates only the core package", async () => {
+  it("creates only the intended packages", async () => {
     const entries = await readdir(resolve(root, "packages"), { withFileTypes: true });
     expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([
       "core",
+      "projection",
     ]);
   });
 
