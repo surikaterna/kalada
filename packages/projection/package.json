@@ -29,6 +29,10 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./projection-v1.schema.json": {
+      "import": "./projection-v1.schema.json",
+      "default": "./projection-v1.schema.json"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

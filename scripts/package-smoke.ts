@@ -34,8 +34,10 @@ async function createConsumer(directory: string): Promise<void> {
       'import { ExpressionProfile, standardV1 } from "@kalada/core/kuery-v1";\n' +
       'import { Instant, KaladaV1 as K, Option, compileKaladaV1Program as compile, isInstant, isOption } from "@kalada/core/kalada-v1";\n' +
       'import { ProjectionV1 as P, compileProjectionV1 } from "@kalada/projection";\n' +
+      'import schema from "@kalada/projection/projection-v1.schema.json" with { type: "json" };\n' +
       'const again = await import("@kalada/core/kuery-v1");\n' +
       'const cjs = createRequire(import.meta.url)("@kalada/core/kalada-v1");\n' +
+      'const require = createRequire(import.meta.url); if (!require.resolve("@kalada/projection/projection-v1.schema.json").endsWith("projection-v1.schema.json") || schema.$id !== "https://kalada.dev/schemas/projection-v1.schema.json") throw new Error("ESM projection schema mismatch");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("ESM root surface mismatch");\n' +
       'if (standardV1 !== again.standardV1 || !(standardV1 instanceof ExpressionProfile)) throw new Error("ESM identity mismatch");\n' +
       'if (!isOption(Option.some(1))) throw new Error("ESM kalada-v1 mismatch");\n' +
@@ -55,6 +57,8 @@ async function createConsumer(directory: string): Promise<void> {
       'const again = require("@kalada/core/kuery-v1");\n' +
       'const kalada = require("@kalada/core/kalada-v1");\n' +
       'const projection = require("@kalada/projection");\n' +
+      'const schema = require("@kalada/projection/projection-v1.schema.json");\n' +
+      'if (!require.resolve("@kalada/projection/projection-v1.schema.json").endsWith("projection-v1.schema.json") || schema.$id !== "https://kalada.dev/schemas/projection-v1.schema.json") throw new Error("CJS projection schema mismatch");\n' +
       'if (Object.keys(root).sort().join() !== "canonicalizeKaladaProgramV1,fromKueryExpression,toKueryExpression") throw new Error("CJS root surface mismatch");\n' +
       'if (first.standardV1 !== again.standardV1 || !(first.standardV1 instanceof first.ExpressionProfile)) throw new Error("CJS identity mismatch");\n' +
       'if (!kalada.isResult(kalada.Result.ok(1))) throw new Error("CJS kalada-v1 mismatch");\n' +
@@ -69,12 +73,13 @@ async function createConsumer(directory: string): Promise<void> {
       'import { compileExpression, standardV1, type ValueExpression } from "@kalada/core/kuery-v1";\n' +
       'import { Instant, KaladaV1, compileKaladaV1Program, type KaladaCoreFunctionName, type KaladaFunctionType, type KaladaV1Program } from "@kalada/core/kalada-v1";\n' +
       'import { ProjectionV1, compileProjectionV1, type ProjectionProgram } from "@kalada/projection";\n' +
+      'import schema from "@kalada/projection/projection-v1.schema.json" with { type: "json" };\n' +
       'const expression: ValueExpression = { kind: "literal", value: true };\n' +
       "const result = fromKueryExpression(expression);\n" +
       "const program: KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: KaladaV1Program = KaladaV1.program(KaladaV1.Option.none());\n" +
       'const coreName: KaladaCoreFunctionName = "map";\nconst functionType: KaladaFunctionType = { kind: "function-type", parameters: [], returns: { kind: "primitive-type", name: "number" } };\n' +
-      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nconst projection: ProjectionProgram = ProjectionV1.program(ProjectionV1.value(native));\nvoid compileProjectionV1(projection);\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
+      "const compiled = compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => Instant.fromMilliseconds(0));\nconst projection: ProjectionProgram = ProjectionV1.program(ProjectionV1.value(native));\nvoid compileProjectionV1(projection);\nvoid schema.$id;\nvoid compileExpression(expression, { profile: standardV1 });\nvoid program; void coreName; void functionType;\n",
   );
   await writeFile(
     join(directory, "types.cts"),
@@ -82,11 +87,12 @@ async function createConsumer(directory: string): Promise<void> {
       'import kuery = require("@kalada/core/kuery-v1");\n' +
       'import kalada = require("@kalada/core/kalada-v1");\n' +
       'import projection = require("@kalada/projection");\n' +
+      'import schema = require("@kalada/projection/projection-v1.schema.json");\n' +
       'const expression: kuery.ValueExpression = { kind: "literal", value: true };\n' +
       "const result = core.fromKueryExpression(expression);\n" +
       "const program: core.KaladaProgramV1 | undefined = result.ok ? result.value : undefined;\n" +
       "const native: kalada.KaladaV1Program = kalada.KaladaV1.program(kalada.KaladaV1.Option.none());\n" +
-      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nconst projectionProgram: projection.ProjectionProgram = projection.ProjectionV1.program(projection.ProjectionV1.value(native));\nvoid projection.compileProjectionV1(projectionProgram);\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
+      "const compiled = kalada.compileKaladaV1Program(native);\nif (compiled.ok) compiled.value.evaluateWithClock(() => ({ found: false }), () => kalada.Instant.fromMilliseconds(0));\nconst projectionProgram: projection.ProjectionProgram = projection.ProjectionV1.program(projection.ProjectionV1.value(native));\nvoid projection.compileProjectionV1(projectionProgram);\nvoid schema.$id;\nvoid kuery.compileExpression(expression, { profile: kuery.standardV1 });\nvoid program;\n",
   );
 }
 
@@ -150,6 +156,7 @@ async function main(): Promise<void> {
           "NodeNext",
           "--moduleResolution",
           "NodeNext",
+          "--resolveJsonModule",
           file,
         ],
         directory,
