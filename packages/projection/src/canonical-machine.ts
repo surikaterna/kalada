@@ -1,9 +1,10 @@
-import {
-  compileKaladaV1Program,
-  type KaladaV1FunctionLimits,
-  type KaladaV1Limits,
-  type KaladaV1Program,
+import type {
+  CompiledKaladaV1Program,
+  KaladaV1FunctionLimits,
+  KaladaV1Limits,
+  KaladaV1Program,
 } from "@kalada/core/kalada-v1";
+import { compileProjectionExpression } from "./canonical-expression.js";
 import { type PreparedProjectionEntry, prepareProjectionEntry } from "./canonical-object.js";
 import { frozenRecord } from "./canonical-output.js";
 import { bindingName, exact } from "./canonical-shape.js";
@@ -38,7 +39,14 @@ interface State {
   readonly active: WeakSet<object>;
   readonly dependencies: string[];
   readonly seenDependencies: Set<string>;
+  readonly programs: WeakMap<KaladaV1Program<string>, CompiledKaladaV1Program<string>>;
   nodes: number;
+}
+interface CanonicalProjectionResult {
+  readonly projection: ProjectionProgram;
+  readonly dependencies: readonly string[];
+  readonly limits: Readonly<ProjectionV1Limits>;
+  readonly programs: WeakMap<KaladaV1Program<string>, CompiledKaladaV1Program<string>>;
 }
 
 const NODE_FIELDS = [
@@ -57,18 +65,11 @@ const NODE_FIELDS = [
 export function canonicalProjection(
   input: unknown,
   options: ProjectionV1Options,
-): { readonly projection: ProjectionProgram; readonly dependencies: readonly string[] } {
+): CanonicalProjectionResult {
   const envelope = inspectRecord(input, [], ["format", "version", "profile", "root"]);
   checkEnvelope(envelope);
   const optionFields = inspectRecord(options, [], [], ["limits", "coreLimits"]);
-  const state: State = {
-    limits: resolveProjectionLimits(optionFields.limits),
-    coreLimits: optionFields.coreLimits as CoreLimits | undefined,
-    active: new WeakSet(),
-    dependencies: [],
-    seenDependencies: new Set(),
-    nodes: 0,
-  };
+  const state = createState(optionFields);
   let root: ProjectionNode | undefined;
   const stack: Work[] = [
     {
@@ -99,7 +100,24 @@ export function canonicalProjection(
     profile: "projection-v1",
     root,
   }) as unknown as ProjectionProgram;
-  return Object.freeze({ projection, dependencies: Object.freeze(state.dependencies) });
+  return Object.freeze({
+    projection,
+    dependencies: Object.freeze(state.dependencies),
+    limits: state.limits,
+    programs: state.programs,
+  });
+}
+
+function createState(optionFields: Record<string, unknown>): State {
+  return {
+    limits: resolveProjectionLimits(optionFields.limits),
+    coreLimits: optionFields.coreLimits as CoreLimits | undefined,
+    active: new WeakSet(),
+    dependencies: [],
+    seenDependencies: new Set(),
+    programs: new WeakMap(),
+    nodes: 0,
+  };
 }
 
 function checkEnvelope(fields: Record<string, unknown>): void {
@@ -160,7 +178,7 @@ function enterValue(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "expression"]);
-  const expression = compileExpression(
+  const expression = compileProjectionExpression(
     raw.expression,
     [...work.path, "expression"],
     work.scope,
@@ -260,7 +278,7 @@ function enterIf(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "condition", "then"], ["else"]);
-  const condition = compileExpression(
+  const condition = compileProjectionExpression(
     raw.condition,
     [...work.path, "condition"],
     work.scope,
@@ -305,7 +323,7 @@ function enterMap(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "collection", "item", "index", "body"]);
-  const collection = compileExpression(
+  const collection = compileProjectionExpression(
     raw.collection,
     [...work.path, "collection"],
     work.scope,
@@ -329,28 +347,6 @@ function enterMap(
   stack.push(
     child(raw.body, [...work.path, "body"], work.depth, bodyScope, (value) => (body = value)),
   );
-}
-
-function compileExpression(
-  input: unknown,
-  path: ProjectionPath,
-  scope: ReadonlySet<string>,
-  state: State,
-): KaladaV1Program<string> {
-  let outcome: ReturnType<typeof compileKaladaV1Program<string>>;
-  try {
-    outcome = compileKaladaV1Program<string>(input, { limits: state.coreLimits });
-  } catch {
-    invalid(path);
-  }
-  if (!outcome.ok) throw new ProjectionFailure("PROJECTION_CORE_ERROR", path, outcome.diagnostic);
-  for (const dependency of outcome.value.dependencies) {
-    if (!scope.has(dependency) && !state.seenDependencies.has(dependency)) {
-      state.seenDependencies.add(dependency);
-      state.dependencies.push(dependency);
-    }
-  }
-  return outcome.value.program;
 }
 
 function pushChildren(

@@ -1,5 +1,6 @@
 import { canonicalProjection } from "./canonical-machine.js";
 import { ProjectionFailure, projectionFailure, projectionSuccess } from "./diagnostics.js";
+import { evaluateProjection, evaluateProjectionWithClock } from "./evaluate.js";
 import type { CompiledProjection, ProjectionOutcome, ProjectionV1Options } from "./types.js";
 
 export function compileProjectionV1(
@@ -9,7 +10,16 @@ export function compileProjectionV1(
   try {
     const result = canonicalProjection(input, options);
     return projectionSuccess(
-      Object.freeze({ projection: result.projection, dependencies: result.dependencies }),
+      Object.freeze({
+        projection: result.projection,
+        dependencies: result.dependencies,
+        evaluate: evaluateProjection(result.projection, result.programs, result.limits),
+        evaluateWithClock: evaluateProjectionWithClock(
+          result.projection,
+          result.programs,
+          result.limits,
+        ),
+      }),
     );
   } catch (error) {
     const failure =
