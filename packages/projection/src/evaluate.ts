@@ -2,7 +2,9 @@ import {
   type CompiledKaladaV1Program,
   type InstantValue,
   isInstant,
+  type JsonValue,
   type KaladaV1Program,
+  type KaladaV1Resolution,
 } from "@kalada/core/kalada-v1";
 import { frozenRecord } from "./canonical-output.js";
 import { ProjectionFailure, projectionFailure } from "./diagnostics.js";
@@ -24,11 +26,13 @@ type Emission = OutputTree | typeof OMIT;
 
 interface EvaluationState {
   readonly resolve: ProjectionResolver;
+  readonly scopes: ReadonlyMap<string, JsonValue>[];
   readonly instant?: InstantValue;
   readonly programs: Programs;
   readonly limits: Readonly<ProjectionV1Limits>;
   readonly output: OutputAccounting;
   invocations: number;
+  iterations: number;
 }
 
 export function evaluateProjection(
@@ -69,11 +73,13 @@ function run(
 ): ProjectionEvaluationOutcome {
   const state: EvaluationState = {
     resolve,
+    scopes: [],
     instant,
     programs,
     limits,
     output: new OutputAccounting(limits),
     invocations: 0,
+    iterations: 0,
   };
   try {
     const result = evaluateNode(projection.root, ["root"], 0, state);
@@ -100,6 +106,7 @@ function evaluateNode(
   if (node.kind === "object") return evaluateObject(node.entries, path, depth, state);
   if (node.kind === "array") return evaluateArray(node.items, path, depth, state);
   if (node.kind === "if") return evaluateIf(node, path, depth, state);
+  if (node.kind === "map") return evaluateMap(node, path, depth, state);
   throw new ProjectionFailure("PROJECTION_INVALID_INPUT", path);
 }
 
@@ -184,6 +191,67 @@ function evaluateIf(
   return evaluateNode(node.else, [...path, "else"], depth, state);
 }
 
+function evaluateMap(
+  node: Extract<ProjectionNode, { kind: "map" }>,
+  path: ProjectionPath,
+  depth: number,
+  state: EvaluationState,
+): OutputTree {
+  const collectionPath = [...path, "collection"];
+  const collection = evaluateExpression(node.collection, collectionPath, state);
+  if (!Array.isArray(collection)) {
+    throw new ProjectionFailure("PROJECTION_COLLECTION_TYPE", collectionPath);
+  }
+  if (collection.length > state.limits.maxCollectionLength) {
+    throw new ProjectionFailure("PROJECTION_LIMIT_EXCEEDED", collectionPath);
+  }
+  state.output.startContainer(depth, path, "[");
+  const emitted: OutputTree[] = [];
+  for (const [index, item] of collection.entries()) {
+    const itemPath = [...path, "body", index];
+    reserveIteration(itemPath, state);
+    const checkpoint = state.output.checkpoint();
+    if (emitted.length > 0) state.output.token(",", itemPath);
+    const child = evaluateMapBody(node, item, index, itemPath, depth, state);
+    if (child === OMIT) state.output.rollback(checkpoint);
+    else {
+      emitted.push(child);
+      state.output.failIfChanged(checkpoint);
+    }
+  }
+  state.output.token("]", path);
+  const value = Object.freeze(emitted.map((item) => item.value)) as OutputTree["value"];
+  return Object.freeze({ value, path, items: Object.freeze(emitted) });
+}
+
+function evaluateMapBody(
+  node: Extract<ProjectionNode, { kind: "map" }>,
+  item: JsonValue,
+  index: number,
+  path: ProjectionPath,
+  depth: number,
+  state: EvaluationState,
+): Emission {
+  state.scopes.push(
+    new Map([
+      [node.item, item],
+      [node.index, index],
+    ]),
+  );
+  try {
+    return evaluateNode(node.body, path, depth + 1, state);
+  } finally {
+    state.scopes.pop();
+  }
+}
+
+function reserveIteration(path: ProjectionPath, state: EvaluationState): void {
+  state.iterations += 1;
+  if (state.iterations > state.limits.maxCollectionIterations) {
+    throw new ProjectionFailure("PROJECTION_LIMIT_EXCEEDED", path);
+  }
+}
+
 function evaluateExpression(
   expression: KaladaV1Program<string>,
   path: ProjectionPath,
@@ -196,11 +264,19 @@ function evaluateExpression(
   const compiled = state.programs.get(expression);
   if (!compiled) throw new ProjectionFailure("PROJECTION_INVALID_INPUT", path);
   const outcome = compiled.evaluate(
-    state.resolve,
+    (reference) => resolveReference(reference, state),
     state.instant ? { instant: state.instant } : undefined,
   );
   if (!outcome.ok) throw new ProjectionFailure("PROJECTION_CORE_ERROR", path, outcome.diagnostic);
   return outcome.value;
+}
+
+function resolveReference(reference: string, state: EvaluationState): KaladaV1Resolution {
+  for (let index = state.scopes.length - 1; index >= 0; index -= 1) {
+    const scope = state.scopes[index];
+    if (scope?.has(reference)) return { found: true, value: scope.get(reference) as JsonValue };
+  }
+  return state.resolve(reference);
 }
 
 function makeRecord(entries: readonly OutputEntry[]) {
