@@ -157,8 +157,16 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status"],
-          "properties": { "status": { "const": "omitted" } }
+          "required": ["status", "outcome"],
+          "properties": {
+            "status": { "const": "omitted" },
+            "outcome": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "omitted"],
+              "properties": { "ok": { "const": true }, "omitted": { "const": true } }
+            }
+          }
         },
         {
           "type": "object",

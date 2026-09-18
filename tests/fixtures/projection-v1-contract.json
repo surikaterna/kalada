@@ -22,5 +22,9 @@
     "maxOutputBytes": { "default": 1048576, "maximum": 16777216 }
   },
   "exampleFixture": "projection-v1-examples.jsonl",
-  "differentialFixture": "selecttransform-differential.jsonl"
+  "differentialFixture": "selecttransform-differential.jsonl",
+  "auditSchema": "projection-v1-audit-vectors.schema.json",
+  "keyFixture": "projection-v1-keys.jsonl",
+  "diagnosticFixture": "projection-v1-diagnostics.jsonl",
+  "accountingFixture": "projection-v1-accounting.jsonl"
 }

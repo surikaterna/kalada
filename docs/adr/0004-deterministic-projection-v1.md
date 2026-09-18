@@ -50,11 +50,18 @@ Embedded programs use the public core canonicalizer with the default string refe
 non-string references are invalid. Every string elsewhere is literal data. There is no source
 expression or interpolation escape.
 
-Object keys are non-empty strings. `__proto__`, `prototype`, and `constructor` are unsafe and
-rejected. Duplicate keys are rejected by exact code-unit equality before any entry value is
+Object keys are non-empty strings. `__proto__`, `prototype`, `constructor`, and every canonical
+ECMAScript array-index string are unsafe and rejected. An array-index string is exactly the decimal
+`ToString(n)` for an integer `n` from 0 through 4,294,967,294: `"0"` or a non-zero digit followed
+only by digits whose numeric value is at most 4,294,967,294. Thus `"00"`, `"01"`, `"-0"`, `"+0"`,
+`"1.0"`, `"1e0"`, and `"4294967295"` are not array indexes and are accepted. This exclusion makes
+ECMAScript own-key and compact-JSON order equal to entry order.
+
+For each entry, key length is checked first, unsafe-key status second, and duplication by exact
+code-unit equality third, all at `entryPath.concat(["key"])`; no value of a rejected entry is
 canonicalized. Successful output objects have null prototypes and enumerable, non-writable,
-non-configurable own properties in entry order; all output objects and arrays are recursively
-frozen. There is no object merge behavior.
+non-configurable own properties in entry order. All output containers are recursively frozen.
+There is no object merge behavior.
 
 Map `item` and `index` are non-empty, distinct names. They are lexical projection bindings, not
 host references. A nested map may shadow either name. Resolution always checks the innermost
@@ -130,41 +137,83 @@ core limits; projection counters do not replace core AST/value/string limits.
 At runtime an expression invocation is reserved before core evaluation. Every invocation gets its
 own fresh core evaluation counters and the same configured core limits, resolver, and sampled
 instant. Projection invocation and iteration counters are cumulative across the whole projection.
-Map length is checked before iteration; an iteration is reserved before its body. Omitted results
-charge no output node or bytes.
+Map length is checked before iteration; an iteration is reserved before its body.
 
-Output nodes and depth are reserved as values are attached. A key's emitted value counts normally;
-the key itself does not add a node. Bytes are checked after each complete root, object entry, array
-item, or map item attachment by UTF-8 encoding that partial compact JSON. The final check includes
-all punctuation and escaped key/string bytes. A failed attachment is not visible in the result.
+Output accounting is the compact `JSON.stringify` token stream in preorder, once per final output
+occurrence. Identity is irrelevant: two output positions referencing the same immutable JSON value
+are two occurrences. A value subtree is charged while emitted and is not charged again when its
+parent attaches it. Root depth is zero; each object-property or array-element edge adds one. Every
+primitive or container occurrence charges one node after its depth check. Object keys charge no
+node.
+
+Byte tokens are atomic UTF-8 sequences. A primitive charges UTF-8 `JSON.stringify(value)`. An
+array charges `[`; then, in index order, `,` before every item after the first and that item's
+tokens; then `]`. An object charges `{`; then, in entry order, `,` before every property after the
+first, UTF-8 `JSON.stringify(key)`, `:`, and its value tokens; then `}`. Punctuation is one byte.
+Strings and keys include their quotes and JSON escapes. Each token is reserved before emission and
+the token that would exceed the inclusive byte limit fails.
+
+Each root, object entry, array item, map iteration, and selected `if` branch has a transactional
+checkpoint containing output counters and the first provisional output failure. Container tokens
+known to survive are committed immediately. A prospective separator/key/colon and all child charges
+are provisional until that child emits. Omission rolls back every provisional depth/node/byte
+charge and pending output failure; emission commits without recharging; a non-output child failure
+discards the transaction and wins. If a child emits, its earliest token-order output failure wins
+and neither it nor later work is attached. Root omission rolls back all output charges and returns
+exactly `{ ok: true, omitted: true }` with no `value` or diagnostic.
+
+Output failure paths identify the token or occurrence. A constructed container uses its node path;
+an object key/comma/colon uses its entry `key` path; an array separator uses its item path; and a map
+separator uses `mapPath.concat(["body", iteration])`. A `value` result root uses its `expression`
+path. Its nested JSON descendants append `"output"` and then their object keys or array indexes.
+A map body inserts its zero-based iteration immediately after `body`; `if` adds no path segment.
+Depth is checked before node count, then the occurrence's opening/primitive byte token, then child
+tokens and its closing token. These rules define equal-limit success and the first `limit + 1`
+failure without partial output.
 
 ## Diagnostics
 
-A projection diagnostic is exactly `{ code, path, message, cause? }`. Stable codes are
-`PROJECTION_INVALID_INPUT`, `PROJECTION_LIMIT_EXCEEDED`, `PROJECTION_DUPLICATE_KEY`,
-`PROJECTION_UNSAFE_KEY`, `PROJECTION_CONDITION_TYPE`, `PROJECTION_COLLECTION_TYPE`,
-`PROJECTION_VALUE_TYPE`, `PROJECTION_OUTPUT_LIMIT`, `PROJECTION_CORE_ERROR`, and
-`PROJECTION_CLOCK_ERROR`. Messages are fixed generic text and never contain inspected values,
-host exceptions, resolver details, stack traces, source text, or property-coercion output.
+A projection diagnostic is exactly `{ code, path, message, cause? }`; `cause` is present only for
+`PROJECTION_CORE_ERROR`. The complete code/message/path contract is:
 
-Paths start at `root` and use canonical fields, for example
-`["root","entries",2,"value","expression"]`, `["root","items",1]`,
-`["root","condition"]`, and `["root","body"]`. A map runtime body error appends the numeric
-iteration index after `body`. An embedded failure has outer code `PROJECTION_CORE_ERROR`, points to
-its `expression`, `condition`, or `collection` field, and has the exact frozen core diagnostic as
-`cause`; core paths remain relative to the embedded program. Clock errors have no `cause`.
+| Code | Exact message | Exact path |
+| --- | --- | --- |
+| `PROJECTION_INVALID_INPUT` | `Projection input is invalid.` | offending input field; malformed limit at `["limits", name]` |
+| `PROJECTION_LIMIT_EXCEEDED` | `Projection limit exceeded.` | rejected limit option, node, key/name, entries/items array, expression invocation field, map collection, or `body,iteration` |
+| `PROJECTION_DUPLICATE_KEY` | `Projection object key is duplicated.` | second entry's `key` |
+| `PROJECTION_UNSAFE_KEY` | `Projection object key is unsafe.` | unsafe entry's `key` |
+| `PROJECTION_CONDITION_TYPE` | `Projection condition must evaluate to a boolean.` | `if` node's `condition` |
+| `PROJECTION_COLLECTION_TYPE` | `Projection map collection must evaluate to a JSON array.` | map node's `collection` |
+| `PROJECTION_VALUE_TYPE` | `Projection value must evaluate to JSON, Option.some(JSON), or Option.none.` | value node's `expression` |
+| `PROJECTION_OUTPUT_LIMIT` | `Projection output limit exceeded.` | output occurrence/token path defined above |
+| `PROJECTION_CORE_ERROR` | `Kalada expression evaluation failed.` | failing `expression`, `condition`, or `collection` |
+| `PROJECTION_CLOCK_ERROR` | `Projection clock failed.` | `["clock"]` |
 
-Canonical diagnostic precedence is: safe own-descriptor/exact-key reads; projection
-depth/node/string limits; envelope or local shape; entry/item count; key/name bounds; unsafe key;
-duplicate key or map-name collision; embedded core canonicalization; then the next canonical field.
-Runtime precedence is clock sample; node entry; expression-invocation limit; embedded core result;
-required projection type; map length; iteration reservation; selected child; output depth/nodes;
-output bytes. Left-to-right traversal decides ties. No later branch, entry, item, or iteration runs
-after failure.
+Paths start at `root`. A map runtime body path inserts its numeric iteration after `body`. For input
+shape, a failed safe descriptor read uses the property path being read; a proxy own-key/prototype
+failure, extra string/symbol key, or wrong object prototype uses that object's path. Missing/wrong
+`format`, `version`, `profile`, `root`, `kind`, or local field uses that field path. A wrong array
+shape or extra array key uses the array field path; a hole/accessor uses its numeric index path.
+Malformed limits (non-object map, unknown key, non-positive/non-safe value) use `[]`,
+`["limits", unknown]`, or `["limits", name]` respectively. An override above its hard maximum is
+`PROJECTION_LIMIT_EXCEEDED` at `["limits", name]`.
 
-Hostile getters and proxies fail as `PROJECTION_INVALID_INPUT` without forwarding thrown text.
-Core resolver/clock failures retain only core's sanitized diagnostic in `cause`. Diagnostics and
-all path/context/cause arrays and objects are recursively frozen.
+Projection depth/node failures use the node that would exceed; entry/item count uses its array;
+key/name limits use their field; expression-invocation uses the expression field; collection length
+uses `collection`; cumulative iteration uses `body,iteration`. Equal map names fail at `index`
+because `item` is read first. Embedded compile/evaluation failure has the exact recursively frozen
+core diagnostic as `cause`, whose path remains program-relative. No other code has `cause`. Every
+diagnostic, path, context, and cause is recursively frozen.
+
+Canonical precedence is: safe descriptors/own keys/prototype and exact keys; malformed limit
+options; over-maximum options; projection depth then nodes; envelope/local shape; entries/items
+count; key/name length; unsafe key; duplicate key or map-name collision; embedded core
+canonicalization; next canonical field. Runtime precedence is: clock; node; invocation reservation;
+core diagnostic; required projection type; map length; iteration reservation; selected child; then
+the transactional output order above. Left-to-right order breaks ties. A non-output child diagnostic
+wins over provisional output failure because omission/failure produces no occurrence. No later work
+runs. Host exceptions, values, resolver details, stacks, source text, and property coercions never
+enter messages or causes; hostile input is converted to the generic invalid-input diagnostic.
 
 ## Migration and package boundary
 
