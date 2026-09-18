@@ -18,7 +18,14 @@
     },
     "packages/core": {
       "name": "@kalada/core",
-      "version": "0.1.0",
+      "version": "0.4.0",
+    },
+    "packages/projection": {
+      "name": "@kalada/projection",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kalada/core": "^0.4.0",
+      },
     },
   },
   "packages": {
@@ -135,6 +142,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@kalada/core": ["@kalada/core@workspace:packages/core"],
+
+    "@kalada/projection": ["@kalada/projection@workspace:packages/projection"],
 
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 

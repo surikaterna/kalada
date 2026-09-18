@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "baseUrl": "../..",
+    "paths": {
+      "@kalada/core/kalada-v1": ["packages/core/src/kalada-v1/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

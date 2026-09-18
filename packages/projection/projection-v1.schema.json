@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kalada.dev/schemas/projection-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "profile", "root"],
+  "properties": {
+    "format": { "const": "kalada-projection" },
+    "version": { "const": 1 },
+    "profile": { "const": "projection-v1" },
+    "root": { "$ref": "#/$defs/node" }
+  },
+  "$defs": {
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "version", "profile", "expression"],
+      "properties": {
+        "format": { "const": "kalada-program" },
+        "version": { "const": 1 },
+        "profile": { "const": "kalada-v1" },
+        "expression": { "type": "object" }
+      }
+    },
+    "node": {
+      "oneOf": [
+        { "$ref": "#/$defs/valueNode" },
+        { "$ref": "#/$defs/objectNode" },
+        { "$ref": "#/$defs/arrayNode" },
+        { "$ref": "#/$defs/ifNode" },
+        { "$ref": "#/$defs/mapNode" }
+      ]
+    },
+    "valueNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expression"],
+      "properties": {
+        "kind": { "const": "value" },
+        "expression": { "$ref": "#/$defs/program" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "$ref": "#/$defs/node" }
+      }
+    },
+    "objectNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "entries"],
+      "properties": {
+        "kind": { "const": "object" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+      }
+    },
+    "arrayNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": { "const": "array" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "ifNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "condition", "then"],
+      "properties": {
+        "kind": { "const": "if" },
+        "condition": { "$ref": "#/$defs/program" },
+        "then": { "$ref": "#/$defs/node" },
+        "else": { "$ref": "#/$defs/node" }
+      }
+    },
+    "mapNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "collection", "item", "index", "body"],
+      "properties": {
+        "kind": { "const": "map" },
+        "collection": { "$ref": "#/$defs/program" },
+        "item": { "type": "string", "minLength": 1 },
+        "index": { "type": "string", "minLength": 1 },
+        "body": { "$ref": "#/$defs/node" }
+      }
+    }
+  }
+}
