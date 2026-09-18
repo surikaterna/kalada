@@ -44,6 +44,76 @@ describe("projection v1 canonical contracts", () => {
     expect("evaluate" in outcome.value).toBe(false);
   });
 
+  it("excludes direct map locals only from body dependencies", () => {
+    const input = P.program(
+      P.map(
+        reference("collection"),
+        "item",
+        "index",
+        P.array([
+          P.value(reference("item")),
+          P.value(reference("index")),
+          P.value(reference("host")),
+        ]),
+      ),
+    );
+    expect(compileProjectionV1(input)).toMatchObject({
+      ok: true,
+      value: { dependencies: ["collection", "host"] },
+    });
+  });
+
+  it("applies outer map scope to nested collections and bodies", () => {
+    const nested = P.map(
+      reference("outer"),
+      "inner",
+      "innerIndex",
+      P.array([
+        P.value(reference("outer")),
+        P.value(reference("outerIndex")),
+        P.value(reference("inner")),
+        P.value(reference("innerIndex")),
+        P.value(reference("host")),
+      ]),
+    );
+    const input = P.program(P.map(reference("source"), "outer", "outerIndex", nested));
+    expect(compileProjectionV1(input)).toMatchObject({
+      ok: true,
+      value: { dependencies: ["source", "host"] },
+    });
+  });
+
+  it("handles nested shadowing without removing same-named host references outside scope", () => {
+    const nested = P.map(
+      reference("nestedSource"),
+      "value",
+      "nestedIndex",
+      P.value(reference("value")),
+    );
+    const scoped = P.map(literal([]), "value", "outerIndex", nested);
+    const input = P.program(P.array([scoped, P.value(reference("value"))]));
+    expect(compileProjectionV1(input)).toMatchObject({
+      ok: true,
+      value: { dependencies: ["nestedSource", "value"] },
+    });
+  });
+
+  it("preserves first-seen host dependency order and deduplicates after scope filtering", () => {
+    const mapped = P.map(
+      reference("a"),
+      "item",
+      "index",
+      P.array([P.value(reference("z")), P.value(reference("item")), P.value(reference("b"))]),
+    );
+    const input = P.program(
+      P.array([P.value(reference("z")), mapped, P.value(reference("a")), P.value(reference("c"))]),
+    );
+    expect(compileProjectionV1(input)).toMatchObject({
+      ok: true,
+      value: { dependencies: ["z", "a", "b", "c"] },
+    });
+  });
+
   it("preserves a sanitized, frozen core diagnostic at its projection path", () => {
     const outcome = compileProjectionV1(P.program(P.value({ bad: true } as never)));
     expect(outcome).toMatchObject({
@@ -121,6 +191,29 @@ describe("projection v1 canonical contracts", () => {
     expect(canonicalizeProjectionV1(duplicate)).toMatchObject({
       ok: false,
       diagnostic: { code: "PROJECTION_DUPLICATE_KEY", path: ["root", "entries", 1, "key"] },
+    });
+    const unsafeAccessor = { key: "__proto__" } as Record<string, unknown>;
+    Object.defineProperty(unsafeAccessor, "value", {
+      enumerable: true,
+      get: () => P.value(literal(1)),
+    });
+    expect(canonicalizeProjectionV1(P.program(P.object([unsafeAccessor as never])))).toMatchObject({
+      ok: false,
+      diagnostic: { code: "PROJECTION_UNSAFE_KEY" },
+    });
+  });
+
+  it.each([
+    ["unsafe", P.entry("__proto__", P.value(literal(1)))],
+    ["duplicate", P.entry("first", P.value(literal(1)))],
+  ])("finishes an earlier entry value before a later %s key", (_case, later) => {
+    const input = P.program(P.object([P.entry("first", P.value({ bad: true } as never)), later]));
+    expect(canonicalizeProjectionV1(input)).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: "PROJECTION_CORE_ERROR",
+        path: ["root", "entries", 0, "value", "expression"],
+      },
     });
   });
 

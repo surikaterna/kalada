@@ -4,6 +4,9 @@ import {
   type KaladaV1Limits,
   type KaladaV1Program,
 } from "@kalada/core/kalada-v1";
+import { type PreparedProjectionEntry, prepareProjectionEntry } from "./canonical-object.js";
+import { frozenRecord } from "./canonical-output.js";
+import { bindingName, exact } from "./canonical-shape.js";
 import { ProjectionFailure } from "./diagnostics.js";
 import { inspectArray, inspectRecord, invalid } from "./inspect.js";
 import { resolveProjectionLimits } from "./resolve-limits.js";
@@ -24,9 +27,11 @@ type Work =
       readonly input: unknown;
       readonly path: ProjectionPath;
       readonly depth: number;
+      readonly scope: ReadonlySet<string>;
       readonly assign: Assign;
     }
-  | { readonly action: "finish"; readonly input: object; readonly finish: () => void };
+  | { readonly action: "finish"; readonly input: object; readonly finish: () => void }
+  | { readonly action: "task"; readonly run: () => void };
 interface State {
   readonly limits: Readonly<ProjectionV1Limits>;
   readonly coreLimits: CoreLimits | undefined;
@@ -71,13 +76,16 @@ export function canonicalProjection(
       input: envelope.root,
       path: ["root"],
       depth: 0,
+      scope: new Set(),
       assign: (value) => (root = value),
     },
   ];
   while (stack.length > 0) {
     const work = stack.pop();
     if (!work) break;
-    if (work.action === "finish") {
+    if (work.action === "task") {
+      work.run();
+    } else if (work.action === "finish") {
       work.finish();
       state.active.delete(work.input);
     } else {
@@ -152,7 +160,12 @@ function enterValue(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "expression"]);
-  const expression = compileExpression(raw.expression, [...work.path, "expression"], state);
+  const expression = compileExpression(
+    raw.expression,
+    [...work.path, "expression"],
+    work.scope,
+    state,
+  );
   stack.push(
     finish(input, () =>
       work.assign(frozenRecord({ kind: "value", expression }) as unknown as ProjectionNode),
@@ -171,58 +184,49 @@ function enterObject(
   const path = [...work.path, "entries"];
   const source = inspectArray(raw.entries, path);
   if (source.length > state.limits.maxObjectEntries) limit(path);
-  const entries = prepareEntries(source, path, state);
-  const values: ProjectionNode[] = [];
-  stack.push(finish(input, () => work.assign(makeObjectNode(entries, values))));
-  for (let index = source.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (!entry) continue;
-    stack.push({
-      action: "node",
-      input: entry.input,
-      path: [...path, index, "value"],
-      depth: work.depth + 1,
-      assign: (value) => (values[index] = value),
-    });
-  }
+  const entries: ProjectionObjectEntry[] = [];
+  const seen = new Set<string>();
+  stack.push(finish(input, () => work.assign(makeObjectNode(entries))));
+  stack.push(task(() => processEntry(0, source, path, work, entries, seen, stack, state)));
 }
 
-interface PreparedEntry {
-  readonly key: string;
-  readonly input: unknown;
-}
-
-function prepareEntries(
+function processEntry(
+  index: number,
   source: readonly unknown[],
   path: ProjectionPath,
+  work: Extract<Work, { action: "node" }>,
+  output: ProjectionObjectEntry[],
+  seen: Set<string>,
+  stack: Work[],
   state: State,
-): readonly PreparedEntry[] {
-  const seen = new Set<string>();
-  return source.map((input, index) => {
-    const entryPath = [...path, index];
-    const raw = inspectRecord(input, entryPath, ["key", "value"]);
-    if (typeof raw.key !== "string" || raw.key.length === 0) invalid([...entryPath, "key"]);
-    if (codePointLengthAbove(raw.key, state.limits.maxKeyLength)) limit([...entryPath, "key"]);
-    if (isUnsafeKey(raw.key))
-      throw new ProjectionFailure("PROJECTION_UNSAFE_KEY", [...entryPath, "key"]);
-    if (seen.has(raw.key))
-      throw new ProjectionFailure("PROJECTION_DUPLICATE_KEY", [...entryPath, "key"]);
-    seen.add(raw.key);
-    return Object.freeze({ key: raw.key, input: raw.value });
+): void {
+  if (index >= source.length) return;
+  const entry = prepareProjectionEntry(
+    source[index],
+    [...path, index],
+    state.limits.maxKeyLength,
+    seen,
+  );
+  stack.push(task(() => processEntry(index + 1, source, path, work, output, seen, stack, state)));
+  stack.push(entryChild(entry, index, path, work, output));
+}
+
+function entryChild(
+  entry: PreparedProjectionEntry,
+  index: number,
+  path: ProjectionPath,
+  work: Extract<Work, { action: "node" }>,
+  output: ProjectionObjectEntry[],
+): Work {
+  return child(entry.input, [...path, index, "value"], work.depth, work.scope, (value) => {
+    output[index] = frozenRecord({ key: entry.key, value }) as unknown as ProjectionObjectEntry;
   });
 }
 
-function makeObjectNode(
-  entries: readonly PreparedEntry[],
-  values: readonly ProjectionNode[],
-): ProjectionNode {
-  const output = entries.map(
-    (entry, index) =>
-      frozenRecord({ key: entry.key, value: values[index] }) as unknown as ProjectionObjectEntry,
-  );
+function makeObjectNode(entries: readonly ProjectionObjectEntry[]): ProjectionNode {
   return frozenRecord({
     kind: "object",
-    entries: Object.freeze(output),
+    entries: Object.freeze(entries),
   }) as unknown as ProjectionNode;
 }
 
@@ -245,7 +249,7 @@ function enterArray(
       ),
     ),
   );
-  pushChildren(source, path, work.depth, items, stack);
+  pushChildren(source, path, work.depth, work.scope, items, stack);
 }
 
 function enterIf(
@@ -256,7 +260,12 @@ function enterIf(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "condition", "then"], ["else"]);
-  const condition = compileExpression(raw.condition, [...work.path, "condition"], state);
+  const condition = compileExpression(
+    raw.condition,
+    [...work.path, "condition"],
+    work.scope,
+    state,
+  );
   let thenNode: ProjectionNode | undefined;
   let elseNode: ProjectionNode | undefined;
   stack.push(
@@ -274,8 +283,18 @@ function enterIf(
     }),
   );
   if ("else" in raw)
-    stack.push(child(raw.else, [...work.path, "else"], work.depth, (value) => (elseNode = value)));
-  stack.push(child(raw.then, [...work.path, "then"], work.depth, (value) => (thenNode = value)));
+    stack.push(
+      child(
+        raw.else,
+        [...work.path, "else"],
+        work.depth,
+        work.scope,
+        (value) => (elseNode = value),
+      ),
+    );
+  stack.push(
+    child(raw.then, [...work.path, "then"], work.depth, work.scope, (value) => (thenNode = value)),
+  );
 }
 
 function enterMap(
@@ -286,7 +305,12 @@ function enterMap(
   input: object,
 ): void {
   exact(raw, work.path, ["kind", "collection", "item", "index", "body"]);
-  const collection = compileExpression(raw.collection, [...work.path, "collection"], state);
+  const collection = compileExpression(
+    raw.collection,
+    [...work.path, "collection"],
+    work.scope,
+    state,
+  );
   const item = bindingName(raw.item, [...work.path, "item"], state.limits.maxNameLength);
   const index = bindingName(raw.index, [...work.path, "index"], state.limits.maxNameLength);
   if (item === index) invalid([...work.path, "index"]);
@@ -299,12 +323,18 @@ function enterMap(
       );
     }),
   );
-  stack.push(child(raw.body, [...work.path, "body"], work.depth, (value) => (body = value)));
+  const bodyScope = new Set(work.scope);
+  bodyScope.add(item);
+  bodyScope.add(index);
+  stack.push(
+    child(raw.body, [...work.path, "body"], work.depth, bodyScope, (value) => (body = value)),
+  );
 }
 
 function compileExpression(
   input: unknown,
   path: ProjectionPath,
+  scope: ReadonlySet<string>,
   state: State,
 ): KaladaV1Program<string> {
   let outcome: ReturnType<typeof compileKaladaV1Program<string>>;
@@ -315,7 +345,7 @@ function compileExpression(
   }
   if (!outcome.ok) throw new ProjectionFailure("PROJECTION_CORE_ERROR", path, outcome.diagnostic);
   for (const dependency of outcome.value.dependencies) {
-    if (!state.seenDependencies.has(dependency)) {
+    if (!scope.has(dependency) && !state.seenDependencies.has(dependency)) {
       state.seenDependencies.add(dependency);
       state.dependencies.push(dependency);
     }
@@ -323,65 +353,39 @@ function compileExpression(
   return outcome.value.program;
 }
 
-function exact(
-  raw: Record<string, unknown>,
-  path: ProjectionPath,
-  required: readonly string[],
-  optional: readonly string[] = [],
-): void {
-  const allowed = new Set([...required, ...optional]);
-  for (const key of Object.keys(raw)) if (!allowed.has(key)) invalid(path);
-  for (const key of required) if (!(key in raw)) invalid([...path, key]);
-}
-
-function bindingName(input: unknown, path: ProjectionPath, maximum: number): string {
-  if (typeof input !== "string" || input.length === 0) invalid(path);
-  if (codePointLengthAbove(input, maximum)) limit(path);
-  return input;
-}
-
-function codePointLengthAbove(value: string, maximum: number): boolean {
-  let count = 0;
-  for (const _point of value) {
-    count += 1;
-    if (count > maximum) return true;
-  }
-  return false;
-}
-
-function isUnsafeKey(key: string): boolean {
-  if (key === "__proto__" || key === "prototype" || key === "constructor") return true;
-  if (!/^(0|[1-9][0-9]*)$/u.test(key)) return false;
-  return Number(key) <= 4_294_967_294;
-}
-
 function pushChildren(
   source: readonly unknown[],
   path: ProjectionPath,
   depth: number,
+  scope: ReadonlySet<string>,
   output: ProjectionNode[],
   stack: Work[],
 ): void {
   for (let index = source.length - 1; index >= 0; index -= 1) {
-    stack.push(child(source[index], [...path, index], depth, (value) => (output[index] = value)));
+    stack.push(
+      child(source[index], [...path, index], depth, scope, (value) => (output[index] = value)),
+    );
   }
 }
 
-function child(input: unknown, path: ProjectionPath, depth: number, assign: Assign): Work {
-  return { action: "node", input, path, depth: depth + 1, assign };
+function child(
+  input: unknown,
+  path: ProjectionPath,
+  depth: number,
+  scope: ReadonlySet<string>,
+  assign: Assign,
+): Work {
+  return { action: "node", input, path, depth: depth + 1, scope, assign };
 }
 
 function finish(input: object, operation: () => void): Work {
   return { action: "finish", input, finish: operation };
 }
 
-function limit(path: ProjectionPath): never {
-  throw new ProjectionFailure("PROJECTION_LIMIT_EXCEEDED", path);
+function task(operation: () => void): Work {
+  return { action: "task", run: operation };
 }
 
-function frozenRecord(fields: Record<string, unknown>): Readonly<Record<string, unknown>> {
-  const output = Object.create(null) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(fields))
-    Object.defineProperty(output, key, { enumerable: true, value });
-  return Object.freeze(output);
+function limit(path: ProjectionPath): never {
+  throw new ProjectionFailure("PROJECTION_LIMIT_EXCEEDED", path);
 }

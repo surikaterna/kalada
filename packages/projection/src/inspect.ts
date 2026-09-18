@@ -10,15 +10,7 @@ export function inspectRecord(
   optional: readonly string[] = [],
   extraAtKey = false,
 ): Fields {
-  if (typeof input !== "object" || input === null || safe(() => Array.isArray(input), path)) {
-    invalid(path);
-  }
-  const object = input as object;
-  const allowed = new Set([...required, ...optional]);
-  const keys = safe(() => Reflect.ownKeys(object), path);
-  const prototype = safe(() => Object.getPrototypeOf(object), path);
-  if (prototype !== null && prototype !== Object.prototype) invalid(path);
-  validateKeys(keys, allowed, path, extraAtKey);
+  const object = inspectRecordShape(input, path, required, optional, extraAtKey);
   const fields: Fields = Object.create(null) as Fields;
   for (const key of required) fields[key] = readData(object, key, [...path, key], true);
   for (const key of optional) {
@@ -26,6 +18,30 @@ export function inspectRecord(
     if (value !== ABSENT) fields[key] = value;
   }
   return fields;
+}
+
+export function inspectRecordShape(
+  input: unknown,
+  path: ProjectionPath,
+  required: readonly string[],
+  optional: readonly string[] = [],
+  extraAtKey = false,
+): object {
+  if (typeof input !== "object" || input === null || safe(() => Array.isArray(input), path)) {
+    invalid(path);
+  }
+  const object = input as object;
+  const keys = safe(() => Reflect.ownKeys(object), path);
+  const prototype = safe(() => Object.getPrototypeOf(object), path);
+  if (prototype !== null && prototype !== Object.prototype) invalid(path);
+  validateKeys(keys, new Set([...required, ...optional]), path, extraAtKey);
+  const strings = new Set(keys.filter((key): key is string => typeof key === "string"));
+  for (const key of required) if (!strings.has(key)) invalid([...path, key]);
+  return object;
+}
+
+export function inspectRequiredData(object: object, key: string, path: ProjectionPath): unknown {
+  return readData(object, key, path, true);
 }
 
 const ABSENT = Symbol("absent");
