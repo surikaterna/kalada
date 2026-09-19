@@ -34,5 +34,7 @@ bun run projection:smoke
 ```
 
 Changes to publishable packages require a Changeset. Publication is owned by the protected
-GitHub Actions release workflow and npm trusted publishing; local publication is not part of
-the development workflow.
+GitHub Actions release workflow and npm trusted publishing; local or manual publication is not
+part of the development workflow. The one-time projection 0.1.0 bootstrap is closed and must not
+be repeated; its immutable release record is
+[docs/releases/kalada-projection-0.1.0-bootstrap.md](docs/releases/kalada-projection-0.1.0-bootstrap.md).
