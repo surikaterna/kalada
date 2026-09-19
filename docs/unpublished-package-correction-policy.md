@@ -70,5 +70,6 @@ owner-authorized issue.
 
 The removal issue must delete any temporary release selection control once the first publication
 and trusted-publisher setup are complete. Manual first-publication evidence must identify the owner
-and exact audited artifact and must not claim GitHub Actions OIDC or SLSA provenance. Every later
-release uses the normal trusted workflow.
+and exact audited artifact and must not claim GitHub Actions OIDC or SLSA provenance. The projection
+0.1.0 bootstrap is complete and recorded in `docs/releases/kalada-projection-0.1.0-bootstrap.md`;
+it must not be repeated. Every later release uses the normal trusted workflow.
