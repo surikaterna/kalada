@@ -17,6 +17,7 @@ import {
 } from "./evaluation-state.js";
 import type { JsonValue } from "./json.js";
 import type { ResolvedKaladaV1Limits } from "./limits.js";
+import { enterOperator } from "./operator-evaluation.js";
 import {
   closureFromExpression,
   closureFromMember,
@@ -117,7 +118,10 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
       break;
     case "field-access":
     case "optional-field-access":
-      enterFieldAccess(node, path, state);
+    case "equality":
+    case "ordered-comparison":
+    case "membership":
+      enterAddedExpression(node, path, state);
       break;
     case "option":
     case "result":
@@ -144,6 +148,28 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
       break;
     default:
       deliver(temporalLeaf(node, path, state.instant), state);
+  }
+}
+
+function enterAddedExpression<R extends JsonValue>(
+  node: Extract<
+    KaladaV1Expression<R>,
+    {
+      kind:
+        | "field-access"
+        | "optional-field-access"
+        | "equality"
+        | "ordered-comparison"
+        | "membership";
+    }
+  >,
+  path: Path,
+  state: MachineState<R>,
+): void {
+  if (node.kind === "field-access" || node.kind === "optional-field-access") {
+    enterFieldAccess(node, path, state);
+  } else {
+    enterOperator(node, path, state);
   }
 }
 

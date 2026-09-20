@@ -25,6 +25,21 @@ const optionalFieldAccess = <R extends JsonValue>(
   target: KaladaV1Expression<R>,
   field: string,
 ): KaladaV1Expression<R> => ({ kind: "optional-field-access", target, field });
+const equality = <R extends JsonValue>(
+  operator: Extract<KaladaV1Expression<R>, { kind: "equality" }>["operator"],
+  left: KaladaV1Expression<R>,
+  right: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "equality", operator, left, right });
+const orderedComparison = <R extends JsonValue>(
+  domain: Extract<KaladaV1Expression<R>, { kind: "ordered-comparison" }>["domain"],
+  operator: Extract<KaladaV1Expression<R>, { kind: "ordered-comparison" }>["operator"],
+  left: KaladaV1Expression<R>,
+  right: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "ordered-comparison", domain, operator, left, right });
+const membership = <R extends JsonValue>(
+  needle: KaladaV1Expression<R>,
+  array: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "membership", needle, array });
 const binding = <R extends JsonValue>(
   name: string,
   value: KaladaV1Expression<R>,
@@ -127,6 +142,9 @@ export const KaladaV1 = Object.freeze({
   ref,
   fieldAccess,
   optionalFieldAccess,
+  equality,
+  orderedComparison,
+  membership,
   binding,
   Option: Object.freeze({ some, none }),
   Result: Object.freeze({ ok, err }),

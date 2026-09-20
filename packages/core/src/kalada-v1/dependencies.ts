@@ -33,17 +33,19 @@ function visit<R extends JsonValue>(
     visitBinding(node, scope, output, identities);
     return;
   }
-  if (node.kind === "field-access" || node.kind === "optional-field-access") {
-    visit(node.target, scope, output, identities);
-    return;
-  }
+  if (visitAddedNode(node, scope, output, identities)) return;
   if (visitFunctionNode(node, scope, output, identities)) return;
 
   if (node.kind === "match") {
     visitMatch(node.value, node.arms, scope, output, identities);
     return;
   }
-  if (node.kind === "temporal-arithmetic" || node.kind === "temporal-comparison") {
+  if (
+    node.kind === "temporal-arithmetic" ||
+    node.kind === "temporal-comparison" ||
+    node.kind === "equality" ||
+    node.kind === "ordered-comparison"
+  ) {
     visit(node.left, scope, output, identities);
     visit(node.right, scope, output, identities);
     return;
@@ -51,6 +53,24 @@ function visit<R extends JsonValue>(
   if (node.kind === "option" || node.kind === "result") {
     visit(node.value, scope, output, identities);
   }
+}
+
+function visitAddedNode<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  scope: ReadonlySet<string>,
+  output: R[],
+  identities: Set<string>,
+): boolean {
+  if (node.kind === "field-access" || node.kind === "optional-field-access") {
+    visit(node.target, scope, output, identities);
+    return true;
+  }
+  if (node.kind === "membership") {
+    visit(node.needle, scope, output, identities);
+    visit(node.array, scope, output, identities);
+    return true;
+  }
+  return false;
 }
 
 function visitFunctionNode<R extends JsonValue>(

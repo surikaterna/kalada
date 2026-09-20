@@ -11,6 +11,7 @@ import {
 } from "./evaluation-state.js";
 import { applyFieldAccess } from "./field-access.js";
 import { cloneJson, type JsonValue } from "./json.js";
+import { deliverOperator } from "./operator-evaluation.js";
 import {
   callableType,
   isCallable,
@@ -19,10 +20,9 @@ import {
   type RuntimeValue,
   type UserClosure,
 } from "./runtime-values.js";
-import { isDuration, isInstant } from "./temporal.js";
-import { applyTemporalBinary } from "./temporal-evaluation.js";
+import { deliverTemporal } from "./temporal-delivery.js";
 import type { KaladaV1Expression } from "./types.js";
-import { isOption, isResult, type KaladaValue, Option, Result } from "./values.js";
+import { isOption, isResult, Option, Result } from "./values.js";
 
 export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void {
   const frame = state.stack[state.stack.length - 1] as EvaluationFrame<R>;
@@ -46,6 +46,11 @@ export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void 
       break;
     case "temporal-binary":
       deliverTemporal(frame, state);
+      break;
+    case "equality":
+    case "ordered-comparison":
+    case "membership":
+      deliverOperator(frame, state);
       break;
     case "function-group-body":
       restore(frame.outer, state);
@@ -126,31 +131,6 @@ function bindArm(
   const nested = new Map(environment);
   if (isOption(value) || isResult(value)) nested.set(name, value.value);
   return nested;
-}
-
-function deliverTemporal<R extends JsonValue>(
-  frame: Extract<EvaluationFrame<R>, { kind: "temporal-binary" }>,
-  state: MachineState<R>,
-): void {
-  const value = state.value as RuntimeValue;
-  if (isCallable(value) || (!isInstant(value) && !isDuration(value))) {
-    fail("KALADA_TEMPORAL_TYPE_MISMATCH", [...frame.path, frame.phase]);
-  }
-  if (frame.phase === "left") {
-    frame.phase = "right";
-    frame.left = value;
-    evaluate(frame.right, [...frame.path, "right"], state.environment, state);
-    return;
-  }
-  state.stack.pop();
-  const output = applyTemporalBinary(
-    frame.expressionKind,
-    frame.operator,
-    frame.left as KaladaValue,
-    value,
-    [...frame.path, "right"],
-  );
-  deliver(output, state);
 }
 
 function deliverCallee<R extends JsonValue>(

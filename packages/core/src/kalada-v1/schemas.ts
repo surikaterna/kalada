@@ -51,6 +51,20 @@ const expression = {
     ),
     fieldNode("field-access"),
     fieldNode("optional-field-access"),
+    binaryNode("equality", ["equal", "not-equal"]),
+    node(
+      "ordered-comparison",
+      {
+        domain: { enum: ["number", "string"] },
+        operator: {
+          enum: ["less-than", "less-than-or-equal", "greater-than", "greater-than-or-equal"],
+        },
+        left: expressionRef(),
+        right: expressionRef(),
+      },
+      ["domain", "operator", "left", "right"],
+    ),
+    node("membership", { needle: expressionRef(), array: expressionRef() }, ["needle", "array"]),
     node("binding", { name: bindingName(), value: expressionRef(), body: expressionRef() }, [
       "name",
       "value",
@@ -147,7 +161,18 @@ export const KALADA_V1_FUNCTION_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze(
   },
 });
 
-const legacyExpression = { oneOf: expression.oneOf.slice(0, 15) };
+const legacyExpression = {
+  oneOf: expression.oneOf.filter((candidate) => {
+    const kind = (candidate as { properties?: { kind?: { const?: string } } }).properties?.kind
+      ?.const;
+    return (
+      kind !== "function" &&
+      kind !== "call" &&
+      kind !== "function-group" &&
+      kind !== "core-function"
+    );
+  }),
+};
 
 export const KALADA_V1_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -200,6 +225,14 @@ function node(
 }
 
 function temporalNode(kind: string, operators: readonly string[]): Record<string, unknown> {
+  return node(
+    kind,
+    { operator: { enum: operators }, left: expressionRef(), right: expressionRef() },
+    ["operator", "left", "right"],
+  );
+}
+
+function binaryNode(kind: string, operators: readonly string[]): Record<string, unknown> {
   return node(
     kind,
     { operator: { enum: operators }, left: expressionRef(), right: expressionRef() },

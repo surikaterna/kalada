@@ -82,11 +82,16 @@ function scanChildren<R extends JsonValue>(
     scan(node.target, [...path, "target"], scope, state);
     return;
   }
+  if (node.kind === "membership") {
+    scan(node.needle, [...path, "needle"], scope, state);
+    scan(node.array, [...path, "array"], scope, state);
+    return;
+  }
   if (node.kind === "match") {
     scanMatch(node, path, scope, state);
     return;
   }
-  if (node.kind === "temporal-arithmetic" || node.kind === "temporal-comparison") {
+  if (isBinary(node)) {
     scan(node.left, [...path, "left"], scope, state);
     scan(node.right, [...path, "right"], scope, state);
     return;
@@ -172,19 +177,38 @@ function visitReferenceChildren<R extends JsonValue>(
     visitReferences(node.target, locals, add);
     return;
   }
+  if (node.kind === "membership") {
+    visitReferences(node.needle, locals, add);
+    visitReferences(node.array, locals, add);
+    return;
+  }
   if (node.kind === "match") {
     visitReferences(node.value, locals, add);
     for (const arm of node.arms)
       visitReferences(arm.body, arm.binding ? added(locals, arm.binding) : locals, add);
     return;
   }
-  if (node.kind === "temporal-arithmetic" || node.kind === "temporal-comparison") {
+  if (isBinary(node)) {
     visitReferences(node.left, locals, add);
     visitReferences(node.right, locals, add);
     return;
   }
   if (node.kind === "option" && node.variant === "some") visitReferences(node.value, locals, add);
   if (node.kind === "result") visitReferences(node.value, locals, add);
+}
+
+function isBinary<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): node is Extract<
+  KaladaV1Expression<R>,
+  { kind: "temporal-arithmetic" | "temporal-comparison" | "equality" | "ordered-comparison" }
+> {
+  return (
+    node.kind === "temporal-arithmetic" ||
+    node.kind === "temporal-comparison" ||
+    node.kind === "equality" ||
+    node.kind === "ordered-comparison"
+  );
 }
 
 function isFieldAccess<R extends JsonValue>(
