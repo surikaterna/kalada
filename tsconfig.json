@@ -10,7 +10,8 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@kalada/core": ["packages/core/src/index.ts"]
+      "@kalada/core": ["packages/core/src/index.ts"],
+      "@kalada/syntax": ["packages/syntax/src/index.ts"]
     },
     "noEmit": true,
     "noFallthroughCasesInSwitch": true,

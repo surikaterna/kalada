@@ -16,6 +16,7 @@ describe("package boundaries", () => {
     expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([
       "core",
       "projection",
+      "syntax",
     ]);
   });
 

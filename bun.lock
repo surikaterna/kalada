@@ -17,10 +17,17 @@
     },
     "packages/core": {
       "name": "@kalada/core",
-      "version": "0.4.0",
+      "version": "0.5.0",
     },
     "packages/projection": {
       "name": "@kalada/projection",
+      "version": "0.1.0",
+      "dependencies": {
+        "@kalada/core": "^0.5.0",
+      },
+    },
+    "packages/syntax": {
+      "name": "@kalada/syntax",
       "version": "0.0.0",
       "dependencies": {
         "@kalada/core": "^0.5.0",
@@ -143,6 +150,8 @@
     "@kalada/core": ["@kalada/core@workspace:packages/core"],
 
     "@kalada/projection": ["@kalada/projection@workspace:packages/projection"],
+
+    "@kalada/syntax": ["@kalada/syntax@workspace:packages/syntax"],
 
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 

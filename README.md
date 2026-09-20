@@ -6,7 +6,8 @@ at its canonical root. The native profile
 supports typed lexical functions, bounded recursion, and the `map`, `filter`, `some`, and `every`
 core function values in addition to Option, Result, temporal values, and exhaustive matches.
 
-See the [core API guide](packages/core/README.md) and
+See the [core API guide](packages/core/README.md),
+[syntax API guide](packages/syntax/README.md), and
 [projection API and migration guide](packages/projection/README.md) for executable examples,
 limits, security boundaries, omission semantics, and public entry points. Projection v1 constructs
 JSON with explicit core expression ASTs and the five bounded `value`, `object`, `array`, `if`, and
@@ -31,6 +32,8 @@ bun run test
 bun run build
 bun run package:smoke
 bun run projection:smoke
+bun run syntax:smoke
+bun run syntax:browser-smoke
 ```
 
 Changes to publishable packages require a Changeset. Publication is owned by the protected
