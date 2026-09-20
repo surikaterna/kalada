@@ -19,6 +19,11 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | EqualityExpression<R>
   | OrderedComparisonExpression<R>
   | MembershipExpression<R>
+  | NumericBinaryExpression<R>
+  | NumericUnaryExpression<R>
+  | BooleanNotExpression<R>
+  | BooleanLogicalExpression<R>
+  | BooleanXorExpression<R>
   | FunctionExpression<R>
   | CallExpression<R>
   | FunctionGroupExpression<R>
@@ -151,6 +156,37 @@ export interface MembershipExpression<R extends JsonValue> {
   readonly array: KaladaV1Expression<R>;
 }
 
+export interface NumericBinaryExpression<R extends JsonValue> {
+  readonly kind: "numeric-binary";
+  readonly operator: "add" | "subtract" | "multiply" | "divide" | "remainder";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
+export interface NumericUnaryExpression<R extends JsonValue> {
+  readonly kind: "numeric-unary";
+  readonly operator: "plus" | "negate";
+  readonly operand: KaladaV1Expression<R>;
+}
+
+export interface BooleanNotExpression<R extends JsonValue> {
+  readonly kind: "boolean-not";
+  readonly operand: KaladaV1Expression<R>;
+}
+
+export interface BooleanLogicalExpression<R extends JsonValue> {
+  readonly kind: "boolean-logical";
+  readonly operator: "and" | "or";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
+export interface BooleanXorExpression<R extends JsonValue> {
+  readonly kind: "boolean-xor";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
 export interface BindingExpression<R extends JsonValue> {
   readonly kind: "binding";
   readonly name: string;
@@ -223,7 +259,9 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_FIELD_MISSING"
   | "KALADA_FIELD_TYPE_MISMATCH"
   | "KALADA_OPERATOR_TYPE"
-  | "KALADA_OPERATOR_AMBIGUOUS";
+  | "KALADA_OPERATOR_AMBIGUOUS"
+  | "KALADA_NUMERIC_ZERO_DIVISOR"
+  | "KALADA_NUMERIC_NON_FINITE";
 
 export interface KaladaV1DiagnosticContextFrame {
   readonly kind: "function-call" | "core-call";

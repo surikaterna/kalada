@@ -32,6 +32,35 @@ import { temporalLeaf } from "./temporal-evaluation.js";
 import type { KaladaV1Expression, KaladaV1FunctionCapture, KaladaV1Resolver } from "./types.js";
 import { type KaladaValue, Option } from "./values.js";
 
+type AddedExpression<R extends JsonValue> = Extract<
+  KaladaV1Expression<R>,
+  {
+    kind:
+      | "field-access"
+      | "optional-field-access"
+      | "equality"
+      | "ordered-comparison"
+      | "membership"
+      | "numeric-binary"
+      | "numeric-unary"
+      | "boolean-not"
+      | "boolean-logical"
+      | "boolean-xor";
+  }
+>;
+const ADDED_EXPRESSION_KINDS: ReadonlySet<string> = new Set([
+  "field-access",
+  "optional-field-access",
+  "equality",
+  "ordered-comparison",
+  "membership",
+  "numeric-binary",
+  "numeric-unary",
+  "boolean-not",
+  "boolean-logical",
+  "boolean-xor",
+]);
+
 const FUNCTION_RUNTIME_DIAGNOSTICS = new Set([
   "KALADA_CAPTURE_LIMIT",
   "KALADA_NOT_CALLABLE",
@@ -106,6 +135,10 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
   state.environment = task.environment;
   charge(task.path, state);
   const { node, path } = task;
+  if (isAddedExpression(node)) {
+    enterAddedExpression(node, path, state);
+    return;
+  }
   switch (node.kind) {
     case "literal":
       deliver(node.value, state);
@@ -115,13 +148,6 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
       break;
     case "binding":
       enterBinding(node, path, state);
-      break;
-    case "field-access":
-    case "optional-field-access":
-    case "equality":
-    case "ordered-comparison":
-    case "membership":
-      enterAddedExpression(node, path, state);
       break;
     case "option":
     case "result":
@@ -152,17 +178,7 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
 }
 
 function enterAddedExpression<R extends JsonValue>(
-  node: Extract<
-    KaladaV1Expression<R>,
-    {
-      kind:
-        | "field-access"
-        | "optional-field-access"
-        | "equality"
-        | "ordered-comparison"
-        | "membership";
-    }
-  >,
+  node: AddedExpression<R>,
   path: Path,
   state: MachineState<R>,
 ): void {
@@ -171,6 +187,12 @@ function enterAddedExpression<R extends JsonValue>(
   } else {
     enterOperator(node, path, state);
   }
+}
+
+function isAddedExpression<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): node is AddedExpression<R> {
+  return ADDED_EXPRESSION_KINDS.has(node.kind);
 }
 
 function enterFieldAccess<R extends JsonValue>(

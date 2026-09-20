@@ -78,8 +78,9 @@ function scanChildren<R extends JsonValue>(
     });
     return;
   }
-  if (isFieldAccess(node)) {
-    scan(node.target, [...path, "target"], scope, state);
+  const single = singleChild(node);
+  if (single) {
+    scan(single[0], [...path, single[1]], scope, state);
     return;
   }
   if (node.kind === "membership") {
@@ -173,8 +174,9 @@ function visitReferenceChildren<R extends JsonValue>(
     for (const item of node.arguments) visitReferences(item, locals, add);
     return;
   }
-  if (isFieldAccess(node)) {
-    visitReferences(node.target, locals, add);
+  const single = singleChild(node);
+  if (single) {
+    visitReferences(single[0], locals, add);
     return;
   }
   if (node.kind === "membership") {
@@ -201,14 +203,40 @@ function isBinary<R extends JsonValue>(
   node: KaladaV1Expression<R>,
 ): node is Extract<
   KaladaV1Expression<R>,
-  { kind: "temporal-arithmetic" | "temporal-comparison" | "equality" | "ordered-comparison" }
+  {
+    kind:
+      | "temporal-arithmetic"
+      | "temporal-comparison"
+      | "equality"
+      | "ordered-comparison"
+      | "numeric-binary"
+      | "boolean-logical"
+      | "boolean-xor";
+  }
 > {
   return (
     node.kind === "temporal-arithmetic" ||
     node.kind === "temporal-comparison" ||
     node.kind === "equality" ||
-    node.kind === "ordered-comparison"
+    node.kind === "ordered-comparison" ||
+    node.kind === "numeric-binary" ||
+    node.kind === "boolean-logical" ||
+    node.kind === "boolean-xor"
   );
+}
+
+function isUnary<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): node is Extract<KaladaV1Expression<R>, { kind: "numeric-unary" | "boolean-not" }> {
+  return node.kind === "numeric-unary" || node.kind === "boolean-not";
+}
+
+function singleChild<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): readonly [KaladaV1Expression<R>, "target" | "operand"] | null {
+  if (isFieldAccess(node)) return [node.target, "target"];
+  if (isUnary(node)) return [node.operand, "operand"];
+  return null;
 }
 
 function isFieldAccess<R extends JsonValue>(

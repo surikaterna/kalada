@@ -40,6 +40,30 @@ const membership = <R extends JsonValue>(
   needle: KaladaV1Expression<R>,
   array: KaladaV1Expression<R>,
 ): KaladaV1Expression<R> => ({ kind: "membership", needle, array });
+const numericBinary = <R extends JsonValue>(
+  operator: Extract<KaladaV1Expression<R>, { kind: "numeric-binary" }>["operator"],
+  left: KaladaV1Expression<R>,
+  right: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "numeric-binary", operator, left, right });
+const numericUnary = <R extends JsonValue>(
+  operator: Extract<KaladaV1Expression<R>, { kind: "numeric-unary" }>["operator"],
+  operand: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "numeric-unary", operator, operand });
+const booleanNot = <R extends JsonValue>(
+  operand: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({
+  kind: "boolean-not",
+  operand,
+});
+const booleanLogical = <R extends JsonValue>(
+  operator: Extract<KaladaV1Expression<R>, { kind: "boolean-logical" }>["operator"],
+  left: KaladaV1Expression<R>,
+  right: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "boolean-logical", operator, left, right });
+const booleanXor = <R extends JsonValue>(
+  left: KaladaV1Expression<R>,
+  right: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "boolean-xor", left, right });
 const binding = <R extends JsonValue>(
   name: string,
   value: KaladaV1Expression<R>,
@@ -145,6 +169,11 @@ export const KaladaV1 = Object.freeze({
   equality,
   orderedComparison,
   membership,
+  numericBinary,
+  numericUnary,
+  booleanNot,
+  booleanLogical,
+  booleanXor,
   binding,
   Option: Object.freeze({ some, none }),
   Result: Object.freeze({ ok, err }),

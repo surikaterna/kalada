@@ -71,6 +71,39 @@ export type EvaluationFrame<R extends JsonValue> =
       needle: RuntimeValue | null;
     }
   | {
+      kind: "numeric-binary";
+      phase: "left" | "right";
+      path: Path;
+      operator: "add" | "subtract" | "multiply" | "divide" | "remainder";
+      right: Expression<R>;
+      left: number | null;
+    }
+  | {
+      kind: "numeric-unary";
+      phase: "operand";
+      path: Path;
+      operator: "plus" | "negate";
+    }
+  | {
+      kind: "boolean-not";
+      phase: "operand";
+      path: Path;
+    }
+  | {
+      kind: "boolean-logical";
+      phase: "left" | "right";
+      path: Path;
+      operator: "and" | "or";
+      right: Expression<R>;
+    }
+  | {
+      kind: "boolean-xor";
+      phase: "left" | "right";
+      path: Path;
+      right: Expression<R>;
+      left: boolean | null;
+    }
+  | {
       kind: "function-group-body";
       phase: "body";
       path: Path;

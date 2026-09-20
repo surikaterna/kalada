@@ -44,7 +44,10 @@ function visit<R extends JsonValue>(
     node.kind === "temporal-arithmetic" ||
     node.kind === "temporal-comparison" ||
     node.kind === "equality" ||
-    node.kind === "ordered-comparison"
+    node.kind === "ordered-comparison" ||
+    node.kind === "numeric-binary" ||
+    node.kind === "boolean-logical" ||
+    node.kind === "boolean-xor"
   ) {
     visit(node.left, scope, output, identities);
     visit(node.right, scope, output, identities);
@@ -52,6 +55,9 @@ function visit<R extends JsonValue>(
   }
   if (node.kind === "option" || node.kind === "result") {
     visit(node.value, scope, output, identities);
+  }
+  if (node.kind === "numeric-unary" || node.kind === "boolean-not") {
+    visit(node.operand, scope, output, identities);
   }
 }
 

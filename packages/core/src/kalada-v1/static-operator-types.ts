@@ -27,7 +27,53 @@ export function inferOperatorType<R extends JsonValue>(
   if (node.kind === "equality") return equalityType(node, path, scope, infer);
   if (node.kind === "ordered-comparison") return orderedType(node, path, scope, infer);
   if (node.kind === "membership") return membershipType(node, path, scope, infer);
+  if (node.kind === "numeric-binary") return numericBinaryType(node, path, scope, infer);
+  if (node.kind === "numeric-unary") return unaryType(node, path, scope, infer, "number");
+  if (node.kind === "boolean-not") return unaryType(node, path, scope, infer, "boolean");
+  if (node.kind === "boolean-logical" || node.kind === "boolean-xor") {
+    return booleanBinaryType(node, path, scope, infer);
+  }
   return null;
+}
+
+function numericBinaryType<R extends JsonValue>(
+  node: Extract<KaladaV1Expression<R>, { kind: "numeric-binary" }>,
+  path: Path,
+  scope: Scope,
+  infer: Infer<R>,
+): StaticType {
+  requirePrimitive(infer(node.left, [...path, "left"], scope), "number", [...path, "left"]);
+  requirePrimitive(infer(node.right, [...path, "right"], scope), "number", [...path, "right"]);
+  return primitive("number");
+}
+
+function unaryType<R extends JsonValue>(
+  node: Extract<KaladaV1Expression<R>, { kind: "numeric-unary" | "boolean-not" }>,
+  path: Path,
+  scope: Scope,
+  infer: Infer<R>,
+  expected: "number" | "boolean",
+): StaticType {
+  requirePrimitive(infer(node.operand, [...path, "operand"], scope), expected, [
+    ...path,
+    "operand",
+  ]);
+  return primitive(expected);
+}
+
+function booleanBinaryType<R extends JsonValue>(
+  node: Extract<KaladaV1Expression<R>, { kind: "boolean-logical" | "boolean-xor" }>,
+  path: Path,
+  scope: Scope,
+  infer: Infer<R>,
+): StaticType {
+  requirePrimitive(infer(node.left, [...path, "left"], scope), "boolean", [...path, "left"]);
+  requirePrimitive(infer(node.right, [...path, "right"], scope), "boolean", [...path, "right"]);
+  return primitive("boolean");
+}
+
+function requirePrimitive(type: StaticType, expected: "number" | "boolean", path: Path): void {
+  if (type !== DYNAMIC && !isPrimitive(type, expected)) fail("KALADA_OPERATOR_TYPE", path);
 }
 
 function equalityType<R extends JsonValue>(
