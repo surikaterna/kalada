@@ -20,6 +20,8 @@
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",
     "projection:smoke": "bun run build && bun scripts/projection-package-smoke.ts",
     "release": "changeset publish",
+    "syntax:browser-smoke": "bun run build && bun scripts/syntax-package-smoke.ts --browser-only",
+    "syntax:smoke": "bun run build && bun scripts/syntax-package-smoke.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

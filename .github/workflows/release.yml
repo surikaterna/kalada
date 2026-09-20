@@ -39,6 +39,8 @@ jobs:
       - run: bun run build
       - run: bun run package:smoke
       - run: bun run projection:smoke
+      - run: bun run syntax:smoke
+      - run: bun run syntax:browser-smoke
       - name: Open release PR or publish approved versions
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const sourceRoots = [
   resolve(import.meta.dirname, "../packages/core/src"),
   resolve(import.meta.dirname, "../packages/projection/src"),
+  resolve(import.meta.dirname, "../packages/syntax/src"),
   resolve(import.meta.dirname, "../scripts/changeset-policy"),
 ];
 const nestedKinds = new Set([
