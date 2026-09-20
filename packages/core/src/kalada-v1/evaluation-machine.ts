@@ -115,6 +115,10 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
     case "binding":
       enterBinding(node, path, state);
       break;
+    case "field-access":
+    case "optional-field-access":
+      enterFieldAccess(node, path, state);
+      break;
     case "option":
     case "result":
       enterConstructor(node, path, state);
@@ -141,6 +145,15 @@ function evaluateTask<R extends JsonValue>(state: MachineState<R>): void {
     default:
       deliver(temporalLeaf(node, path, state.instant), state);
   }
+}
+
+function enterFieldAccess<R extends JsonValue>(
+  node: Extract<KaladaV1Expression<R>, { kind: "field-access" | "optional-field-access" }>,
+  path: Path,
+  state: MachineState<R>,
+): void {
+  push({ kind: node.kind, phase: "target", path, field: node.field }, [...path, "target"], state);
+  evaluate(node.target, [...path, "target"], state.environment, state);
 }
 
 function evaluateReference<R extends JsonValue>(

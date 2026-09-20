@@ -247,7 +247,7 @@ the operator expression beginning at `expression`.
 | Code | Exact message | Narrow canonical path |
 | --- | --- | --- |
 | `KALADA_FIELD_MISSING` | `Kalada field does not exist.` | strict node's `field` |
-| `KALADA_FIELD_TYPE` | `Kalada field access requires a JSON object.` | node's `target` |
+| `KALADA_FIELD_TYPE_MISMATCH` | `Kalada field access requires a JSON object.` | node's `target` |
 | `KALADA_OPTION_REQUIRED` | `Kalada option coalesce requires an Option value.` | coalesce node's `option` |
 | `KALADA_OPERATOR_TYPE` | `Kalada operator received an incompatible value.` | first statically or dynamically invalid operand |
 | `KALADA_OPERATOR_AMBIGUOUS` | `Kalada operator domain is ambiguous.` | node's `operator`, or the source operator range before lowering |
@@ -256,7 +256,7 @@ the operator expression beginning at `expression`.
 
 For `KALADA_OPERATOR_TYPE`, operand paths are `left`, `right`, `operand`, `needle`, `array`, or
 `condition`; static conditional-join failure uses `else`. Callable equality reports the first
-callable operand. Optional access uses `KALADA_FIELD_TYPE` for a wrong primitive, array, ADT,
+callable operand. Optional access uses `KALADA_FIELD_TYPE_MISMATCH` for a wrong primitive, array, ADT,
 temporal, callable, or nested-Option target. Existing canonical-input, continuation, evaluation,
 temporal, and function diagnostics retain their precedence and meanings.
 

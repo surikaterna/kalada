@@ -17,6 +17,14 @@ const ref = <R extends JsonValue = string>(value: R): KaladaV1Expression<R> => (
   kind: "ref",
   ref: value,
 });
+const fieldAccess = <R extends JsonValue>(
+  target: KaladaV1Expression<R>,
+  field: string,
+): KaladaV1Expression<R> => ({ kind: "field-access", target, field });
+const optionalFieldAccess = <R extends JsonValue>(
+  target: KaladaV1Expression<R>,
+  field: string,
+): KaladaV1Expression<R> => ({ kind: "optional-field-access", target, field });
 const binding = <R extends JsonValue>(
   name: string,
   value: KaladaV1Expression<R>,
@@ -117,6 +125,8 @@ const functionType = (parameters: readonly KaladaType[], returns: KaladaType): K
 export const KaladaV1 = Object.freeze({
   literal,
   ref,
+  fieldAccess,
+  optionalFieldAccess,
   binding,
   Option: Object.freeze({ some, none }),
   Result: Object.freeze({ ok, err }),

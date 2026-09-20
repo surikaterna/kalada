@@ -140,6 +140,14 @@ export function bindingName(input: unknown, path: Path, limits: KaladaV1Limits):
   return input;
 }
 
+export function fieldName(input: unknown, path: Path, limits: KaladaV1Limits): string {
+  if (typeof input !== "string") throw new KaladaFailure("KALADA_INVALID_INPUT", path);
+  if ([...input].length > limits.maxStringLength) {
+    throw new KaladaFailure("KALADA_LIMIT_EXCEEDED", path);
+  }
+  return input;
+}
+
 export function safeValidate<R>(
   validate: (input: unknown) => input is R,
   input: unknown,

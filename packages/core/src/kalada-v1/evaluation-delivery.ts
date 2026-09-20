@@ -9,6 +9,7 @@ import {
   push,
   reserveCollectionIteration,
 } from "./evaluation-state.js";
+import { applyFieldAccess } from "./field-access.js";
 import { cloneJson, type JsonValue } from "./json.js";
 import {
   callableType,
@@ -26,6 +27,14 @@ import { isOption, isResult, type KaladaValue, Option, Result } from "./values.j
 export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void {
   const frame = state.stack[state.stack.length - 1] as EvaluationFrame<R>;
   switch (frame.kind) {
+    case "field-access":
+    case "optional-field-access":
+      state.stack.pop();
+      deliver(
+        applyFieldAccess(frame.kind, state.value as RuntimeValue, frame.field, frame.path),
+        state,
+      );
+      break;
     case "binding":
       deliverBinding(frame, state);
       break;

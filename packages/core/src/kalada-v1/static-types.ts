@@ -38,10 +38,66 @@ function infer<R extends JsonValue>(
   if (node.kind === "call") return checkCall(node, path, scope);
   if (node.kind === "core-function") return coreType(node.name);
   if (node.kind === "binding") return checkBinding(node, path, scope);
+  if (node.kind === "field-access" || node.kind === "optional-field-access") {
+    return fieldAccessType(node, path, scope);
+  }
   if (node.kind === "option") return optionType(node, path, scope);
   if (node.kind === "result") return resultType(node, path, scope);
   if (node.kind === "match") return checkMatch(node, path, scope);
   return inferTemporal(node, path, scope);
+}
+
+function fieldAccessType<R extends JsonValue>(
+  node: Extract<KaladaV1Expression<R>, { kind: "field-access" | "optional-field-access" }>,
+  path: Path,
+  scope: Scope,
+): StaticType {
+  const target = infer(node.target, [...path, "target"], scope);
+  const optional = node.kind === "optional-field-access";
+  if (!fieldTargetCanSucceed(target, optional)) {
+    fail("KALADA_FIELD_TYPE_MISMATCH", [...path, "target"]);
+  }
+  const result = narrowFieldResult(node.target, node.field, optional);
+  return optional ? Object.freeze({ shape: "option", value: result }) : result;
+}
+
+function narrowFieldResult<R extends JsonValue>(
+  target: KaladaV1Expression<R>,
+  field: string,
+  optional: boolean,
+): StaticType {
+  if (target.kind === "literal") return literalFieldResult(target.value, field, optional);
+  if (optional && target.kind === "option" && target.variant === "some") {
+    const payload = target.value;
+    if (payload.kind === "literal") return literalFieldResult(payload.value, field, true);
+  }
+  return DYNAMIC;
+}
+
+function literalFieldResult(value: JsonValue, field: string, optional: boolean): StaticType {
+  if (value === null) return optional ? primitive("null") : DYNAMIC;
+  if (typeof value !== "object" || Array.isArray(value)) return DYNAMIC;
+  const descriptor = Object.getOwnPropertyDescriptor(value, field);
+  return descriptor && "value" in descriptor ? literalType(descriptor.value as JsonValue) : DYNAMIC;
+}
+
+function fieldTargetCanSucceed(target: StaticType, optional: boolean): boolean {
+  if (target === DYNAMIC) return true;
+  if (isUnion(target))
+    return target.members.some((member) => fieldTargetCanSucceed(member, optional));
+  if (isOptionShape(target)) return optional && unwrappedFieldTargetCanSucceed(target.value);
+  if (isShape(target)) return false;
+  if (target.kind === "option-type") {
+    return optional && unwrappedFieldTargetCanSucceed(target.value);
+  }
+  return isPrimitive(target, "json") || (optional && isPrimitive(target, "null"));
+}
+
+function unwrappedFieldTargetCanSucceed(target: StaticType): boolean {
+  if (target === DYNAMIC) return true;
+  if (isUnion(target)) return target.members.some(unwrappedFieldTargetCanSucceed);
+  if (isShape(target)) return false;
+  return isPrimitive(target, "json") || isPrimitive(target, "null");
 }
 
 function checkFunction<R extends JsonValue>(
