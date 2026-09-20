@@ -99,9 +99,6 @@ function orderedType<R extends JsonValue>(
   requireOrdered(left, node.domain, [...path, "left"]);
   const right = infer(node.right, [...path, "right"], scope);
   requireOrdered(right, node.domain, [...path, "right"]);
-  if (left === DYNAMIC && right === DYNAMIC) {
-    fail("KALADA_OPERATOR_AMBIGUOUS", [...path, "operator"]);
-  }
   return primitive("boolean");
 }
 

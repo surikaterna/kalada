@@ -111,37 +111,101 @@ it("compares strings by exact UTF-16 code units and numbers by numeric order", (
   expect(ordered("number", "greater-than-or-equal", 2, 2)).toEqual({ ok: true, value: true });
 });
 
-it("selects ordering from one known operand and rejects invalid or ambiguous static pairs", () => {
-  const selected = KaladaV1.orderedComparison(
-    "number",
-    "less-than",
-    KaladaV1.literal(1),
-    KaladaV1.ref("dynamic"),
-  );
-  expect(evaluate(selected, { dynamic: 2 })).toEqual({ ok: true, value: true });
-  expect(evaluate(selected, { dynamic: "2" })).toMatchObject({
-    ok: false,
-    diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "right"] },
-  });
-  const ambiguous = KaladaV1.orderedComparison(
+it("compiles explicit ordered domains with dynamic operands and evaluates matching values", () => {
+  const numberComparison = KaladaV1.orderedComparison(
     "number",
     "less-than",
     KaladaV1.ref("left"),
     KaladaV1.ref("right"),
   );
-  expect(compileKaladaV1Program(KaladaV1.program(ambiguous))).toMatchObject({
-    ok: false,
-    diagnostic: { code: "KALADA_OPERATOR_AMBIGUOUS", path: ["expression", "operator"] },
+  expect(compileKaladaV1Program(KaladaV1.program(numberComparison))).toMatchObject({ ok: true });
+  expect(evaluate(numberComparison, { left: 1, right: 2 })).toEqual({ ok: true, value: true });
+
+  const stringComparison = KaladaV1.orderedComparison(
+    "string",
+    "greater-than",
+    KaladaV1.ref("left"),
+    KaladaV1.ref("right"),
+  );
+  expect(compileKaladaV1Program(KaladaV1.program(stringComparison))).toMatchObject({ ok: true });
+  expect(evaluate(stringComparison, { left: "b", right: "a" })).toEqual({
+    ok: true,
+    value: true,
   });
-  const invalid = KaladaV1.orderedComparison(
+});
+
+it("checks dynamic ordered operands left-to-right at their exact paths", () => {
+  const comparison = KaladaV1.orderedComparison(
+    "number",
+    "less-than",
+    KaladaV1.ref("left"),
+    KaladaV1.ref("right"),
+  );
+  const compiled = compileKaladaV1Program(KaladaV1.program(comparison));
+  expect(compiled.ok).toBe(true);
+  if (!compiled.ok) throw new Error("expected ordered comparison to compile");
+
+  const invalidLeft = vi.fn((reference: string) => ({
+    found: true as const,
+    value: reference === "left" ? ("1" as const) : (2 as const),
+  }));
+  expect(compiled.value.evaluate(invalidLeft)).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "left"] },
+  });
+  expect(invalidLeft).toHaveBeenCalledTimes(1);
+  expect(invalidLeft).toHaveBeenCalledWith("left");
+
+  const invalidRight = vi.fn((reference: string) => ({
+    found: true as const,
+    value: reference === "left" ? (1 as const) : ("2" as const),
+  }));
+  expect(compiled.value.evaluate(invalidRight)).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "right"] },
+  });
+  expect(invalidRight.mock.calls.map(([reference]) => reference)).toEqual(["left", "right"]);
+});
+
+it("retains one-known ordering and rejects the first incompatible known operand", () => {
+  const knownLeft = KaladaV1.orderedComparison(
+    "number",
+    "less-than",
+    KaladaV1.literal(1),
+    KaladaV1.ref("dynamic"),
+  );
+  expect(evaluate(knownLeft, { dynamic: 2 })).toEqual({ ok: true, value: true });
+  expect(evaluate(knownLeft, { dynamic: "2" })).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "right"] },
+  });
+  const knownRight = KaladaV1.orderedComparison(
+    "number",
+    "less-than",
+    KaladaV1.ref("left"),
+    KaladaV1.literal(2),
+  );
+  expect(evaluate(knownRight, { left: 1 })).toEqual({ ok: true, value: true });
+
+  const invalidRight = KaladaV1.orderedComparison(
     "number",
     "less-than",
     KaladaV1.literal(1),
     KaladaV1.literal("2"),
   );
-  expect(compileKaladaV1Program(KaladaV1.program(invalid))).toMatchObject({
+  expect(compileKaladaV1Program(KaladaV1.program(invalidRight))).toMatchObject({
     ok: false,
     diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "right"] },
+  });
+  const invalidLeft = KaladaV1.orderedComparison(
+    "string",
+    "less-than",
+    KaladaV1.literal(1),
+    KaladaV1.literal("2"),
+  );
+  expect(compileKaladaV1Program(KaladaV1.program(invalidLeft))).toMatchObject({
+    ok: false,
+    diagnostic: { code: "KALADA_OPERATOR_TYPE", path: ["expression", "left"] },
   });
 });
 
