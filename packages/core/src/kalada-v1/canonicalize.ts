@@ -2,6 +2,7 @@ import {
   bindingName,
   count,
   exact,
+  fieldName,
   inspectJson,
   type Path,
   properties,
@@ -47,6 +48,8 @@ const NODE_KEYS = new Set([
   "callee",
   "arguments",
   "functions",
+  "target",
+  "field",
 ]);
 const ARM_ORDER = Object.freeze({ Option: ["some", "none"], Result: ["ok", "err"] } as const);
 
@@ -124,12 +127,30 @@ function canonicalNode<R extends JsonValue>(
   }
 }
 
+function canonicalFieldAccess<R extends JsonValue>(
+  raw: Record<string, unknown>,
+  path: Path,
+  depth: number,
+  state: State<R>,
+): KaladaV1Expression<R> {
+  exact(raw, path, ["kind", "target", "field"]);
+  const field = fieldName(raw.field, [...path, "field"], state.limits);
+  return Object.freeze({
+    kind: raw.kind,
+    target: canonicalNode(raw.target, [...path, "target"], depth + 1, state),
+    field,
+  }) as KaladaV1Expression<R>;
+}
+
 function canonicalAddedNode<R extends JsonValue>(
   raw: Record<string, unknown>,
   path: Path,
   depth: number,
   state: State<R>,
 ): KaladaV1Expression<R> | undefined {
+  if (raw.kind === "field-access" || raw.kind === "optional-field-access") {
+    return canonicalFieldAccess(raw, path, depth, state);
+  }
   if (raw.kind === "function") return canonicalFunction(raw, path, depth, state, canonicalNode);
   if (raw.kind === "call") return canonicalCall(raw, path, depth, state, canonicalNode);
   if (raw.kind === "function-group") return canonicalGroup(raw, path, depth, state, canonicalNode);

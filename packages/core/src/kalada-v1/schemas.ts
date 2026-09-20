@@ -49,6 +49,8 @@ const expression = {
       },
       ["ref"],
     ),
+    fieldNode("field-access"),
+    fieldNode("optional-field-access"),
     node("binding", { name: bindingName(), value: expressionRef(), body: expressionRef() }, [
       "name",
       "value",
@@ -145,7 +147,7 @@ export const KALADA_V1_FUNCTION_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze(
   },
 });
 
-const legacyExpression = { oneOf: expression.oneOf.slice(0, 13) };
+const legacyExpression = { oneOf: expression.oneOf.slice(0, 15) };
 
 export const KALADA_V1_PROGRAM_SCHEMA: KaladaV1JsonSchema = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -202,6 +204,17 @@ function temporalNode(kind: string, operators: readonly string[]): Record<string
     kind,
     { operator: { enum: operators }, left: expressionRef(), right: expressionRef() },
     ["operator", "left", "right"],
+  );
+}
+
+function fieldNode(kind: "field-access" | "optional-field-access"): Record<string, unknown> {
+  return node(
+    kind,
+    {
+      target: expressionRef(),
+      field: { type: "string", maxLength: DEFAULT_KALADA_V1_LIMITS.maxStringLength },
+    },
+    ["target", "field"],
   );
 }
 

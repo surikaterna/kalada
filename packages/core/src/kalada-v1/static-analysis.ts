@@ -78,6 +78,10 @@ function scanChildren<R extends JsonValue>(
     });
     return;
   }
+  if (isFieldAccess(node)) {
+    scan(node.target, [...path, "target"], scope, state);
+    return;
+  }
   if (node.kind === "match") {
     scanMatch(node, path, scope, state);
     return;
@@ -164,6 +168,10 @@ function visitReferenceChildren<R extends JsonValue>(
     for (const item of node.arguments) visitReferences(item, locals, add);
     return;
   }
+  if (isFieldAccess(node)) {
+    visitReferences(node.target, locals, add);
+    return;
+  }
   if (node.kind === "match") {
     visitReferences(node.value, locals, add);
     for (const arm of node.arms)
@@ -177,6 +185,12 @@ function visitReferenceChildren<R extends JsonValue>(
   }
   if (node.kind === "option" && node.variant === "some") visitReferences(node.value, locals, add);
   if (node.kind === "result") visitReferences(node.value, locals, add);
+}
+
+function isFieldAccess<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): node is Extract<KaladaV1Expression<R>, { kind: "field-access" | "optional-field-access" }> {
+  return node.kind === "field-access" || node.kind === "optional-field-access";
 }
 
 function visitGroupReferences<R extends JsonValue>(

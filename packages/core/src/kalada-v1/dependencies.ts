@@ -33,6 +33,10 @@ function visit<R extends JsonValue>(
     visitBinding(node, scope, output, identities);
     return;
   }
+  if (node.kind === "field-access" || node.kind === "optional-field-access") {
+    visit(node.target, scope, output, identities);
+    return;
+  }
   if (visitFunctionNode(node, scope, output, identities)) return;
 
   if (node.kind === "match") {

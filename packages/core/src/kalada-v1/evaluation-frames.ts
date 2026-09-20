@@ -7,6 +7,12 @@ type Expression<R extends JsonValue> = KaladaV1Expression<R>;
 
 export type EvaluationFrame<R extends JsonValue> =
   | {
+      kind: "field-access" | "optional-field-access";
+      phase: "target";
+      path: Path;
+      field: string;
+    }
+  | {
       kind: "binding";
       phase: "value" | "body";
       path: Path;

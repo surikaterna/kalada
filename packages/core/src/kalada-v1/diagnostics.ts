@@ -37,6 +37,8 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
   KALADA_COLLECTION_TYPE_MISMATCH: "Kalada collection function received an incompatible value.",
   KALADA_COLLECTION_LIMIT: "Kalada collection exceeds a configured limit.",
   KALADA_FUNCTION_ESCAPE: "Kalada callable cannot escape evaluation.",
+  KALADA_FIELD_MISSING: "Kalada field does not exist.",
+  KALADA_FIELD_TYPE_MISMATCH: "Kalada field access requires a JSON object.",
 });
 
 export class KaladaFailure extends Error {

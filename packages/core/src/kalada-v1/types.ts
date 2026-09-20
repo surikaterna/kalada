@@ -14,6 +14,8 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | CurrentInstantExpression
   | TemporalArithmeticExpression<R>
   | TemporalComparisonExpression<R>
+  | FieldAccessExpression<R>
+  | OptionalFieldAccessExpression<R>
   | FunctionExpression<R>
   | CallExpression<R>
   | FunctionGroupExpression<R>
@@ -113,6 +115,18 @@ export interface TemporalComparisonExpression<R extends JsonValue> {
   readonly right: KaladaV1Expression<R>;
 }
 
+export interface FieldAccessExpression<R extends JsonValue> {
+  readonly kind: "field-access";
+  readonly target: KaladaV1Expression<R>;
+  readonly field: string;
+}
+
+export interface OptionalFieldAccessExpression<R extends JsonValue> {
+  readonly kind: "optional-field-access";
+  readonly target: KaladaV1Expression<R>;
+  readonly field: string;
+}
+
 export interface BindingExpression<R extends JsonValue> {
   readonly kind: "binding";
   readonly name: string;
@@ -181,7 +195,9 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_CONTINUATION_LIMIT"
   | "KALADA_COLLECTION_TYPE_MISMATCH"
   | "KALADA_COLLECTION_LIMIT"
-  | "KALADA_FUNCTION_ESCAPE";
+  | "KALADA_FUNCTION_ESCAPE"
+  | "KALADA_FIELD_MISSING"
+  | "KALADA_FIELD_TYPE_MISMATCH";
 
 export interface KaladaV1DiagnosticContextFrame {
   readonly kind: "function-call" | "core-call";
