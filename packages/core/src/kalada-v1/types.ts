@@ -16,6 +16,9 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | TemporalComparisonExpression<R>
   | FieldAccessExpression<R>
   | OptionalFieldAccessExpression<R>
+  | EqualityExpression<R>
+  | OrderedComparisonExpression<R>
+  | MembershipExpression<R>
   | FunctionExpression<R>
   | CallExpression<R>
   | FunctionGroupExpression<R>
@@ -127,6 +130,27 @@ export interface OptionalFieldAccessExpression<R extends JsonValue> {
   readonly field: string;
 }
 
+export interface EqualityExpression<R extends JsonValue> {
+  readonly kind: "equality";
+  readonly operator: "equal" | "not-equal";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
+export interface OrderedComparisonExpression<R extends JsonValue> {
+  readonly kind: "ordered-comparison";
+  readonly domain: "number" | "string";
+  readonly operator: "less-than" | "less-than-or-equal" | "greater-than" | "greater-than-or-equal";
+  readonly left: KaladaV1Expression<R>;
+  readonly right: KaladaV1Expression<R>;
+}
+
+export interface MembershipExpression<R extends JsonValue> {
+  readonly kind: "membership";
+  readonly needle: KaladaV1Expression<R>;
+  readonly array: KaladaV1Expression<R>;
+}
+
 export interface BindingExpression<R extends JsonValue> {
   readonly kind: "binding";
   readonly name: string;
@@ -197,7 +221,9 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_COLLECTION_LIMIT"
   | "KALADA_FUNCTION_ESCAPE"
   | "KALADA_FIELD_MISSING"
-  | "KALADA_FIELD_TYPE_MISMATCH";
+  | "KALADA_FIELD_TYPE_MISMATCH"
+  | "KALADA_OPERATOR_TYPE"
+  | "KALADA_OPERATOR_AMBIGUOUS";
 
 export interface KaladaV1DiagnosticContextFrame {
   readonly kind: "function-call" | "core-call";

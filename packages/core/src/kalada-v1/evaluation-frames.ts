@@ -47,6 +47,30 @@ export type EvaluationFrame<R extends JsonValue> =
       left: RuntimeValue | null;
     }
   | {
+      kind: "equality";
+      phase: "left" | "right";
+      path: Path;
+      operator: "equal" | "not-equal";
+      right: Expression<R>;
+      left: RuntimeValue | null;
+    }
+  | {
+      kind: "ordered-comparison";
+      phase: "left" | "right";
+      path: Path;
+      domain: "number" | "string";
+      operator: "less-than" | "less-than-or-equal" | "greater-than" | "greater-than-or-equal";
+      right: Expression<R>;
+      left: RuntimeValue | null;
+    }
+  | {
+      kind: "membership";
+      phase: "needle" | "array";
+      path: Path;
+      array: Expression<R>;
+      needle: RuntimeValue | null;
+    }
+  | {
       kind: "function-group-body";
       phase: "body";
       path: Path;

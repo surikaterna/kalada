@@ -1,4 +1,4 @@
-import { cloneJson, cloneJsonWithStats, deepEqualJson, type JsonValue } from "./json.js";
+import { cloneJson, cloneJsonWithStats, type JsonValue } from "./json.js";
 import { type DurationValue, type InstantValue, isDuration, isInstant } from "./temporal.js";
 
 export type KaladaValue = JsonValue | OptionValue | ResultValue | InstantValue | DurationValue;
@@ -95,13 +95,21 @@ export function isResult(value: unknown): value is ResultValue {
 }
 
 export function equalKaladaValues(left: KaladaValue, right: KaladaValue): boolean {
-  if (isInstant(left) || isInstant(right))
-    return isInstant(left) && isInstant(right) && left.milliseconds === right.milliseconds;
-  if (isDuration(left) || isDuration(right))
-    return isDuration(left) && isDuration(right) && left.milliseconds === right.milliseconds;
-  if (isOption(left) || isOption(right)) return equalOptions(left, right);
-  if (isResult(left) || isResult(right)) return equalResults(left, right);
-  return deepEqualJson(left, right);
+  return compareKaladaValues(left, right);
+}
+
+export function compareKaladaValues(
+  left: KaladaValue,
+  right: KaladaValue,
+  visit: () => void = () => undefined,
+): boolean {
+  const work: Array<readonly [KaladaValue, KaladaValue]> = [[left, right]];
+  while (work.length > 0) {
+    const [currentLeft, currentRight] = work.pop() as readonly [KaladaValue, KaladaValue];
+    visit();
+    if (!comparePair(currentLeft, currentRight, work)) return false;
+  }
+  return true;
 }
 
 export function validateKaladaValueLimits(
@@ -146,13 +154,64 @@ function validateTemporalLeaf(
   if (depth > limits.maxDepth || nodes + 1 > limits.maxNodes) throw new RangeError("limit");
 }
 
-function equalOptions(left: KaladaValue, right: KaladaValue): boolean {
-  if (!isOption(left) || !isOption(right) || left.variant !== right.variant) return false;
-  if (left.variant === "none" || right.variant === "none") return true;
-  return equalKaladaValues(left.value, right.value);
+function comparePair(
+  left: KaladaValue,
+  right: KaladaValue,
+  work: Array<readonly [KaladaValue, KaladaValue]>,
+): boolean {
+  if (isInstant(left) || isInstant(right)) {
+    return isInstant(left) && isInstant(right) && left.milliseconds === right.milliseconds;
+  }
+  if (isDuration(left) || isDuration(right)) {
+    return isDuration(left) && isDuration(right) && left.milliseconds === right.milliseconds;
+  }
+  if (isOption(left) || isOption(right)) return queueOption(left, right, work);
+  if (isResult(left) || isResult(right)) return queueResult(left, right, work);
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+    return left === right;
+  }
+  return queueJson(left, right, work);
 }
 
-function equalResults(left: KaladaValue, right: KaladaValue): boolean {
+function queueOption(
+  left: KaladaValue,
+  right: KaladaValue,
+  work: Array<readonly [KaladaValue, KaladaValue]>,
+): boolean {
+  if (!isOption(left) || !isOption(right) || left.variant !== right.variant) return false;
+  if (left.variant === "some" && right.variant === "some") work.push([left.value, right.value]);
+  return true;
+}
+
+function queueResult(
+  left: KaladaValue,
+  right: KaladaValue,
+  work: Array<readonly [KaladaValue, KaladaValue]>,
+): boolean {
   if (!isResult(left) || !isResult(right) || left.variant !== right.variant) return false;
-  return equalKaladaValues(left.value, right.value);
+  work.push([left.value, right.value]);
+  return true;
+}
+
+function queueJson(
+  left: JsonValue[] | { [key: string]: JsonValue },
+  right: JsonValue[] | { [key: string]: JsonValue },
+  work: Array<readonly [KaladaValue, KaladaValue]>,
+): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    for (let index = left.length - 1; index >= 0; index -= 1) {
+      work.push([left[index] as JsonValue, right[index] as JsonValue]);
+    }
+    return true;
+  }
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (let index = leftKeys.length - 1; index >= 0; index -= 1) {
+    const key = leftKeys[index] as string;
+    if (key !== rightKeys[index]) return false;
+    work.push([left[key] as JsonValue, right[key] as JsonValue]);
+  }
+  return true;
 }

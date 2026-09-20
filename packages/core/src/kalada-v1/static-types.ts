@@ -1,25 +1,28 @@
 import { KaladaFailure } from "./diagnostics.js";
 import type { JsonValue } from "./json.js";
+import { inferOperatorType } from "./static-operator-types.js";
+import {
+  DYNAMIC,
+  equalType,
+  isFunctionType,
+  isOptionShape,
+  isPrimitive,
+  isResultShape,
+  isShape,
+  isUnion,
+  literalType,
+  merged,
+  type OptionShape,
+  primitive,
+  type ResultShape,
+  type Scope,
+  type StaticType,
+  staticEqual,
+  union,
+} from "./static-type-model.js";
 import type { KaladaFunctionType, KaladaType, KaladaV1Expression, NamedFunction } from "./types.js";
 
 type Path = readonly (string | number)[];
-const DYNAMIC = Symbol("dynamic");
-type Dynamic = typeof DYNAMIC;
-interface OptionShape {
-  readonly shape: "option";
-  readonly value: StaticType;
-}
-interface ResultShape {
-  readonly shape: "result";
-  readonly ok: StaticType;
-  readonly error: StaticType;
-}
-interface UnionShape {
-  readonly shape: "union";
-  readonly members: readonly StaticType[];
-}
-type StaticType = KaladaType | Dynamic | OptionShape | ResultShape | UnionShape;
-type Scope = ReadonlyMap<string, StaticType>;
 
 export function checkKaladaV1Types<R extends JsonValue>(expression: KaladaV1Expression<R>): void {
   infer(expression, ["expression"], new Map());
@@ -38,13 +41,37 @@ function infer<R extends JsonValue>(
   if (node.kind === "call") return checkCall(node, path, scope);
   if (node.kind === "core-function") return coreType(node.name);
   if (node.kind === "binding") return checkBinding(node, path, scope);
-  if (node.kind === "field-access" || node.kind === "optional-field-access") {
-    return fieldAccessType(node, path, scope);
-  }
+  const added = inferAdded(node, path, scope);
+  if (added !== null) return added;
   if (node.kind === "option") return optionType(node, path, scope);
   if (node.kind === "result") return resultType(node, path, scope);
   if (node.kind === "match") return checkMatch(node, path, scope);
-  return inferTemporal(node, path, scope);
+  return inferTemporal(
+    node as Extract<
+      KaladaV1Expression<R>,
+      {
+        kind:
+          | "instant"
+          | "duration"
+          | "current-instant"
+          | "temporal-arithmetic"
+          | "temporal-comparison";
+      }
+    >,
+    path,
+    scope,
+  );
+}
+
+function inferAdded<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  path: Path,
+  scope: Scope,
+): StaticType | null {
+  if (node.kind === "field-access" || node.kind === "optional-field-access") {
+    return fieldAccessType(node, path, scope);
+  }
+  return inferOperatorType(node, path, scope, infer);
 }
 
 function fieldAccessType<R extends JsonValue>(
@@ -304,15 +331,6 @@ function join(types: readonly StaticType[]): StaticType {
   return unique.length === 1 ? (unique[0] as StaticType) : union(unique);
 }
 
-function staticEqual(left: StaticType, right: StaticType): boolean {
-  if (left === DYNAMIC || right === DYNAMIC) return left === right;
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function union(members: readonly StaticType[]): UnionShape {
-  return Object.freeze({ shape: "union", members: Object.freeze([...members]) });
-}
-
 function coreType(name: "map" | "filter" | "some" | "every"): KaladaFunctionType {
   const callback = functionType(
     [primitive("json"), primitive("number")],
@@ -340,50 +358,6 @@ function functionType(parameters: readonly KaladaType[], returns: KaladaType): K
   });
 }
 
-function literalType(value: JsonValue): KaladaType {
-  if (Array.isArray(value))
-    return Object.freeze({ kind: "array-type", element: primitive("json") });
-  return primitive(
-    value === null
-      ? "null"
-      : typeof value === "object"
-        ? "json"
-        : (typeof value as "boolean" | "number" | "string"),
-  );
-}
-
-function primitive(
-  name: "null" | "boolean" | "number" | "string" | "json" | "Instant" | "Duration",
-): KaladaType {
-  return Object.freeze({ kind: "primitive-type", name });
-}
-
-function isFunctionType(value: StaticType): value is KaladaFunctionType {
-  return value !== DYNAMIC && !isShape(value) && value.kind === "function-type";
-}
-function isPrimitive(value: StaticType, name: string): boolean {
-  return (
-    value !== DYNAMIC && !isShape(value) && value.kind === "primitive-type" && value.name === name
-  );
-}
-function isShape(value: StaticType): value is OptionShape | ResultShape | UnionShape {
-  return value !== DYNAMIC && "shape" in value;
-}
-function isOptionShape(value: StaticType): value is OptionShape {
-  return isShape(value) && value.shape === "option";
-}
-function isResultShape(value: StaticType): value is ResultShape {
-  return isShape(value) && value.shape === "result";
-}
-function isUnion(value: StaticType): value is UnionShape {
-  return isShape(value) && value.shape === "union";
-}
-function equalType(left: KaladaType, right: KaladaType): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-function merged(base: Scope, extra: Scope): Scope {
-  return new Map([...base, ...extra]);
-}
 function fail(code: ConstructorParameters<typeof KaladaFailure>[0], path: Path): never {
   throw new KaladaFailure(code, path);
 }

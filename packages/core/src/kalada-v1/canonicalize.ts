@@ -22,6 +22,7 @@ import {
 } from "./function-contracts.js";
 import type { JsonValue } from "./json.js";
 import { resolveLimits } from "./limits.js";
+import { canonicalOperatorNode } from "./operator-contracts.js";
 import type {
   KaladaV1Expression,
   KaladaV1Options,
@@ -50,6 +51,9 @@ const NODE_KEYS = new Set([
   "functions",
   "target",
   "field",
+  "domain",
+  "needle",
+  "array",
 ]);
 const ARM_ORDER = Object.freeze({ Option: ["some", "none"], Result: ["ok", "err"] } as const);
 
@@ -155,6 +159,8 @@ function canonicalAddedNode<R extends JsonValue>(
   if (raw.kind === "call") return canonicalCall(raw, path, depth, state, canonicalNode);
   if (raw.kind === "function-group") return canonicalGroup(raw, path, depth, state, canonicalNode);
   if (raw.kind === "core-function") return canonicalCoreFunction(raw, path);
+  const operator = canonicalOperatorNode(raw, path, depth, state, canonicalNode);
+  if (operator) return operator;
   return undefined;
 }
 
