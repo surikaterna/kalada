@@ -88,6 +88,7 @@ function scanChildren<R extends JsonValue>(
     scan(node.array, [...path, "array"], scope, state);
     return;
   }
+  if (scanControlChildren(node, path, scope, state)) return;
   if (node.kind === "match") {
     scanMatch(node, path, scope, state);
     return;
@@ -100,6 +101,24 @@ function scanChildren<R extends JsonValue>(
   if (node.kind === "option" && node.variant === "some")
     scan(node.value, [...path, "value"], scope, state);
   if (node.kind === "result") scan(node.value, [...path, "value"], scope, state);
+}
+
+function scanControlChildren<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  path: Path,
+  scope: Names,
+  state: AnalysisState,
+): boolean {
+  if (node.kind === "conditional") {
+    scan(node.condition, [...path, "condition"], scope, state);
+    scan(node.then, [...path, "then"], scope, state);
+    scan(node.else, [...path, "else"], scope, state);
+    return true;
+  }
+  if (node.kind !== "option-coalesce") return false;
+  scan(node.option, [...path, "option"], scope, state);
+  scan(node.fallback, [...path, "fallback"], scope, state);
+  return true;
 }
 
 function scanMatch<R extends JsonValue>(
@@ -179,11 +198,7 @@ function visitReferenceChildren<R extends JsonValue>(
     visitReferences(single[0], locals, add);
     return;
   }
-  if (node.kind === "membership") {
-    visitReferences(node.needle, locals, add);
-    visitReferences(node.array, locals, add);
-    return;
-  }
+  if (visitOrderedReferences(node, locals, add)) return;
   if (node.kind === "match") {
     visitReferences(node.value, locals, add);
     for (const arm of node.arms)
@@ -197,6 +212,28 @@ function visitReferenceChildren<R extends JsonValue>(
   }
   if (node.kind === "option" && node.variant === "some") visitReferences(node.value, locals, add);
   if (node.kind === "result") visitReferences(node.value, locals, add);
+}
+
+function visitOrderedReferences<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  locals: Set<string>,
+  add: (name: string) => void,
+): boolean {
+  if (node.kind === "membership") {
+    visitReferences(node.needle, locals, add);
+    visitReferences(node.array, locals, add);
+    return true;
+  }
+  if (node.kind === "conditional") {
+    visitReferences(node.condition, locals, add);
+    visitReferences(node.then, locals, add);
+    visitReferences(node.else, locals, add);
+    return true;
+  }
+  if (node.kind !== "option-coalesce") return false;
+  visitReferences(node.option, locals, add);
+  visitReferences(node.fallback, locals, add);
+  return true;
 }
 
 function isBinary<R extends JsonValue>(

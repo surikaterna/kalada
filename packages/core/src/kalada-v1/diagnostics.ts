@@ -39,6 +39,7 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
   KALADA_FUNCTION_ESCAPE: "Kalada callable cannot escape evaluation.",
   KALADA_FIELD_MISSING: "Kalada field does not exist.",
   KALADA_FIELD_TYPE_MISMATCH: "Kalada field access requires a JSON object.",
+  KALADA_OPTION_REQUIRED: "Kalada option coalesce requires an Option value.",
   KALADA_OPERATOR_TYPE: "Kalada operator received an incompatible value.",
   KALADA_OPERATOR_AMBIGUOUS: "Kalada operator domain is ambiguous.",
   KALADA_NUMERIC_ZERO_DIVISOR: "Kalada numeric divisor must not be zero.",

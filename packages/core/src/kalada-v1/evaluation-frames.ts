@@ -104,6 +104,21 @@ export type EvaluationFrame<R extends JsonValue> =
       left: boolean | null;
     }
   | {
+      kind: "conditional";
+      phase: "condition" | "branch";
+      path: Path;
+      trueBranch: Expression<R>;
+      falseBranch: Expression<R>;
+      outer: RuntimeEnvironment;
+    }
+  | {
+      kind: "option-coalesce";
+      phase: "option" | "fallback";
+      path: Path;
+      fallback: Expression<R>;
+      outer: RuntimeEnvironment;
+    }
+  | {
       kind: "function-group-body";
       phase: "body";
       path: Path;

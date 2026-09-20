@@ -61,6 +61,15 @@ const expression = {
     binaryNode("boolean-logical", ["and", "or"]),
     node("boolean-xor", { left: expressionRef(), right: expressionRef() }, ["left", "right"]),
     node(
+      "conditional",
+      Object.fromEntries(["condition", "then", "else"].map((key) => [key, expressionRef()])),
+      ["condition", "then", "else"],
+    ),
+    node("option-coalesce", { option: expressionRef(), fallback: expressionRef() }, [
+      "option",
+      "fallback",
+    ]),
+    node(
       "ordered-comparison",
       {
         domain: { enum: ["number", "string"] },

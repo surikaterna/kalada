@@ -1,3 +1,4 @@
+import { enterControl } from "./control-evaluation.js";
 import { KaladaFailure } from "./diagnostics.js";
 import { deliverFrame } from "./evaluation-delivery.js";
 import type { EvaluationTask, Path } from "./evaluation-frames.js";
@@ -45,7 +46,9 @@ type AddedExpression<R extends JsonValue> = Extract<
       | "numeric-unary"
       | "boolean-not"
       | "boolean-logical"
-      | "boolean-xor";
+      | "boolean-xor"
+      | "conditional"
+      | "option-coalesce";
   }
 >;
 const ADDED_EXPRESSION_KINDS: ReadonlySet<string> = new Set([
@@ -59,6 +62,8 @@ const ADDED_EXPRESSION_KINDS: ReadonlySet<string> = new Set([
   "boolean-not",
   "boolean-logical",
   "boolean-xor",
+  "conditional",
+  "option-coalesce",
 ]);
 
 const FUNCTION_RUNTIME_DIAGNOSTICS = new Set([
@@ -184,6 +189,8 @@ function enterAddedExpression<R extends JsonValue>(
 ): void {
   if (node.kind === "field-access" || node.kind === "optional-field-access") {
     enterFieldAccess(node, path, state);
+  } else if (node.kind === "conditional" || node.kind === "option-coalesce") {
+    enterControl(node, path, state);
   } else {
     enterOperator(node, path, state);
   }
