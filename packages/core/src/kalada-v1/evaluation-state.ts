@@ -100,7 +100,14 @@ export function captureMap(
 export function unwind<R extends JsonValue>(state: MachineState<R>): void {
   while (state.stack.length > 0) {
     const frame = state.stack.pop() as EvaluationFrame<R>;
-    if (frame.kind === "binding" || frame.kind === "match") state.environment = frame.outer;
+    if (
+      frame.kind === "binding" ||
+      frame.kind === "match" ||
+      frame.kind === "conditional" ||
+      frame.kind === "option-coalesce"
+    ) {
+      state.environment = frame.outer;
+    }
     if (frame.kind === "function-group-body") state.environment = frame.outer;
     if (frame.kind === "user-return") {
       state.environment = frame.caller;

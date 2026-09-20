@@ -1,3 +1,4 @@
+import { deliverControl } from "./control-evaluation.js";
 import { type EvaluationFrame, functionEnvironment, type Path } from "./evaluation-frames.js";
 import {
   charge,
@@ -47,15 +48,9 @@ export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void 
     case "temporal-binary":
       deliverTemporal(frame, state);
       break;
-    case "equality":
-    case "ordered-comparison":
-    case "membership":
-    case "numeric-binary":
-    case "numeric-unary":
-    case "boolean-not":
-    case "boolean-logical":
-    case "boolean-xor":
-      deliverOperator(frame, state);
+    case "conditional":
+    case "option-coalesce":
+      deliverControl(frame, state);
       break;
     case "function-group-body":
       restore(frame.outer, state);
@@ -72,6 +67,8 @@ export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void 
     case "core-iteration":
       deliverCoreCallback(frame, state);
       break;
+    default:
+      deliverOperator(frame, state);
   }
 }
 

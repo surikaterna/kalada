@@ -64,6 +64,15 @@ const booleanXor = <R extends JsonValue>(
   left: KaladaV1Expression<R>,
   right: KaladaV1Expression<R>,
 ): KaladaV1Expression<R> => ({ kind: "boolean-xor", left, right });
+const conditional = <R extends JsonValue>(
+  condition: KaladaV1Expression<R>,
+  then: KaladaV1Expression<R>,
+  otherwise: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "conditional", condition, then, else: otherwise });
+const optionCoalesce = <R extends JsonValue>(
+  option: KaladaV1Expression<R>,
+  fallback: KaladaV1Expression<R>,
+): KaladaV1Expression<R> => ({ kind: "option-coalesce", option, fallback });
 const binding = <R extends JsonValue>(
   name: string,
   value: KaladaV1Expression<R>,
@@ -174,6 +183,8 @@ export const KaladaV1 = Object.freeze({
   booleanNot,
   booleanLogical,
   booleanXor,
+  conditional,
+  optionCoalesce,
   binding,
   Option: Object.freeze({ some, none }),
   Result: Object.freeze({ ok, err }),

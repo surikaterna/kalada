@@ -29,12 +29,9 @@ function visit<R extends JsonValue>(
     (node.kind === "option" && node.variant === "none")
   )
     return;
-  if (node.kind === "binding") {
-    visitBinding(node, scope, output, identities);
-    return;
-  }
-  if (visitAddedNode(node, scope, output, identities)) return;
+  if (visitTraversalNode(node, scope, output, identities)) return;
   if (visitFunctionNode(node, scope, output, identities)) return;
+  if (visitControlNode(node, scope, output, identities)) return;
 
   if (node.kind === "match") {
     visitMatch(node.value, node.arms, scope, output, identities);
@@ -61,12 +58,34 @@ function visit<R extends JsonValue>(
   }
 }
 
-function visitAddedNode<R extends JsonValue>(
+function visitControlNode<R extends JsonValue>(
   node: KaladaV1Expression<R>,
   scope: ReadonlySet<string>,
   output: R[],
   identities: Set<string>,
 ): boolean {
+  if (node.kind === "conditional") {
+    visit(node.condition, scope, output, identities);
+    visit(node.then, scope, output, identities);
+    visit(node.else, scope, output, identities);
+    return true;
+  }
+  if (node.kind !== "option-coalesce") return false;
+  visit(node.option, scope, output, identities);
+  visit(node.fallback, scope, output, identities);
+  return true;
+}
+
+function visitTraversalNode<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+  scope: ReadonlySet<string>,
+  output: R[],
+  identities: Set<string>,
+): boolean {
+  if (node.kind === "binding") {
+    visitBinding(node, scope, output, identities);
+    return true;
+  }
   if (node.kind === "field-access" || node.kind === "optional-field-access") {
     visit(node.target, scope, output, identities);
     return true;

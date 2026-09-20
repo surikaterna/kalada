@@ -53,7 +53,39 @@ export function canonicalOperatorNode<R extends JsonValue>(
     exact(raw, path, ["kind", "left", "right"]);
     return canonicalPair(raw, path, depth, state, canonicalNode);
   }
-  return undefined;
+  return canonicalControl(raw, path, depth, state, canonicalNode);
+}
+
+function canonicalControl<R extends JsonValue>(
+  raw: Record<string, unknown>,
+  path: Path,
+  depth: number,
+  state: CanonicalState<R>,
+  canonicalNode: CanonicalNode<R>,
+): KaladaV1Expression<R> | undefined {
+  const keys =
+    raw.kind === "option-coalesce"
+      ? ["option", "fallback"]
+      : raw.kind === "conditional"
+        ? ["condition", "then", "else"]
+        : null;
+  if (!keys) return undefined;
+  exact(raw, path, ["kind", ...keys]);
+  return canonicalChildren(raw, keys, path, depth, state, canonicalNode);
+}
+
+function canonicalChildren<R extends JsonValue>(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+  path: Path,
+  depth: number,
+  state: CanonicalState<R>,
+  canonicalNode: CanonicalNode<R>,
+): KaladaV1Expression<R> {
+  const children = Object.fromEntries(
+    keys.map((key) => [key, canonicalNode(raw[key], [...path, key], depth + 1, state)]),
+  );
+  return Object.freeze({ kind: raw.kind, ...children }) as KaladaV1Expression<R>;
 }
 
 function canonicalUnary<R extends JsonValue>(

@@ -2,6 +2,7 @@ import type {
   BooleanLogicalExpression,
   BooleanNotExpression,
   BooleanXorExpression,
+  ConditionalExpression,
   DurationValue,
   EncodedKaladaValueV1,
   InstantValue,
@@ -9,6 +10,7 @@ import type {
   KaladaV1DiagnosticContextFrame,
   NumericBinaryExpression,
   NumericUnaryExpression,
+  OptionCoalesceExpression,
   OptionValue,
   ResultValue,
 } from "./index.js";
@@ -18,6 +20,8 @@ declare const numericUnary: NumericUnaryExpression<string>;
 declare const booleanNot: BooleanNotExpression<string>;
 declare const booleanLogical: BooleanLogicalExpression<string>;
 declare const booleanXor: BooleanXorExpression<string>;
+declare const conditional: ConditionalExpression<string>;
+declare const optionCoalesce: OptionCoalesceExpression<string>;
 
 const functionType: KaladaFunctionType = {
   kind: "function-type",
@@ -79,3 +83,5 @@ void numericUnary;
 void booleanNot;
 void booleanLogical;
 void booleanXor;
+void conditional;
+void optionCoalesce;

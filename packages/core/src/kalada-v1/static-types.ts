@@ -1,5 +1,6 @@
 import { KaladaFailure } from "./diagnostics.js";
 import type { JsonValue } from "./json.js";
+import { inferControlType } from "./static-control-types.js";
 import { inferOperatorType } from "./static-operator-types.js";
 import {
   DYNAMIC,
@@ -36,7 +37,9 @@ type AddedExpression<R extends JsonValue> = Extract<
       | "numeric-unary"
       | "boolean-not"
       | "boolean-logical"
-      | "boolean-xor";
+      | "boolean-xor"
+      | "conditional"
+      | "option-coalesce";
   }
 >;
 
@@ -69,6 +72,8 @@ function inferAdded<R extends JsonValue>(
   path: Path,
   scope: Scope,
 ): StaticType {
+  const control = inferControlType(node, path, scope, infer);
+  if (control !== null) return control;
   if (node.kind === "field-access" || node.kind === "optional-field-access") {
     return fieldAccessType(node, path, scope);
   }
@@ -89,6 +94,8 @@ function isAddedExpression<R extends JsonValue>(
     "boolean-not",
     "boolean-logical",
     "boolean-xor",
+    "conditional",
+    "option-coalesce",
   ].includes(node.kind);
 }
 

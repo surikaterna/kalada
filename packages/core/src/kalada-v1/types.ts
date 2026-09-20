@@ -24,6 +24,8 @@ export type KaladaV1Expression<R extends JsonValue = string> =
   | BooleanNotExpression<R>
   | BooleanLogicalExpression<R>
   | BooleanXorExpression<R>
+  | ConditionalExpression<R>
+  | OptionCoalesceExpression<R>
   | FunctionExpression<R>
   | CallExpression<R>
   | FunctionGroupExpression<R>
@@ -187,6 +189,19 @@ export interface BooleanXorExpression<R extends JsonValue> {
   readonly right: KaladaV1Expression<R>;
 }
 
+export interface ConditionalExpression<R extends JsonValue> {
+  readonly kind: "conditional";
+  readonly condition: KaladaV1Expression<R>;
+  readonly then: KaladaV1Expression<R>;
+  readonly else: KaladaV1Expression<R>;
+}
+
+export interface OptionCoalesceExpression<R extends JsonValue> {
+  readonly kind: "option-coalesce";
+  readonly option: KaladaV1Expression<R>;
+  readonly fallback: KaladaV1Expression<R>;
+}
+
 export interface BindingExpression<R extends JsonValue> {
   readonly kind: "binding";
   readonly name: string;
@@ -258,6 +273,7 @@ export type KaladaV1DiagnosticCode =
   | "KALADA_FUNCTION_ESCAPE"
   | "KALADA_FIELD_MISSING"
   | "KALADA_FIELD_TYPE_MISMATCH"
+  | "KALADA_OPTION_REQUIRED"
   | "KALADA_OPERATOR_TYPE"
   | "KALADA_OPERATOR_AMBIGUOUS"
   | "KALADA_NUMERIC_ZERO_DIVISOR"
