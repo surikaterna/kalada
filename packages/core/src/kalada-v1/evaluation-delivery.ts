@@ -50,6 +50,11 @@ export function deliverFrame<R extends JsonValue>(state: MachineState<R>): void 
     case "equality":
     case "ordered-comparison":
     case "membership":
+    case "numeric-binary":
+    case "numeric-unary":
+    case "boolean-not":
+    case "boolean-logical":
+    case "boolean-xor":
       deliverOperator(frame, state);
       break;
     case "function-group-body":

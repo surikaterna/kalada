@@ -1,12 +1,23 @@
 import type {
+  BooleanLogicalExpression,
+  BooleanNotExpression,
+  BooleanXorExpression,
   DurationValue,
   EncodedKaladaValueV1,
   InstantValue,
   KaladaFunctionType,
   KaladaV1DiagnosticContextFrame,
+  NumericBinaryExpression,
+  NumericUnaryExpression,
   OptionValue,
   ResultValue,
 } from "./index.js";
+
+declare const numericBinary: NumericBinaryExpression<string>;
+declare const numericUnary: NumericUnaryExpression<string>;
+declare const booleanNot: BooleanNotExpression<string>;
+declare const booleanLogical: BooleanLogicalExpression<string>;
+declare const booleanXor: BooleanXorExpression<string>;
 
 const functionType: KaladaFunctionType = {
   kind: "function-type",
@@ -63,3 +74,8 @@ void impossibleVariant;
 void functionType;
 void context;
 void missingReturn;
+void numericBinary;
+void numericUnary;
+void booleanNot;
+void booleanLogical;
+void booleanXor;

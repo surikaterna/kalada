@@ -45,7 +45,7 @@ ordered-comparison    { kind, domain: "number" | "string",
 membership            { kind, needle, array }
 numeric-binary        { kind, operator: "add" | "subtract" | "multiply" |
                                             "divide" | "remainder", left, right }
-numeric-unary         { kind, operator: "positive" | "negative", operand }
+numeric-unary         { kind, operator: "plus" | "negate", operand }
 boolean-not           { kind, operand }
 boolean-logical       { kind, operator: "and" | "or", left, right }
 boolean-xor           { kind, left, right }
@@ -133,8 +133,8 @@ types are rejected statically, while a selected node validates dynamic values at
 
 | Numeric operation | Contract |
 | --- | --- |
-| unary positive | finite operand, same numeric value, normalize `-0` |
-| unary negative | finite negation, normalize `-0` |
+| unary `plus` | finite operand, same numeric value, normalize `-0` |
+| unary `negate` | finite negation, normalize `-0` |
 | add/subtract/multiply | finite operands and finite result, normalize `-0` |
 | divide | finite operands, reject `+0` or `-0` divisor, require finite result, normalize `-0` |
 | remainder | finite operands, reject `+0` or `-0` divisor, require finite result, normalize `-0` |
@@ -251,8 +251,8 @@ the operator expression beginning at `expression`.
 | `KALADA_OPTION_REQUIRED` | `Kalada option coalesce requires an Option value.` | coalesce node's `option` |
 | `KALADA_OPERATOR_TYPE` | `Kalada operator received an incompatible value.` | first statically or dynamically invalid operand |
 | `KALADA_OPERATOR_AMBIGUOUS` | `Kalada operator domain is ambiguous.` | node's `operator`, or the source operator range before lowering |
-| `KALADA_ZERO_DIVISOR` | `Kalada divisor must not be zero.` | numeric node's `right` |
-| `KALADA_NON_FINITE` | `Kalada numeric operation produced a non-finite value.` | invalid input operand, or node path for a non-finite result |
+| `KALADA_NUMERIC_ZERO_DIVISOR` | `Kalada numeric divisor must not be zero.` | numeric node's `right` |
+| `KALADA_NUMERIC_NON_FINITE` | `Kalada numeric operation produced a non-finite value.` | numeric node path for a non-finite result |
 
 For `KALADA_OPERATOR_TYPE`, operand paths are `left`, `right`, `operand`, `needle`, `array`, or
 `condition`; static conditional-join failure uses `else`. Callable equality reports the first

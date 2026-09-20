@@ -23,6 +23,22 @@ import {
 import type { KaladaFunctionType, KaladaType, KaladaV1Expression, NamedFunction } from "./types.js";
 
 type Path = readonly (string | number)[];
+type AddedExpression<R extends JsonValue> = Extract<
+  KaladaV1Expression<R>,
+  {
+    kind:
+      | "field-access"
+      | "optional-field-access"
+      | "equality"
+      | "ordered-comparison"
+      | "membership"
+      | "numeric-binary"
+      | "numeric-unary"
+      | "boolean-not"
+      | "boolean-logical"
+      | "boolean-xor";
+  }
+>;
 
 export function checkKaladaV1Types<R extends JsonValue>(expression: KaladaV1Expression<R>): void {
   infer(expression, ["expression"], new Map());
@@ -41,37 +57,43 @@ function infer<R extends JsonValue>(
   if (node.kind === "call") return checkCall(node, path, scope);
   if (node.kind === "core-function") return coreType(node.name);
   if (node.kind === "binding") return checkBinding(node, path, scope);
-  const added = inferAdded(node, path, scope);
-  if (added !== null) return added;
+  if (isAddedExpression(node)) return inferAdded(node, path, scope);
   if (node.kind === "option") return optionType(node, path, scope);
   if (node.kind === "result") return resultType(node, path, scope);
   if (node.kind === "match") return checkMatch(node, path, scope);
-  return inferTemporal(
-    node as Extract<
-      KaladaV1Expression<R>,
-      {
-        kind:
-          | "instant"
-          | "duration"
-          | "current-instant"
-          | "temporal-arithmetic"
-          | "temporal-comparison";
-      }
-    >,
-    path,
-    scope,
-  );
+  return inferTemporal(node, path, scope);
 }
 
 function inferAdded<R extends JsonValue>(
-  node: KaladaV1Expression<R>,
+  node: AddedExpression<R>,
   path: Path,
   scope: Scope,
-): StaticType | null {
+): StaticType {
   if (node.kind === "field-access" || node.kind === "optional-field-access") {
     return fieldAccessType(node, path, scope);
   }
-  return inferOperatorType(node, path, scope, infer);
+  return inferOperatorType(node, path, scope, infer) ?? invalidAdded(path);
+}
+
+function isAddedExpression<R extends JsonValue>(
+  node: KaladaV1Expression<R>,
+): node is AddedExpression<R> {
+  return [
+    "field-access",
+    "optional-field-access",
+    "equality",
+    "ordered-comparison",
+    "membership",
+    "numeric-binary",
+    "numeric-unary",
+    "boolean-not",
+    "boolean-logical",
+    "boolean-xor",
+  ].includes(node.kind);
+}
+
+function invalidAdded(path: Path): never {
+  throw new KaladaFailure("KALADA_INVALID_INPUT", path);
 }
 
 function fieldAccessType<R extends JsonValue>(

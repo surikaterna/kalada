@@ -54,6 +54,7 @@ const NODE_KEYS = new Set([
   "domain",
   "needle",
   "array",
+  "operand",
 ]);
 const ARM_ORDER = Object.freeze({ Option: ["some", "none"], Result: ["ok", "err"] } as const);
 

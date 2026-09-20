@@ -41,6 +41,8 @@ const MESSAGES: Readonly<Record<KaladaV1DiagnosticCode, string>> = Object.freeze
   KALADA_FIELD_TYPE_MISMATCH: "Kalada field access requires a JSON object.",
   KALADA_OPERATOR_TYPE: "Kalada operator received an incompatible value.",
   KALADA_OPERATOR_AMBIGUOUS: "Kalada operator domain is ambiguous.",
+  KALADA_NUMERIC_ZERO_DIVISOR: "Kalada numeric divisor must not be zero.",
+  KALADA_NUMERIC_NON_FINITE: "Kalada numeric operation produced a non-finite value.",
 });
 
 export class KaladaFailure extends Error {

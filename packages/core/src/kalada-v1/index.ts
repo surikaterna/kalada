@@ -22,6 +22,9 @@ export {
 } from "./temporal.js";
 export type {
   BindingExpression,
+  BooleanLogicalExpression,
+  BooleanNotExpression,
+  BooleanXorExpression,
   CallExpression,
   CompiledKaladaV1Program,
   CoreFunctionExpression,
@@ -56,6 +59,8 @@ export type {
   MatchExpression,
   MembershipExpression,
   NamedFunction,
+  NumericBinaryExpression,
+  NumericUnaryExpression,
   OptionalFieldAccessExpression,
   OptionExpression,
   OrderedComparisonExpression,

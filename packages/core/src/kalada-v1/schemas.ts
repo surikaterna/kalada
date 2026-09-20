@@ -52,6 +52,14 @@ const expression = {
     fieldNode("field-access"),
     fieldNode("optional-field-access"),
     binaryNode("equality", ["equal", "not-equal"]),
+    binaryNode("numeric-binary", ["add", "subtract", "multiply", "divide", "remainder"]),
+    node("numeric-unary", { operator: { enum: ["plus", "negate"] }, operand: expressionRef() }, [
+      "operator",
+      "operand",
+    ]),
+    node("boolean-not", { operand: expressionRef() }, ["operand"]),
+    binaryNode("boolean-logical", ["and", "or"]),
+    node("boolean-xor", { left: expressionRef(), right: expressionRef() }, ["left", "right"]),
     node(
       "ordered-comparison",
       {
@@ -79,8 +87,8 @@ const expression = {
     node("instant", { milliseconds: safeInteger() }, ["milliseconds"]),
     node("duration", { milliseconds: safeInteger() }, ["milliseconds"]),
     node("current-instant", {}, []),
-    temporalNode("temporal-arithmetic", ["add", "subtract"]),
-    temporalNode("temporal-comparison", [
+    binaryNode("temporal-arithmetic", ["add", "subtract"]),
+    binaryNode("temporal-comparison", [
       "equal",
       "not-equal",
       "less-than",
@@ -222,14 +230,6 @@ function node(
     required: ["kind", ...required],
     additionalProperties: false,
   };
-}
-
-function temporalNode(kind: string, operators: readonly string[]): Record<string, unknown> {
-  return node(
-    kind,
-    { operator: { enum: operators }, left: expressionRef(), right: expressionRef() },
-    ["operator", "left", "right"],
-  );
 }
 
 function binaryNode(kind: string, operators: readonly string[]): Record<string, unknown> {
