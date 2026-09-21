@@ -109,6 +109,12 @@ function success(
       format: "kalada-host-environment-v1",
       provider: providerDeclaration(providerRecord, providerIdentity),
       cacheability: environmentCacheability(providerIdentity, capabilities.declarations),
+      compileProjection: Object.freeze({
+        format: "kalada-host-compile-projection-v1" as const,
+        bindings: Object.freeze(
+          normalized.map(({ id, name, semanticType }) => Object.freeze({ id, name, semanticType })),
+        ),
+      }),
       bindings: Object.freeze(normalized),
       capabilities: Object.freeze(capabilities.declarations),
       editorGraph: graph,

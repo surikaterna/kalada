@@ -124,6 +124,17 @@ export interface NormalizedBinding {
   readonly provenance: readonly ProvenanceEntry[];
 }
 
+export interface HostCompileBinding {
+  readonly id: string;
+  readonly name: string;
+  readonly semanticType: KaladaSyntaxStaticType;
+}
+
+export interface HostCompileProjection {
+  readonly format: "kalada-host-compile-projection-v1";
+  readonly bindings: readonly HostCompileBinding[];
+}
+
 export interface NormalizedEnvironment {
   readonly format: "kalada-host-environment-v1";
   readonly provider: Readonly<{
@@ -134,6 +145,7 @@ export interface NormalizedEnvironment {
     identity: Cacheability;
   }>;
   readonly cacheability: Cacheability;
+  readonly compileProjection: HostCompileProjection;
   readonly bindings: readonly NormalizedBinding[];
   readonly capabilities: readonly CapabilityDeclaration[];
   readonly editorGraph: EditorGraph;
