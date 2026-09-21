@@ -58,6 +58,7 @@ export interface EditorScalarShape extends EditorShapeEvidence {
 export interface EditorUnknownShape extends EditorShapeEvidence {
   readonly kind: "unknown";
   readonly reason?: string;
+  readonly evidenceCode?: EditorUnknownCode;
 }
 
 export interface EditorObjectPropertyShape {
@@ -191,7 +192,7 @@ export interface EditorEdge {
 export interface EditorPropertyEdge extends EditorEdge {
   readonly name: string;
   readonly required: boolean;
-  readonly presence: "required" | "optional" | "unknown";
+  readonly presence?: "required" | "optional" | "unknown";
 }
 
 export interface EditorRelationEdge extends EditorEdge {
@@ -207,7 +208,7 @@ export interface EditorNodeBase {
   readonly sourceId?: string;
   readonly annotations?: EditorData;
   readonly constraints?: EditorData;
-  readonly relations: readonly EditorRelationEdge[];
+  readonly relations?: readonly EditorRelationEdge[];
 }
 
 export interface EditorScalarNode extends EditorNodeBase {
@@ -223,7 +224,7 @@ export interface EditorUnknownNode extends EditorNodeBase {
 export interface EditorObjectNode extends EditorNodeBase {
   readonly kind: "object";
   readonly properties: readonly EditorPropertyEdge[];
-  readonly requiredNames: readonly string[];
+  readonly requiredNames?: readonly string[];
   readonly unknownKeys?: "strip" | "reject" | "passthrough" | "schema" | "unknown";
   readonly additionalProperties?: EditorEdge;
 }

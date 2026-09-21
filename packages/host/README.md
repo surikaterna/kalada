@@ -22,6 +22,9 @@ intersection, wrapper, relation, additional-property, presence, source-ID, annot
 constraint evidence. These constructs carry editor/provider evidence only; they do not infer the
 binding's semantic type. `readSemanticType` is the public bounded reader for generic adapter-owned
 type declarations.
+New normalized evidence fields on pre-existing public node/property interfaces are optional for
+source compatibility; host-produced normalized graphs always populate deterministic relation,
+presence, and required-name values.
 
 Normalized environments contain only recursively frozen serializable data. Validator and codec
 callbacks are held separately in the returned, instance-scoped `capabilitySnapshot`. There is no

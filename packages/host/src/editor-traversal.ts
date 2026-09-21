@@ -59,7 +59,7 @@ function walk(
 }
 
 function walkChildren(node: EditorNode, depth: number, state: TraversalState): void {
-  for (const relation of node.relations) walk(relation, "relation", depth + 1, state);
+  for (const relation of node.relations ?? []) walk(relation, "relation", depth + 1, state);
   if (node.kind === "object") {
     for (const property of node.properties) walk(property, "property", depth + 1, state);
     if (node.additionalProperties) {

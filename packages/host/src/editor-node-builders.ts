@@ -67,10 +67,22 @@ export function declaredUnknownNode(
   path: HostPath,
 ): EditorNode {
   const reason = typeof record.reason === "string" ? record.reason.slice(0, 256) : undefined;
+  const code = validUnknownCode(record.evidenceCode) ? record.evidenceCode : "unsupported-shape";
   return {
-    ...unknownNode(id, path, "unsupported-shape"),
+    ...unknownNode(id, path, code),
     ...(reason === undefined ? {} : { reason }),
   };
+}
+
+function validUnknownCode(value: unknown): value is EditorUnknownCode {
+  return [
+    "invalid-shape",
+    "unsupported-shape",
+    "depth-limit",
+    "node-limit",
+    "edge-limit",
+    "unresolved-reference",
+  ].includes(value as string);
 }
 
 export function objectNode(

@@ -46,7 +46,7 @@ function addUndiscovered(
 }
 
 function outgoingNodeIds(node: EditorNode): string[] {
-  const relations = node.relations.map(({ nodeId }) => nodeId);
+  const relations = (node.relations ?? []).map(({ nodeId }) => nodeId);
   if (node.kind === "object") {
     return [
       ...relations,
