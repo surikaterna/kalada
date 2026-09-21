@@ -38,6 +38,10 @@ export function readOwnDataRecord(input: unknown, maximumKeys = 10_000): Shallow
     return Object.freeze({ ok: false, reason: "invalid-value" });
   }
   try {
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return Object.freeze({ ok: false, reason: "invalid-value" });
+    }
     const keys = Reflect.ownKeys(input);
     if (keys.length > maximumKeys) return Object.freeze({ ok: false, reason: "size-limit" });
     const output: Record<string, unknown> = Object.create(null);
@@ -92,9 +96,19 @@ function cloneArray(
   depth: number,
   state: CloneState,
 ): SerializableCloneResult {
-  if (input.length > state.limits.maxCollectionSize) return failure("size-limit", path);
+  const lengthDescriptor = safeDescriptor(input, "length");
+  if (!lengthDescriptor || !("value" in lengthDescriptor)) return failure("accessor", path);
+  const length = lengthDescriptor.value;
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    length > state.limits.maxCollectionSize
+  ) {
+    return failure("size-limit", path);
+  }
   const output: SerializableValue[] = [];
-  for (let index = 0; index < input.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     const descriptor = safeDescriptor(input, String(index));
     if (!descriptor || !("value" in descriptor)) return failure("accessor", [...path, index]);
     const cloned = cloneValue(descriptor.value, Object.freeze([...path, index]), depth + 1, state);

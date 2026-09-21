@@ -178,6 +178,7 @@ export interface EditorGraph {
   readonly roots: readonly EditorGraphRoot[];
   readonly nodes: readonly EditorNode[];
   readonly definitions: readonly EditorGraphDefinition[];
+  readonly evidence: readonly EditorUnknownEvidence[];
 }
 
 export interface EditorTraversalOptions {

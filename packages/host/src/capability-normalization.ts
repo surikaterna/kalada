@@ -1,7 +1,7 @@
 import type {
   Cacheability,
   CapabilityDeclaration,
-  HostDiagnostic,
+  HostEnvironmentDiagnostic,
   LiveCapability,
 } from "./contracts.js";
 import { environmentDiagnostic } from "./diagnostics.js";
@@ -12,7 +12,7 @@ import { readOwnDataRecord } from "./serializable.js";
 export interface CapabilityState {
   readonly declarations: CapabilityDeclaration[];
   readonly live: Record<string, LiveCapability>;
-  readonly diagnostics: HostDiagnostic[];
+  readonly diagnostics: HostEnvironmentDiagnostic[];
 }
 
 export function normalizeCapabilities(input: unknown, provider: Cacheability): CapabilityState {

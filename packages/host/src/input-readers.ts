@@ -1,14 +1,33 @@
 export function readArray(input: unknown, maximum: number): readonly unknown[] | null {
+  const result = readArrayPrefix(input, maximum);
+  return result && !result.truncated ? result.items : null;
+}
+
+export function readArrayPrefix(
+  input: unknown,
+  maximum: number,
+): Readonly<{ items: readonly unknown[]; truncated: boolean }> | null {
   if (!Array.isArray(input)) return null;
   try {
-    if (input.length > maximum) return null;
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(input, "length");
+    if (!lengthDescriptor || !("value" in lengthDescriptor)) return null;
+    const length = lengthDescriptor.value;
+    if (
+      typeof length !== "number" ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      !Number.isSafeInteger(maximum) ||
+      maximum < 0
+    )
+      return null;
     const output: unknown[] = [];
-    for (let index = 0; index < input.length; index += 1) {
+    const readLength = Math.min(length, maximum);
+    for (let index = 0; index < readLength; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
       if (!descriptor || !("value" in descriptor)) return null;
       output.push(descriptor.value);
     }
-    return output;
+    return Object.freeze({ items: Object.freeze(output), truncated: length > maximum });
   } catch {
     return null;
   }

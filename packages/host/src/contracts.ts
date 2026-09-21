@@ -1,4 +1,5 @@
-import type { KaladaSyntaxStaticType } from "@kalada/syntax";
+import type { KaladaV1Diagnostic } from "@kalada/core";
+import type { KaladaSyntaxDiagnostic, KaladaSyntaxStaticType } from "@kalada/syntax";
 import type { EditorGraph, HostPath, ManualEditorShapeDocument } from "./editor-types.js";
 
 export type SerializablePrimitive = null | boolean | number | string;
@@ -150,12 +151,45 @@ export type HostEnvironmentDiagnosticCode =
   | "HOST_ENVIRONMENT_INVALID_PROVENANCE"
   | "HOST_ENVIRONMENT_UNKNOWN_CAPABILITY";
 
+export type HostDiagnosticPhase =
+  | "environment"
+  | "parse"
+  | "lower"
+  | "compile"
+  | "link"
+  | "bind"
+  | "evaluate";
+
+export interface Utf16Position {
+  readonly line: number;
+  readonly character: number;
+}
+
+export interface Utf16Range {
+  readonly start: Utf16Position;
+  readonly end: Utf16Position;
+}
+
+export interface HostDiagnosticSource {
+  readonly uri: string;
+  readonly range: Utf16Range;
+}
+
+export type HostDiagnosticCause = Readonly<KaladaSyntaxDiagnostic | KaladaV1Diagnostic>;
+
 export interface HostDiagnostic {
-  readonly code: HostEnvironmentDiagnosticCode;
-  readonly phase: "environment";
+  readonly code: string;
+  readonly phase: HostDiagnosticPhase;
   readonly message: string;
+  readonly source?: HostDiagnosticSource;
   readonly bindingPath?: HostPath;
   readonly provenance?: Readonly<Record<string, string>>;
+  readonly cause?: HostDiagnosticCause;
+}
+
+export interface HostEnvironmentDiagnostic extends HostDiagnostic {
+  readonly code: HostEnvironmentDiagnosticCode;
+  readonly phase: "environment";
 }
 
 export type DescribeEnvironmentResult =
@@ -164,7 +198,7 @@ export type DescribeEnvironmentResult =
       environment: NormalizedEnvironment;
       capabilitySnapshot: CapabilitySnapshot;
     }>
-  | Readonly<{ ok: false; diagnostics: readonly HostDiagnostic[] }>;
+  | Readonly<{ ok: false; diagnostics: readonly HostEnvironmentDiagnostic[] }>;
 
 export interface ManualProvider {
   readonly kind: "manual";

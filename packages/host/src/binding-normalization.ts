@@ -1,13 +1,14 @@
 import type { CapabilityState } from "./capability-normalization.js";
 import type {
-  Cacheability,
   CapabilityDeclaration,
-  HostDiagnostic,
+  HostEnvironmentDiagnostic,
+  HostEnvironmentDiagnosticCode,
   NormalizedBinding,
   ProvenanceEntry,
   SerializableValue,
 } from "./contracts.js";
 import { environmentDiagnostic } from "./diagnostics.js";
+import { validateEditorDocument } from "./editor-input-validation.js";
 import type { EditorGraphInput, ManualEditorShapeDocument } from "./editor-types.js";
 import { readArray, readStringArray, validName } from "./input-readers.js";
 import { cloneSemanticType } from "./semantic-type.js";
@@ -16,23 +17,20 @@ import { cloneSerializableData, readOwnDataRecord } from "./serializable.js";
 export interface BindingState {
   readonly bindings: Omit<NormalizedBinding, "editorShapeRoot">[];
   readonly graphInputs: EditorGraphInput[];
-  readonly diagnostics: HostDiagnostic[];
+  readonly diagnostics: HostEnvironmentDiagnostic[];
   readonly providerProvenance: ProvenanceEntry;
 }
 
 export function normalizeBindings(
   input: unknown,
   capabilities: CapabilityState,
-  provider: Cacheability,
+  providerProvenance: ProvenanceEntry,
 ): BindingState {
   const state: BindingState = {
     bindings: [],
     graphInputs: [],
     diagnostics: [],
-    providerProvenance: Object.freeze({
-      providerId: provider.cacheable ? provider.id : "manual",
-      ...(provider.cacheable ? { providerVersion: provider.version } : {}),
-    }),
+    providerProvenance,
   };
   const items = readArray(input, 10_000);
   if (!items) {
@@ -205,6 +203,10 @@ function normalizeEditorDocument(
     return null;
   }
   const document: ManualEditorShapeDocument = { root: inspected.value.root as never, definitions };
+  if (!validateEditorDocument(document)) {
+    bindingError(state, "HOST_ENVIRONMENT_INVALID_BINDING", path);
+    return null;
+  }
   return { bindingId, path, document };
 }
 
@@ -225,7 +227,7 @@ function normalizeDefinitions(input: unknown): ManualEditorShapeDocument["defini
 
 function bindingError(
   state: BindingState,
-  code: HostDiagnostic["code"],
+  code: HostEnvironmentDiagnosticCode,
   path?: readonly string[],
 ): undefined {
   state.diagnostics.push(environmentDiagnostic(code, path, state.providerProvenance));

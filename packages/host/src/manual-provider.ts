@@ -5,9 +5,11 @@ import type {
   CapabilityDeclaration,
   CapabilitySnapshot,
   DescribeEnvironmentResult,
-  HostDiagnostic,
+  HostEnvironmentDiagnostic,
+  HostEnvironmentDiagnosticCode,
   ManualProvider,
   ManualProviderInput,
+  ProvenanceEntry,
 } from "./contracts.js";
 import { environmentDiagnostic } from "./diagnostics.js";
 import { createEditorGraph } from "./editor-graph.js";
@@ -58,7 +60,7 @@ function normalize(input: unknown): DescribeEnvironmentResult {
   const providerIdentity = normalizeProviderIdentity(record);
   if (!providerIdentity) return failure("HOST_ENVIRONMENT_INVALID_IDENTITY");
   const capabilities = normalizeCapabilities(record.capabilities, providerIdentity);
-  const bindings = normalizeBindings(record.bindings, capabilities, providerIdentity);
+  const bindings = normalizeBindings(record.bindings, capabilities, providerProvenance(record));
   const diagnostics = [...capabilities.diagnostics, ...bindings.diagnostics];
   if (diagnostics.length > 0) return failedDiagnostics(diagnostics);
   return success(record, providerIdentity, capabilities, bindings);
@@ -72,6 +74,15 @@ function normalizeProviderIdentity(record: Record<string, unknown>): Cacheabilit
     cacheable: record.cacheable,
   });
   return result.ok ? result.value : null;
+}
+
+function providerProvenance(record: Record<string, unknown>): ProvenanceEntry {
+  return Object.freeze({
+    providerId: typeof record.providerId === "string" ? record.providerId : "manual",
+    ...(typeof record.providerVersion === "string"
+      ? { providerVersion: record.providerVersion }
+      : {}),
+  });
 }
 
 function success(
@@ -129,11 +140,11 @@ function environmentCacheability(
   return provider;
 }
 
-function failedDiagnostics(diagnostics: HostDiagnostic[]): DescribeEnvironmentResult {
+function failedDiagnostics(diagnostics: HostEnvironmentDiagnostic[]): DescribeEnvironmentResult {
   return Object.freeze({ ok: false, diagnostics: Object.freeze(diagnostics) });
 }
 
-function failure(code: HostDiagnostic["code"]): DescribeEnvironmentResult {
+function failure(code: HostEnvironmentDiagnosticCode): DescribeEnvironmentResult {
   return failedDiagnostics([environmentDiagnostic(code)]);
 }
 

@@ -3,11 +3,14 @@ import type { EditorEdge, EditorNode } from "./editor-types.js";
 export function markReferenceCycles(
   nodes: EditorNode[],
   references: readonly { readonly index: number }[],
+  maximumWork: number,
 ): void {
+  const budget = { remaining: maximumWork };
   for (const reference of references) {
+    if (budget.remaining <= 0) return;
     const node = nodes[reference.index];
     if (node?.kind !== "reference" || !node.target) continue;
-    if (!isReachable(nodes, node.target.nodeId, node.id)) continue;
+    if (!isReachable(nodes, node.target.nodeId, node.id, budget)) continue;
     nodes[reference.index] = {
       ...node,
       target: cycleEdge(node.target),
@@ -15,11 +18,17 @@ export function markReferenceCycles(
   }
 }
 
-function isReachable(nodes: readonly EditorNode[], start: string, target: string): boolean {
+function isReachable(
+  nodes: readonly EditorNode[],
+  start: string,
+  target: string,
+  budget: { remaining: number },
+): boolean {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const pending = [start];
   const visited = new Set<string>();
-  while (pending.length > 0 && visited.size <= nodes.length) {
+  while (pending.length > 0 && budget.remaining > 0) {
+    budget.remaining -= 1;
     const id = pending.pop();
     if (!id || visited.has(id)) continue;
     if (id === target) return true;

@@ -1,5 +1,5 @@
 import type {
-  HostDiagnostic,
+  HostEnvironmentDiagnostic,
   HostEnvironmentDiagnosticCode,
   ProvenanceEntry,
 } from "./contracts.js";
@@ -22,8 +22,8 @@ export function environmentDiagnostic(
   code: HostEnvironmentDiagnosticCode,
   bindingPath?: HostPath,
   provenance?: ProvenanceEntry,
-): HostDiagnostic {
-  const diagnostic: HostDiagnostic = {
+): HostEnvironmentDiagnostic {
+  const diagnostic: HostEnvironmentDiagnostic = {
     code,
     phase: "environment",
     message: messages[code],

@@ -7,6 +7,10 @@ export type {
   CapabilitySnapshot,
   DescribeEnvironmentResult,
   HostDiagnostic,
+  HostDiagnosticCause,
+  HostDiagnosticPhase,
+  HostDiagnosticSource,
+  HostEnvironmentDiagnostic,
   HostEnvironmentDiagnosticCode,
   LiveCapability,
   ManualBindingDescriptor,
@@ -21,6 +25,8 @@ export type {
   ProviderIdentityInput,
   SerializablePrimitive,
   SerializableValue,
+  Utf16Position,
+  Utf16Range,
 } from "./contracts.js";
 export { createEditorGraph, DEFAULT_EDITOR_GRAPH_LIMITS } from "./editor-graph.js";
 export { traverseEditorGraph } from "./editor-traversal.js";
