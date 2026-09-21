@@ -4,8 +4,9 @@ import {
   type ManualCapability,
   type SerializableValue,
 } from "@kalada/host";
-import type { Diagnostic, SchemaDocument, StandardSchemaV1 } from "@scheman/core";
+import type { Diagnostic, SchemaDocument } from "@scheman/core";
 import { resolveAnalysisLimits } from "./analysis-limits.js";
+import { convertWithFinalPolicy, decodeStandardSchema } from "./capability-wrappers.js";
 import { schemanEditorDocument } from "./editor-document.js";
 import { validNormalizedEditorGraph } from "./editor-invariants.js";
 import { type ResolvedProfile, resolveProfile } from "./profile.js";
@@ -21,7 +22,9 @@ const validatorHandle = "scheman-validator";
 const codecHandle = "scheman-codec";
 const maximumSourceRecords = 512;
 
-export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptSchemanResult {
+export function adaptSchemanDocument<Input = unknown, Output = Input>(
+  options: AdaptSchemanOptions<Input, Output>,
+): AdaptSchemanResult<Input, Output> {
   const document = options.document as SchemaDocument & { readonly formatVersion: number };
   const invalid = validateDocument(document);
   if (invalid) return failure(invalid);
@@ -74,7 +77,7 @@ function adapterProvider(
     providerVersion: options.providerVersion,
     configurationDigest: options.configurationDigest,
     cacheable: options.cacheable,
-    capabilities: configuredCapabilities(options),
+    capabilities: configuredCapabilities(options, profile),
     bindings: [
       {
         id: options.binding.id,
@@ -102,19 +105,23 @@ function validateDocument(document: SchemaDocument & { readonly formatVersion: n
   return undefined;
 }
 
-function configuredCapabilities(options: AdaptSchemanOptions): ManualCapability[] {
+function configuredCapabilities(
+  options: AdaptSchemanOptions,
+  profile: ResolvedProfile,
+): ManualCapability[] {
   const capabilities: ManualCapability[] = [];
   if (options.validator) capabilities.push(validatorCapability(options.validator));
-  if (options.codec) {
+  const codec = options.codec;
+  if (codec) {
     capabilities.push({
       handle: codecHandle,
       kind: "codec",
-      mode: options.codec.mode,
-      capabilityId: options.codec.id,
-      capabilityVersion: options.codec.capabilityVersion,
-      configurationDigest: options.codec.configurationDigest,
-      cacheable: options.codec.cacheable,
-      convert: options.codec.convert,
+      mode: codec.mode,
+      capabilityId: codec.id,
+      capabilityVersion: codec.capabilityVersion,
+      configurationDigest: codec.configurationDigest,
+      cacheable: codec.cacheable,
+      convert: (value) => convertWithFinalPolicy(codec, profile.finalValidation, value),
     });
   }
   return capabilities;
@@ -129,12 +136,8 @@ function validatorCapability(config: NonNullable<AdaptSchemanOptions["validator"
     capabilityVersion: config.capabilityVersion,
     configurationDigest: config.configurationDigest,
     cacheable: config.cacheable,
-    decode: (value: unknown) => liveValidate(config.validator, value),
+    decode: (value: unknown) => decodeStandardSchema(config.validator, value),
   };
-}
-
-function liveValidate(validator: StandardSchemaV1, value: unknown): unknown {
-  return validator["~standard"].validate(value);
 }
 
 function environmentMetadata(
@@ -281,6 +284,6 @@ function adapterFailure(code: SchemanAdapterDiagnostic["code"]): SchemanAdapterD
   return Object.freeze({ code, severity: "error", side: "output", sourcePointer: "" });
 }
 
-function failure(diagnostic: SchemanAdapterDiagnostic): AdaptSchemanResult {
+function failure(diagnostic: SchemanAdapterDiagnostic): Extract<AdaptSchemanResult, { ok: false }> {
   return Object.freeze({ ok: false, diagnostics: Object.freeze([diagnostic]) });
 }

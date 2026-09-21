@@ -21,8 +21,8 @@ export interface SchemanBindingOptions {
   readonly override?: Omit<KaladaProfile, "version">;
 }
 
-export interface SchemanValidatorOptions {
-  readonly validator: StandardSchemaV1;
+export interface SchemanValidatorOptions<Input = unknown, Output = Input> {
+  readonly validator: StandardSchemaV1<Input, Output>;
   readonly mode: CapabilityMode;
   readonly capabilityId: string;
   readonly capabilityVersion: string;
@@ -39,7 +39,8 @@ export interface SchemanCodecOptions {
   readonly convert: (value: unknown) => unknown;
 }
 
-export interface AdaptSchemanOptions extends ProviderIdentityInput {
+export interface AdaptSchemanOptions<Input = unknown, Output = Input>
+  extends ProviderIdentityInput {
   readonly document: SchemaDocument;
   readonly mode: CapabilityMode;
   readonly providerId: string;
@@ -47,7 +48,7 @@ export interface AdaptSchemanOptions extends ProviderIdentityInput {
   readonly configurationDigest: string;
   readonly cacheable: boolean;
   readonly binding: SchemanBindingOptions;
-  readonly validator?: SchemanValidatorOptions;
+  readonly validator?: SchemanValidatorOptions<Input, Output>;
   readonly codec?: SchemanCodecOptions;
   readonly analysisLimits?: Partial<SchemanAnalysisLimits>;
 }
@@ -86,13 +87,13 @@ export interface SchemanSourceDiagnostic extends Diagnostic {
   }>;
 }
 
-export type AdaptSchemanResult =
+export type AdaptSchemanResult<Input = unknown, Output = Input> =
   | Readonly<{
       ok: true;
       environment: Extract<DescribeEnvironmentResult, { ok: true }>["environment"];
       capabilitySnapshot: Extract<DescribeEnvironmentResult, { ok: true }>["capabilitySnapshot"];
       diagnostics: readonly (SchemanAdapterDiagnostic | SchemanSourceDiagnostic)[];
-      retainedValidator?: StandardSchemaV1;
+      retainedValidator?: StandardSchemaV1<Input, Output>;
     }>
   | Readonly<{
       ok: false;

@@ -86,6 +86,7 @@ relations, cycles, and local refs retain only prefixes whose normalized targets 
 definition and diagnostic records are independently bounded to 512 records. Each object's required
 names are bounded by `maxEdges`, with aggregate retained/total/truncated source accounting.
 
-Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
-are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy
-preconditions but intentionally does not duplicate that execution layer.
+Runtime sequencing remains owned by the host execution layer. The adapter's capability wrappers only
+translate synchronous Standard Schema outcomes to decoded values/failures and enforce the declared
+safe-integer conversion precondition. Promise and thenable outputs pass untouched to the host's sync
+guard; final canonical/Kalada-type validation and entry into core remain host-owned.
