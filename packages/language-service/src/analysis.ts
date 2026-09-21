@@ -1,10 +1,13 @@
-import type { NormalizedEnvironment } from "@kalada/host";
 import {
-  type KaladaReferenceBinding,
-  type KaladaSyntaxDiagnostic,
-  lowerKaladaV1Expression,
-  parseKaladaV1Expression,
-} from "@kalada/syntax";
+  type CapabilitySnapshot,
+  type CompiledExpression,
+  compileExpression,
+  type DescribeEnvironmentResult,
+  linkExpression,
+  type NormalizedEnvironment,
+  type ParsedExpression,
+  parseExpression,
+} from "@kalada/host";
 import type {
   AnalysisCheckpoint,
   CancellationToken,
@@ -14,16 +17,28 @@ import type {
   LanguageServiceDiagnostic,
 } from "./contracts.js";
 
+type Cancellation = Readonly<{ cancelled: true; checkpoint: AnalysisCheckpoint }>;
+type Stage<T> = Cancellation | Readonly<{ cancelled: false; value: T }>;
+
 export type PhaseRun =
-  | Readonly<{
-      cancelled: true;
-      checkpoint: AnalysisCheckpoint;
-    }>
+  | Cancellation
   | Readonly<{
       cancelled: false;
       diagnostics: readonly LanguageServiceDiagnostic[];
       analysis: LanguageAnalysis;
     }>;
+
+interface PhaseState {
+  readonly diagnostics: LanguageServiceDiagnostic[];
+  readonly analysis: MutableAnalysis;
+}
+
+interface MutableAnalysis extends LanguageAnalysis {
+  environment?: NormalizedEnvironment;
+  syntax?: NonNullable<LanguageAnalysis["syntax"]>;
+  program?: NonNullable<LanguageAnalysis["program"]>;
+  sourceMap?: NonNullable<LanguageAnalysis["sourceMap"]>;
+}
 
 export function runAnalysisPhases(
   document: DocumentSnapshot,
@@ -32,88 +47,105 @@ export function runAnalysisPhases(
 ): PhaseRun {
   const captured = cancelledAt("captured", cancellation);
   if (captured) return captured;
-  const diagnostics = environmentDiagnostics(environment);
-  const environmentCheckpoint = cancelledAt("environment", cancellation);
-  if (environmentCheckpoint) return environmentCheckpoint;
-  const syntax = parseKaladaV1Expression(document.text);
-  diagnostics.push(...syntax.diagnostics.map((cause) => syntaxDiagnostic(cause, document)));
-  const parsed = cancelledAt("parsed", cancellation);
-  if (parsed) return parsed;
-  const analysis: MutableAnalysis = { syntax };
-  lowerWhenAvailable(analysis, diagnostics, document, environment);
-  const lowered = cancelledAt("lowered", cancellation);
-  if (lowered) return lowered;
+  const state = createState(environment.description);
+  const inspected = cancelledAt("environment", cancellation);
+  if (inspected) return inspected;
+  const parsed = parsePhase(state, document, cancellation);
+  if (parsed.cancelled) return parsed;
+  if (!parsed.value || !environment.description.ok) return finish(state, cancellation);
+  const compiled = compilePhase(
+    state,
+    parsed.value,
+    environment.description.environment,
+    cancellation,
+  );
+  if (compiled.cancelled) return compiled;
+  if (!compiled.value) return finish(state, cancellation);
+  const linked = linkPhase(
+    state,
+    compiled.value,
+    environment.description.environment,
+    environment.description.capabilitySnapshot,
+    cancellation,
+  );
+  return linked ?? finish(state, cancellation);
+}
+
+function createState(description: DescribeEnvironmentResult): PhaseState {
+  const diagnostics = description.ok ? [] : [...description.diagnostics];
+  const analysis: MutableAnalysis = {};
+  if (description.ok) analysis.environment = description.environment;
+  return { diagnostics, analysis };
+}
+
+function parsePhase(
+  state: PhaseState,
+  document: DocumentSnapshot,
+  cancellation?: CancellationToken,
+): Stage<ParsedExpression | null> {
+  const before = cancelledAt("before-parse", cancellation);
+  if (before) return before;
+  const parsed = parseExpression(document.text, { sourceUri: document.uri });
+  if (parsed.ok) state.analysis.syntax = parsed.value.syntax;
+  else state.diagnostics.push(...parsed.diagnostics);
+  const after = cancelledAt("after-parse", cancellation);
+  return after ?? Object.freeze({ cancelled: false, value: parsed.ok ? parsed.value : null });
+}
+
+function compilePhase(
+  state: PhaseState,
+  parsed: ParsedExpression,
+  environment: NormalizedEnvironment,
+  cancellation?: CancellationToken,
+): Stage<CompiledExpression | null> {
+  const before = cancelledAt("before-compile", cancellation);
+  if (before) return before;
+  const compiled = compileExpression(parsed, environment.compileProjection);
+  if (compiled.ok) captureCompilation(state.analysis, compiled.value);
+  else state.diagnostics.push(...compiled.diagnostics);
+  const after = cancelledAt("after-compile", cancellation);
+  return after ?? Object.freeze({ cancelled: false, value: compiled.ok ? compiled.value : null });
+}
+
+function captureCompilation(analysis: MutableAnalysis, compiled: CompiledExpression): void {
+  analysis.program = compiled.program;
+  analysis.sourceMap = compiled.sourceMap;
+}
+
+function linkPhase(
+  state: PhaseState,
+  compiled: CompiledExpression,
+  environment: NormalizedEnvironment,
+  snapshot: CapabilitySnapshot,
+  cancellation?: CancellationToken,
+): Cancellation | null {
+  const before = cancelledAt("before-link", cancellation);
+  if (before) return before;
+  collectLinkDiagnostics(state, linkExpression(compiled, environment, snapshot));
+  return cancelledAt("after-link", cancellation);
+}
+
+function collectLinkDiagnostics(
+  state: PhaseState,
+  linked: ReturnType<typeof linkExpression>,
+): void {
+  if (!linked.ok) state.diagnostics.push(...linked.diagnostics);
+}
+
+function finish(state: PhaseState, cancellation?: CancellationToken): PhaseRun {
   const complete = cancelledAt("complete", cancellation);
   if (complete) return complete;
   return Object.freeze({
     cancelled: false,
-    diagnostics: Object.freeze(diagnostics),
-    analysis: Object.freeze(analysis),
-  });
-}
-
-interface MutableAnalysis extends LanguageAnalysis {
-  environment?: NormalizedEnvironment;
-  program?: NonNullable<LanguageAnalysis["program"]>;
-  sourceMap?: NonNullable<LanguageAnalysis["sourceMap"]>;
-}
-
-function lowerWhenAvailable(
-  analysis: MutableAnalysis,
-  diagnostics: LanguageServiceDiagnostic[],
-  document: DocumentSnapshot,
-  environment: EnvironmentSnapshot,
-): void {
-  if (!environment.description.ok || analysis.syntax.diagnostics.length > 0) return;
-  analysis.environment = environment.description.environment;
-  const lowered = lowerKaladaV1Expression(analysis.syntax, {
-    references: referenceBindings(environment.description.environment),
-  });
-  if (!lowered.ok) {
-    diagnostics.push(...lowered.diagnostics.map((cause) => syntaxDiagnostic(cause, document)));
-    return;
-  }
-  analysis.program = lowered.program;
-  analysis.sourceMap = lowered.sourceMap;
-}
-
-function environmentDiagnostics(environment: EnvironmentSnapshot): LanguageServiceDiagnostic[] {
-  return environment.description.ok ? [] : [...environment.description.diagnostics];
-}
-
-function referenceBindings(
-  environment: NormalizedEnvironment,
-): Record<string, KaladaReferenceBinding<string>> {
-  const references: Record<string, KaladaReferenceBinding<string>> = Object.create(null);
-  for (const binding of environment.bindings) {
-    references[binding.name] = { reference: binding.id, type: binding.semanticType };
-  }
-  return references;
-}
-
-function syntaxDiagnostic(
-  cause: KaladaSyntaxDiagnostic,
-  document: DocumentSnapshot,
-): LanguageServiceDiagnostic {
-  return Object.freeze({
-    code: cause.code,
-    phase: cause.phase === "lower" ? "lower" : "parse",
-    message: cause.message,
-    source: Object.freeze({
-      uri: document.uri,
-      range: Object.freeze({
-        start: document.lineIndex.positionAt(cause.range.start),
-        end: document.lineIndex.positionAt(cause.range.end),
-      }),
-    }),
-    cause,
+    diagnostics: Object.freeze(state.diagnostics),
+    analysis: Object.freeze(state.analysis),
   });
 }
 
 function cancelledAt(
   checkpoint: AnalysisCheckpoint,
   cancellation?: CancellationToken,
-): Extract<PhaseRun, { cancelled: true }> | null {
+): Cancellation | null {
   return cancellation?.isCancellationRequested()
     ? Object.freeze({ cancelled: true, checkpoint })
     : null;

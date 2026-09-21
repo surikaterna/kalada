@@ -97,7 +97,17 @@ describe("analysis and diagnostics", () => {
   });
 
   it("cancels at every deterministic analysis checkpoint without diagnostics or mutation", () => {
-    const checkpoints = ["captured", "environment", "parsed", "lowered", "complete"] as const;
+    const checkpoints = [
+      "captured",
+      "environment",
+      "before-parse",
+      "after-parse",
+      "before-compile",
+      "after-compile",
+      "before-link",
+      "after-link",
+      "complete",
+    ] as const;
     for (const [target, checkpoint] of checkpoints.entries()) {
       const service = withDocument("price + 1");
       const before = service.getDocument("doc");

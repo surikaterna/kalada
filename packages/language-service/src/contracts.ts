@@ -55,7 +55,16 @@ export interface WorkspaceSnapshot {
   readonly documents: readonly DocumentIdentity[];
 }
 
-export type AnalysisCheckpoint = "captured" | "environment" | "parsed" | "lowered" | "complete";
+export type AnalysisCheckpoint =
+  | "captured"
+  | "environment"
+  | "before-parse"
+  | "after-parse"
+  | "before-compile"
+  | "after-compile"
+  | "before-link"
+  | "after-link"
+  | "complete";
 
 export type FormatCheckpoint = "captured" | "formatted" | "complete";
 export type LanguageServiceCheckpoint = AnalysisCheckpoint | FormatCheckpoint;
@@ -78,12 +87,10 @@ export interface CancelledResult extends SnapshotIdentity {
   readonly status: ResultStatus;
 }
 
-export interface LanguageServiceDiagnostic extends HostDiagnostic {
-  readonly phase: "environment" | "parse" | "lower" | "compile" | "link";
-}
+export type LanguageServiceDiagnostic = HostDiagnostic;
 
 export interface LanguageAnalysis<R extends JsonValue = string> {
-  readonly syntax: KaladaParseResult;
+  readonly syntax?: KaladaParseResult;
   readonly environment?: NormalizedEnvironment;
   readonly program?: KaladaV1Program<R>;
   readonly sourceMap?: readonly KaladaSourceMapEntry[];

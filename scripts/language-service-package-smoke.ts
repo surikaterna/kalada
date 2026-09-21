@@ -87,7 +87,6 @@ function assertHeadless(text: string, source: string): void {
     /\b(?:fetch|XMLHttpRequest|WebSocket)\s*\(/u,
     /\beval\s*\(/u,
     /\bFunction\s*\(/u,
-    /\.evaluate\s*\(/u,
   ];
   for (const pattern of forbidden) {
     if (pattern.test(text)) throw new Error(`${source} contains forbidden hook ${pattern.source}`);
@@ -96,8 +95,25 @@ function assertHeadless(text: string, source: string): void {
 
 function assertRuntime(archive: string): void {
   for (const file of ["dist/index.js", "dist/index.cjs"]) {
-    assertHeadless(run(["tar", "-xOf", archive, `package/${file}`], root), file);
+    const text = run(["tar", "-xOf", archive, `package/${file}`], root);
+    assertHeadless(text, file);
+    if (evaluationHookCount(text) !== 0) {
+      throw new Error(`${file} invokes an evaluator`);
+    }
   }
+}
+
+function assertBrowserEvaluationBoundary(text: string): void {
+  const expected = ["core.evaluate(resolve, inputs)", "core.evaluateWithClock(resolve, clock)"];
+  const hostBind = "compiled.coreCompilation.evaluate((reference)";
+  if (evaluationHookCount(text) !== 3 || !expected.every((hook) => text.includes(hook))) {
+    throw new Error("Browser bundle evaluation boundary drifted");
+  }
+  if (!text.includes(hostBind)) throw new Error("Browser bundle is missing the host bind boundary");
+}
+
+function evaluationHookCount(text: string): number {
+  return text.match(/\.evaluate(?:WithClock)?\s*\(/gu)?.length ?? 0;
 }
 
 function runTypes(directory: string): void {
@@ -123,7 +139,9 @@ function runTypes(directory: string): void {
 
 async function runBrowser(directory: string): Promise<void> {
   run(["bun", "build", "browser.mjs", "--target=browser", "--outfile=browser.js"], directory);
-  assertHeadless(await readFile(join(directory, "browser.js"), "utf8"), "browser bundle");
+  const bundle = await readFile(join(directory, "browser.js"), "utf8");
+  assertHeadless(bundle, "browser bundle");
+  assertBrowserEvaluationBoundary(bundle);
   run(["node", "browser-runner.cjs"], directory);
 }
 
