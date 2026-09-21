@@ -78,9 +78,7 @@ function lowerWhenAvailable(
 }
 
 function environmentDiagnostics(environment: EnvironmentSnapshot): LanguageServiceDiagnostic[] {
-  return environment.description.ok
-    ? []
-    : [...(environment.description.diagnostics as readonly LanguageServiceDiagnostic[])];
+  return environment.description.ok ? [] : [...environment.description.diagnostics];
 }
 
 function referenceBindings(

@@ -43,11 +43,14 @@ function positionAt(offset: number, length: number, bounds: LineBounds): Utf16Po
   let high = bounds.starts.length - 1;
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    if ((bounds.starts[middle] as number) <= offset) low = middle;
+    const start = bounds.starts[middle];
+    if (start === undefined) invalidRange();
+    if (start <= offset) low = middle;
     else high = middle - 1;
   }
-  const start = bounds.starts[low] as number;
-  const end = bounds.ends[low] as number;
+  const start = bounds.starts[low];
+  const end = bounds.ends[low];
+  if (start === undefined || end === undefined) invalidRange();
   return Object.freeze({ line: low, character: Math.min(offset, end) - start });
 }
 

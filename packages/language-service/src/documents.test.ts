@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createLanguageService, LanguageServiceError } from "./index.js";
+import {
+  createLanguageService,
+  LanguageServiceError,
+  type LanguageServiceErrorCode,
+} from "./index.js";
 import { validEnvironment } from "./test-support.js";
 
 const environment = () => ({ generation: 0, description: validEnvironment() });
@@ -31,6 +35,23 @@ describe("versioned documents", () => {
     expect(() =>
       service.openDocument({ uri: "unsafe", version: Number.MAX_SAFE_INTEGER + 1, text: "" }),
     ).toThrowError(error("INVALID_VERSION"));
+  });
+
+  it("rejects a stale reentrant open after reading its text exactly once", () => {
+    const service = createLanguageService(environment());
+    let reads = 0;
+    const outer = {
+      uri: "reentrant-open",
+      version: 1,
+      get text() {
+        reads += 1;
+        service.openDocument({ uri: "reentrant-open", version: 2, text: "nested" });
+        return "outer";
+      },
+    };
+    expect(() => service.openDocument(outer)).toThrowError(error("DUPLICATE_DOCUMENT"));
+    expect(reads).toBe(1);
+    expect(service.getDocument("reentrant-open")).toMatchObject({ version: 2, text: "nested" });
   });
 
   it("validates batched edits against the old snapshot and commits atomically", () => {
@@ -72,6 +93,48 @@ describe("versioned documents", () => {
     expect(updated.lineIndex.offsetAt({ line: 1, character: 0 })).toBe(5);
   });
 
+  it("rejects stale reentrant full and ranged edits without regressing the newer snapshot", () => {
+    const service = createLanguageService(environment());
+    service.openDocument({ uri: "reentrant-update", version: 1, text: "abc" });
+    let textReads = 0;
+    const fullEdit = {
+      range: range(0, 0, 0, 3),
+      get text() {
+        textReads += 1;
+        service.updateDocument({
+          uri: "reentrant-update",
+          version: 3,
+          edits: [{ range: range(0, 0, 0, 3), text: "nested" }],
+        });
+        return "outer";
+      },
+    };
+    expect(() =>
+      service.updateDocument({ uri: "reentrant-update", version: 2, edits: [fullEdit] }),
+    ).toThrowError(error("VERSION_NOT_MONOTONIC"));
+    expect(textReads).toBe(1);
+    expect(service.getDocument("reentrant-update")).toMatchObject({ version: 3, text: "nested" });
+
+    let rangeReads = 0;
+    const rangedEdit = {
+      get range() {
+        rangeReads += 1;
+        service.updateDocument({
+          uri: "reentrant-update",
+          version: 5,
+          edits: [{ range: range(0, 0, 0, 1), text: "N" }],
+        });
+        return range(0, 1, 0, 2);
+      },
+      text: "outer",
+    };
+    expect(() =>
+      service.updateDocument({ uri: "reentrant-update", version: 4, edits: [rangedEdit] }),
+    ).toThrowError(error("VERSION_NOT_MONOTONIC"));
+    expect(rangeReads).toBe(1);
+    expect(service.getDocument("reentrant-update")).toMatchObject({ version: 5, text: "Nested" });
+  });
+
   it("keeps documents and workspace identities isolated and immutable", () => {
     const service = createLanguageService(environment());
     service.openDocument({ uri: "z", version: 1, text: "1" });
@@ -88,6 +151,32 @@ describe("versioned documents", () => {
     expect(service.getDocument("a")?.version).toBe(7);
   });
 
+  it("sorts workspace URIs by code unit regardless of en-US or sv-SE collation", () => {
+    expect(["ä", "z"].sort(new Intl.Collator("en-US").compare)).toEqual(["ä", "z"]);
+    expect(["ä", "z"].sort(new Intl.Collator("sv-SE").compare)).toEqual(["z", "ä"]);
+    const original = String.prototype.localeCompare;
+    try {
+      for (const locale of ["en-US", "sv-SE"]) {
+        const collator = new Intl.Collator(locale);
+        Object.defineProperty(String.prototype, "localeCompare", {
+          configurable: true,
+          value(this: string, other: string) {
+            return collator.compare(this, other);
+          },
+        });
+        const service = createLanguageService(environment());
+        service.openDocument({ uri: "ä", version: 1, text: "" });
+        service.openDocument({ uri: "z", version: 1, text: "" });
+        expect(service.getWorkspaceSnapshot().documents.map(({ uri }) => uri)).toEqual(["z", "ä"]);
+      }
+    } finally {
+      Object.defineProperty(String.prototype, "localeCompare", {
+        configurable: true,
+        value: original,
+      });
+    }
+  });
+
   it("checks monotonic environment generations", () => {
     const service = createLanguageService(environment());
     const before = service.getEnvironment();
@@ -99,6 +188,37 @@ describe("versioned documents", () => {
       service.updateEnvironment({ generation: 1, description: validEnvironment() }).generation,
     ).toBe(1);
   });
+
+  it("snapshots constructor fields once and rejects a stale reentrant environment update", () => {
+    const description = validEnvironment();
+    let generationReads = 0;
+    let descriptionReads = 0;
+    const service = createLanguageService({
+      get generation() {
+        generationReads += 1;
+        return 0;
+      },
+      get description() {
+        descriptionReads += 1;
+        return description;
+      },
+    });
+    expect([generationReads, descriptionReads]).toEqual([1, 1]);
+    let updateDescriptionReads = 0;
+    const outer = {
+      generation: 2,
+      get description() {
+        updateDescriptionReads += 1;
+        service.updateEnvironment({ generation: 3, description });
+        return description;
+      },
+    };
+    expect(() => service.updateEnvironment(outer)).toThrowError(
+      error("ENVIRONMENT_GENERATION_NOT_MONOTONIC"),
+    );
+    expect(updateDescriptionReads).toBe(1);
+    expect(service.getEnvironment()).toMatchObject({ generation: 3, description });
+  });
 });
 
 function range(startLine: number, start: number, endLine: number, end: number) {
@@ -108,6 +228,6 @@ function range(startLine: number, start: number, endLine: number, end: number) {
   };
 }
 
-function error(code: string): LanguageServiceError {
-  return new LanguageServiceError(code as never);
+function error(code: LanguageServiceErrorCode): LanguageServiceError {
+  return new LanguageServiceError(code);
 }

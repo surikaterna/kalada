@@ -3,6 +3,7 @@ import { runAnalysisPhases } from "./analysis.js";
 import type {
   AnalysisOutcome,
   CancellationToken,
+  CancelledResult,
   DiagnosticsOutcome,
   DocumentOpen,
   DocumentSnapshot,
@@ -16,6 +17,7 @@ import type {
   LanguageServiceDiagnostic,
   LanguageServiceOperation,
   RequestOptions,
+  ResultStatus,
   SnapshotIdentity,
   WorkspaceSnapshot,
 } from "./contracts.js";
@@ -31,8 +33,7 @@ class LanguageServiceInstance implements LanguageService {
   private environment: EnvironmentSnapshot;
 
   constructor(initial: EnvironmentUpdate) {
-    validVersion(initial.generation);
-    this.environment = freezeEnvironment(initial);
+    this.environment = snapshotEnvironment(initial);
   }
 
   openDocument(input: DocumentOpen): DocumentSnapshot {
@@ -52,12 +53,10 @@ class LanguageServiceInstance implements LanguageService {
   }
 
   updateEnvironment(input: EnvironmentUpdate): EnvironmentSnapshot {
-    validVersion(input.generation);
-    if (input.generation <= this.environment.generation) {
-      throw new LanguageServiceError("ENVIRONMENT_GENERATION_NOT_MONOTONIC");
-    }
-    this.environment = freezeEnvironment(input);
-    return this.environment;
+    const snapshot = snapshotEnvironment(input);
+    const expected = this.environment;
+    this.assertEnvironmentGeneration(snapshot.generation);
+    return this.commitEnvironment(snapshot, expected);
   }
 
   getEnvironment(): EnvironmentSnapshot {
@@ -67,7 +66,7 @@ class LanguageServiceInstance implements LanguageService {
   getWorkspaceSnapshot(): WorkspaceSnapshot {
     const documents = [...this.store.documents.values()]
       .map(({ uri, version }) => Object.freeze({ uri, version }))
-      .sort((left, right) => left.uri.localeCompare(right.uri));
+      .sort(compareDocumentIdentity);
     return Object.freeze({
       environmentGeneration: this.environment.generation,
       documents: Object.freeze(documents),
@@ -75,11 +74,11 @@ class LanguageServiceInstance implements LanguageService {
   }
 
   analyze(uri: string, options?: RequestOptions): AnalysisOutcome {
-    return this.runAnalysis("analyze", uri, options) as AnalysisOutcome;
+    return this.runAnalysis("analyze", uri, options);
   }
 
   diagnostics(uri: string, options?: RequestOptions): DiagnosticsOutcome {
-    return this.runAnalysis("diagnostics", uri, options) as DiagnosticsOutcome;
+    return this.runAnalysis("diagnostics", uri, options);
   }
 
   format(uri: string, options?: RequestOptions): FormatOutcome {
@@ -111,6 +110,12 @@ class LanguageServiceInstance implements LanguageService {
     );
   }
 
+  private runAnalysis(operation: "analyze", uri: string, options?: RequestOptions): AnalysisOutcome;
+  private runAnalysis(
+    operation: "diagnostics",
+    uri: string,
+    options?: RequestOptions,
+  ): DiagnosticsOutcome;
   private runAnalysis(
     operation: "analyze" | "diagnostics",
     uri: string,
@@ -119,7 +124,7 @@ class LanguageServiceInstance implements LanguageService {
     const captured = this.capture(uri);
     const run = runAnalysisPhases(captured.document, captured.environment, options?.cancellation);
     if (run.cancelled) return this.cancelled(operation, captured.identity, run.checkpoint);
-    const base = { ...captured.identity, status: this.status(captured.identity) } as const;
+    const base = Object.freeze({ ...captured.identity, status: this.status(captured.identity) });
     if (operation === "diagnostics") {
       return Object.freeze({ kind: "diagnostics", ...base, diagnostics: run.diagnostics });
     }
@@ -146,9 +151,9 @@ class LanguageServiceInstance implements LanguageService {
     operation: LanguageServiceOperation,
     identity: SnapshotIdentity,
     checkpoint: LanguageServiceCheckpoint,
-  ) {
+  ): CancelledResult {
     return Object.freeze({
-      kind: "cancelled" as const,
+      kind: "cancelled",
       operation,
       checkpoint,
       ...identity,
@@ -160,7 +165,7 @@ class LanguageServiceInstance implements LanguageService {
     checkpoint: FormatCheckpoint,
     identity: SnapshotIdentity,
     cancellation?: CancellationToken,
-  ) {
+  ): CancelledResult | null {
     return cancellation?.isCancellationRequested()
       ? this.cancelled("format", identity, checkpoint)
       : null;
@@ -187,13 +192,51 @@ class LanguageServiceInstance implements LanguageService {
     });
   }
 
-  private status(identity: SnapshotIdentity) {
-    return this.isCurrent(identity) ? ("current" as const) : ("stale" as const);
+  private status(identity: SnapshotIdentity): ResultStatus {
+    return this.isCurrent(identity) ? "current" : "stale";
+  }
+
+  private assertEnvironmentGeneration(generation: number): void {
+    if (generation <= this.environment.generation) {
+      throw new LanguageServiceError("ENVIRONMENT_GENERATION_NOT_MONOTONIC");
+    }
+  }
+
+  private commitEnvironment(
+    snapshot: EnvironmentSnapshot,
+    expected: EnvironmentSnapshot,
+  ): EnvironmentSnapshot {
+    if (this.environment !== expected) {
+      throw new LanguageServiceError("ENVIRONMENT_GENERATION_NOT_MONOTONIC");
+    }
+    this.assertEnvironmentGeneration(snapshot.generation);
+    this.environment = snapshot;
+    return snapshot;
   }
 }
 
-function freezeEnvironment(input: EnvironmentUpdate): EnvironmentSnapshot {
-  return Object.freeze({ generation: input.generation, description: input.description });
+function snapshotEnvironment(input: EnvironmentUpdate): EnvironmentSnapshot {
+  try {
+    const generation = input.generation;
+    const description = input.description;
+    validVersion(generation);
+    if (typeof description !== "object" || description === null) {
+      throw new TypeError("Environment description must be an object");
+    }
+    return Object.freeze({ generation, description });
+  } catch (error) {
+    if (error instanceof LanguageServiceError || error instanceof TypeError) throw error;
+    throw new TypeError("Environment input could not be read");
+  }
+}
+
+function compareDocumentIdentity(
+  left: Readonly<{ uri: string }>,
+  right: Readonly<{ uri: string }>,
+): number {
+  if (left.uri < right.uri) return -1;
+  if (left.uri > right.uri) return 1;
+  return 0;
 }
 
 function sameDocument(expected: readonly { uri: string; version: number }[]) {
