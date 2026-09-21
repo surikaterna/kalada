@@ -12,7 +12,8 @@ only a future provider adapter with explicit trusted provenance may interpret it
 
 Editor shape is normalized into an ordered `kalada-editor-graph-v1` node table. Roots, definitions,
 properties, tuple items, union variants, paths, unresolved references, unknown constructs, and cycle
-edges retain input order. Graph construction and traversal are bounded. Node IDs such as `n0` are
+edges retain input order. Graph construction, roots, definitions, reference resolution, and traversal
+are bounded, with limit evidence retained in the graph. Node IDs such as `n0` are
 deterministic traversal identities scoped only to that normalized document (`nodeIdScope` is
 `document-local`); they are not hashes, cache keys, or cross-document fingerprints.
 
@@ -66,3 +67,5 @@ environment explicitly non-cacheable; this package emits no link fingerprint.
 All failures use a frozen `phase: "environment"` diagnostic with a stable code and fixed message.
 Diagnostics may include a copied binding path and allow-listed provenance strings, but never include
 input values, callback/provider objects, exception messages, stacks, source text, or secrets.
+The public `HostDiagnostic` envelope also reserves parse, lower, compile, link, bind, and evaluate
+phases plus UTF-16 source and immutable syntax/core cause fields for later orchestration packages.
