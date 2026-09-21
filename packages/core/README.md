@@ -4,6 +4,11 @@ This dependency-free package owns Kalada's canonical native v1 runtime contracts
 is the only supported runtime entry point; `./kalada-v1`, `./kuery-v1`, and direct `./dist/*` access
 are not exported.
 
+The package supports Node ESM, Node CommonJS, and package-aware browser bundlers on the documented
+Node/toolchain matrix. Its ESM entry is a generated wrapper around the CJS implementation so both
+loaders share runtime identity. Raw CDN URLs and unbundled native-browser/import-map loading are not
+supported; “browser” support means a bundler consumes the installed package.
+
 ```ts
 import { KaladaV1, compileKaladaV1Program } from "@kalada/core";
 

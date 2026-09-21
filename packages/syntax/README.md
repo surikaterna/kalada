@@ -1,8 +1,10 @@
 # `@kalada/syntax`
 
-Dependency-light, browser-safe source tooling for Kalada v1 expressions. The package provides a
-lossless token stream and typed CST, deterministic diagnostics and formatting, and lowering to the
-canonical `@kalada/core` program contract.
+Dependency-light source tooling for Kalada v1 expressions. The package provides a lossless token
+stream and typed CST, deterministic diagnostics and formatting, and lowering to the canonical
+`@kalada/core` program contract. It supports Node ESM, Node CommonJS, and browser use through a
+package-aware bundler. Raw CDN URLs and unbundled native-browser/import-map loading are not
+supported; “browser-safe” refers only to the bundled path.
 
 ```ts
 import {
