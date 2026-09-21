@@ -28,6 +28,17 @@ export type {
   Utf16Position,
   Utf16Range,
 } from "./contracts.js";
+export type {
+  EditorGraphAdmission,
+  EditorGraphAdmissionRequest,
+  EditorGraphEdgeCategory,
+  EditorGraphEdgeMeter,
+  EditorGraphEdgeUsage,
+} from "./editor-admission.js";
+export {
+  calculateEditorGraphAdmission,
+  createEditorGraphEdgeMeter,
+} from "./editor-admission.js";
 export { createEditorGraph, DEFAULT_EDITOR_GRAPH_LIMITS } from "./editor-graph.js";
 export { traverseEditorGraph } from "./editor-traversal.js";
 export type {

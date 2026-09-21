@@ -1,4 +1,4 @@
-import type { ManualEditorShapeDocument } from "./editor-types.js";
+import type { EditorUnknownCode, ManualEditorShapeDocument } from "./editor-types.js";
 import { readArray } from "./input-readers.js";
 import { readOwnDataRecord } from "./serializable.js";
 
@@ -17,6 +17,21 @@ export function validateEditorDocument(document: ManualEditorShapeDocument): boo
     if (!inspected.ok || !validateShape(inspected.value.shape, 0, state)) return false;
   }
   return true;
+}
+
+export function readEditorEvidence(value: unknown): readonly EditorUnknownCode[] {
+  const items = readArray(value, 8_192) ?? [];
+  const allowed = [
+    "invalid-shape",
+    "unsupported-shape",
+    "depth-limit",
+    "node-limit",
+    "edge-limit",
+    "unresolved-reference",
+  ];
+  return items.filter(
+    (item): item is EditorUnknownCode => typeof item === "string" && allowed.includes(item),
+  );
 }
 
 function validateShape(input: unknown, depth: number, state: ValidationState): boolean {

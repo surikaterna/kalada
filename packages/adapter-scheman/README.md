@@ -76,17 +76,15 @@ filesystem fetch.
 Semantic and JSON-safety analysis is iterative and bounded by `analysisLimits` (`maxNodes: 2048`,
 `maxEdges: 8192`, and `maxTypeDepth: 32` by default and as hard maxima). Reaching a limit produces
 deterministic `SCHEMAN_ADAPTER_ANALYSIS_LIMIT`/dynamic evidence rather than recursion failure.
-Editor definitions are selected within the same node bound with input root, output root, and declared
-definitions prioritized. Editor properties, tuple items, variants, intersections, references, and
-relations consume the edge bound before host validation; a deterministic prefix and explicit
-edge-limit evidence are retained. Source definition and diagnostic records are independently bounded
-to 512 records, with retained/total/truncated counts in normalized metadata and an analysis-limit
-diagnostic whenever source records are omitted. Each object's required-name collection is bounded by
-`maxEdges`; overflow retains the deterministic prefix, reserves visible edge-limit evidence, and
-records aggregate retained/total/truncated required-name counts independently from graph edges. When
-collection and structural edges overflow together, structural allocation first reserves the host root,
-one declaration edge per selected definition, and root-reference resolution so the partial input object
-and its source/presence evidence survive host normalization.
+Editor admission uses the host's public `B/D/C/V/R/Q` cost model: total budget, definitions, children,
+local-reference resolutions, roots, and emergency evidence capacity. Root/definition/resolution
+backbones are admitted before optional native content; each child/local-reference pair is atomic,
+relations follow native content, and truncation is provider evidence rather than a half-admitted ref.
+Source retention and actual categorized host charging are reported separately. Definitions remain
+deterministically prioritized, while properties, tuples, unions, intersections, records, wrappers,
+relations, cycles, and local refs retain only prefixes whose normalized targets can resolve. Source
+definition and diagnostic records are independently bounded to 512 records. Each object's required
+names are bounded by `maxEdges`, with aggregate retained/total/truncated source accounting.
 
 Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
 are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy

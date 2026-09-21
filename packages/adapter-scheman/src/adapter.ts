@@ -7,6 +7,7 @@ import {
 import type { Diagnostic, SchemaDocument, StandardSchemaV1 } from "@scheman/core";
 import { resolveAnalysisLimits } from "./analysis-limits.js";
 import { schemanEditorDocument } from "./editor-document.js";
+import { validNormalizedEditorGraph } from "./editor-invariants.js";
 import { type ResolvedProfile, resolveProfile } from "./profile.js";
 import { projectOutput } from "./semantic-mapping.js";
 import type {
@@ -33,31 +34,19 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
     document,
     Math.min(limits.maxNodes, maximumSourceRecords),
   );
-  const capabilities = configuredCapabilities(options);
   const described = describeEnvironment(
-    createManualProvider({
-      mode: options.mode,
-      providerId: options.providerId,
-      providerVersion: options.providerVersion,
-      configurationDigest: options.configurationDigest,
-      cacheable: options.cacheable,
-      capabilities,
-      bindings: [
-        {
-          id: options.binding.id,
-          name: options.binding.name,
-          path: options.binding.path,
-          semanticType: profile.value.type,
-          editorShape: editor.document,
-          ...(options.validator ? { validatorHandle } : {}),
-          ...(profile.value.codec ? { codecHandle } : {}),
-          metadata: environmentMetadata(document, profile.value, limits, editor, sourceEvidence),
-          provenance: [schemanProvenance(document)],
-        },
-      ],
-    }),
+    adapterProvider(options, document, profile.value, limits, editor, sourceEvidence),
   );
   if (!described.ok) return failure(adapterFailure("SCHEMAN_ADAPTER_INVALID_DOCUMENT"));
+  if (
+    !validNormalizedEditorGraph(
+      described.environment.editorGraph,
+      options.binding.id,
+      document.root.input.nodeId,
+    )
+  ) {
+    return failure(adapterFailure("SCHEMAN_ADAPTER_INVALID_DOCUMENT"));
+  }
   return Object.freeze({
     ok: true,
     environment: described.environment,
@@ -68,6 +57,37 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
       ...sourceLimitDiagnostics(sourceEvidence, editor),
     ]),
     ...(options.validator ? { retainedValidator: options.validator.validator } : {}),
+  });
+}
+
+function adapterProvider(
+  options: AdaptSchemanOptions,
+  document: SchemaDocument,
+  profile: ResolvedProfile,
+  limits: ReturnType<typeof resolveAnalysisLimits>,
+  editor: ReturnType<typeof schemanEditorDocument>,
+  sourceEvidence: SourceEvidence,
+) {
+  return createManualProvider({
+    mode: options.mode,
+    providerId: options.providerId,
+    providerVersion: options.providerVersion,
+    configurationDigest: options.configurationDigest,
+    cacheable: options.cacheable,
+    capabilities: configuredCapabilities(options),
+    bindings: [
+      {
+        id: options.binding.id,
+        name: options.binding.name,
+        path: options.binding.path,
+        semanticType: profile.type,
+        editorShape: editor.document,
+        ...(options.validator ? { validatorHandle } : {}),
+        ...(profile.codec ? { codecHandle } : {}),
+        metadata: environmentMetadata(document, profile, limits, editor, sourceEvidence),
+        provenance: [schemanProvenance(document)],
+      },
+    ],
   });
 }
 
@@ -124,6 +144,7 @@ function environmentMetadata(
   editor: ReturnType<typeof schemanEditorDocument>,
   sourceEvidence: SourceEvidence,
 ): SerializableValue {
+  const sourceRetention = sourceRetentionMetadata(document, editor, sourceEvidence);
   return {
     scheman: {
       formatVersion: document.formatVersion,
@@ -142,10 +163,12 @@ function environmentMetadata(
           total: Object.keys(document.nodes).length,
           truncated: editor.nodeTruncated,
         },
-        edges: { retained: editor.retainedEdges, truncated: editor.edgeTruncated },
+        edges: editor.sourceEdges,
         requiredNames: editor.requiredNames,
         definitions: sourceEvidence.definitions.summary,
         diagnostics: sourceEvidence.diagnostics.summary,
+        sourceRetention,
+        hostAdmissionPlan: editor.admission,
         truncated:
           editor.nodeTruncated ||
           editor.edgeTruncated ||
@@ -156,6 +179,24 @@ function environmentMetadata(
     },
     policy: profile,
   } as unknown as SerializableValue;
+}
+
+function sourceRetentionMetadata(
+  document: SchemaDocument,
+  editor: ReturnType<typeof schemanEditorDocument>,
+  sourceEvidence: SourceEvidence,
+) {
+  return {
+    nodes: {
+      retained: editor.retainedNodes,
+      total: Object.keys(document.nodes).length,
+      truncated: editor.nodeTruncated,
+    },
+    edges: editor.sourceEdges,
+    requiredNames: editor.requiredNames,
+    definitions: sourceEvidence.definitions.summary,
+    diagnostics: sourceEvidence.diagnostics.summary,
+  };
 }
 
 function schemanProvenance(document: SchemaDocument) {

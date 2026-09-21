@@ -99,28 +99,74 @@ describe("auditor adversarial regressions", () => {
     const document = testDocument(root, root, { leaf: { kind: "primitive", type: "string" } });
     const editor = schemanEditorDocument(document, DEFAULT_SCHEMAN_ANALYSIS_LIMITS);
     const definition = editor.document.definitions?.find((item) => item.name === "input");
-    expect(editor).toMatchObject({ edgeTruncated: true, retainedEdges: 8_192 });
+    expect(editor).toMatchObject({
+      edgeTruncated: true,
+      retainedEdges: 4_093,
+      sourceEdges: { retained: 4_093, total: 8_193, truncated: true },
+    });
     expect(definition?.shape.kind).toBe("object");
     if (definition?.shape.kind !== "object") return;
-    expect(definition.shape.properties).toHaveLength(8_192);
+    expect(definition.shape.properties).toHaveLength(4_093);
     expect(definition.shape.properties[0]?.name).toBe("property-0");
     expect(definition.shape.properties[1]?.name).toBe("property-1");
-    expect(definition.shape.properties.at(-1)?.shape).toMatchObject({
-      kind: "unknown",
-      evidenceCode: "edge-limit",
-    });
+    expect(definition.shape.properties.at(-1)?.name).toBe("property-4092");
     const result = adaptSchemanDocument({ ...base, document });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.environment.bindings[0]?.metadata).toMatchObject({
-      scheman: { bounded: { edges: { retained: 8_192, truncated: true } } },
+      scheman: { bounded: { edges: { retained: 4_093, total: 8_193, truncated: true } } },
     });
-    expect(
-      result.environment.editorGraph.nodes.some((node) =>
-        node.evidence.some((evidence) => evidence.code === "edge-limit"),
-      ),
-    ).toBe(true);
+    expect(hasGraphEvidence(result.environment.editorGraph, "edge-limit")).toBe(true);
   });
+
+  it.each([8_192, 8_193])(
+    "normalizes a resolved deterministic prefix for %i optional real-provider properties",
+    (count) => {
+      const { document, names } = optionalPropertiesDocument(count);
+      const result = adaptSchemanDocument({ ...base, document });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const graph = result.environment.editorGraph;
+      const rootReference = graph.nodes.find((node) => node.id === graph.roots[0]?.nodeId);
+      expect(rootReference).toMatchObject({ kind: "reference", status: "resolved" });
+      const root = graph.nodes.find((node) => node.sourceId === document.root.input.nodeId);
+      expect(root?.kind).toBe("object");
+      if (root?.kind !== "object") return;
+      expect(root.properties.length).toBeGreaterThan(1);
+      expect(root.properties.length).toBeLessThan(count);
+      expect(root.properties[0]).toMatchObject({
+        name: names[0],
+        presence: "optional",
+        required: false,
+      });
+      expect(root.properties.at(-1)?.name).toBe(names[root.properties.length - 1]);
+      expect(
+        graph.nodes.every(
+          (node) =>
+            node.kind !== "reference" ||
+            node.unresolved !== undefined ||
+            (node.reference !== undefined && !node.reference.startsWith("#")) ||
+            node.status === "resolved",
+        ),
+      ).toBe(true);
+      expect(graph.admission?.total).toBeLessThanOrEqual(graph.limits.maxEdges);
+      expect(claimedGraphEdges(graph)).toBe(graph.admission?.total);
+      expect(result.environment.bindings[0]?.metadata).toMatchObject({
+        scheman: {
+          bounded: {
+            sourceRetention: {
+              edges: {
+                retained: root.properties.length,
+                total: expect.any(Number),
+                truncated: true,
+              },
+            },
+          },
+        },
+      });
+      expect(hasGraphEvidence(graph, "edge-limit")).toBe(true);
+    },
+  );
 
   it("reports a deterministic required-name prefix from the real JSON provider", () => {
     const { document, names } = requiredNamesDocument(8_193);
@@ -142,16 +188,12 @@ describe("auditor adversarial regressions", () => {
     expect(result.environment.bindings[0]?.metadata).toMatchObject({
       scheman: {
         bounded: {
-          requiredNames: { retained: 16_384, total: 16_386, truncated: true },
+          requiredNames: { retained: 8_192, total: 16_386, truncated: true },
           truncated: true,
         },
       },
     });
-    expect(
-      result.environment.editorGraph.nodes.some((node) =>
-        node.evidence.some((evidence) => evidence.code === "edge-limit"),
-      ),
-    ).toBe(true);
+    expect(hasGraphEvidence(result.environment.editorGraph, "edge-limit")).toBe(true);
     const diagnostic = result.diagnostics.find(
       (item) =>
         item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT" &&
@@ -175,11 +217,7 @@ describe("auditor adversarial regressions", () => {
         bounded: { requiredNames: { retained: 16_384, total: 16_384, truncated: false } },
       },
     });
-    expect(
-      result.environment.editorGraph.nodes.some((node) =>
-        node.evidence.some((evidence) => evidence.code === "edge-limit"),
-      ),
-    ).toBe(false);
+    expect(hasGraphEvidence(result.environment.editorGraph, "edge-limit")).toBe(false);
     expect(result.diagnostics.some((item) => item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT")).toBe(
       false,
     );
@@ -197,8 +235,8 @@ describe("auditor adversarial regressions", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const graph = result.environment.editorGraph;
-    const expectedRetainedEdges = 8_192 - Object.keys(document.nodes).length - 2;
-    const expectedProperties = expectedRetainedEdges - 1;
+    const expectedRetainedEdges = 4_091;
+    const expectedProperties = expectedRetainedEdges;
     const expectedRequiredNames = Object.values(document.nodes).reduce(
       (total, node) => total + (node.kind === "object" ? node.required.length : 0),
       0,
@@ -224,15 +262,13 @@ describe("auditor adversarial regressions", () => {
     expect(result.environment.bindings[0]?.metadata).toMatchObject({
       scheman: {
         bounded: {
-          edges: { retained: expectedRetainedEdges, truncated: true },
+          edges: { retained: expectedRetainedEdges, total: 8_193, truncated: true },
           requiredNames: { retained: 8_192, total: expectedRequiredNames, truncated: true },
           truncated: true,
         },
       },
     });
-    expect(
-      graph.nodes.some((node) => node.evidence.some((evidence) => evidence.code === "edge-limit")),
-    ).toBe(true);
+    expect(hasGraphEvidence(graph, "edge-limit")).toBe(true);
     expect(
       result.diagnostics.some(
         (item) =>
@@ -241,6 +277,7 @@ describe("auditor adversarial regressions", () => {
       ),
     ).toBe(true);
     expect(claimedGraphEdges(graph)).toBeLessThanOrEqual(graph.limits.maxEdges);
+    expect(claimedGraphEdges(graph)).toBe(graph.admission?.total);
     expect(graph.nodes.length).toBeLessThanOrEqual(graph.limits.maxNodes);
   });
 
@@ -503,11 +540,29 @@ function combinedLimitDocument() {
   return { document, names };
 }
 
+function optionalPropertiesDocument(count: number) {
+  const names = Array.from({ length: count }, (_, index) => `optional-${index}`);
+  const shared = { type: "string" } as const;
+  const properties = Object.fromEntries(names.map((name) => [name, shared]));
+  const { document } = ingestSchemaDocument(
+    { type: "object", properties, additionalProperties: false },
+    { provider: jsonSchemaProvider() },
+  );
+  return { document, names };
+}
+
 function claimedGraphEdges(graph: EditorGraph): number {
   return (
     graph.roots.length +
     graph.definitions.length +
     graph.nodes.reduce((total, node) => total + nodeClaimedEdges(node), 0)
+  );
+}
+
+function hasGraphEvidence(graph: EditorGraph, code: "edge-limit" | "node-limit"): boolean {
+  return (
+    graph.evidence.some((item) => item.code === code) ||
+    graph.nodes.some((node) => node.evidence.some((item) => item.code === code))
   );
 }
 

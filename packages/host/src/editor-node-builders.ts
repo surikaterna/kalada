@@ -1,4 +1,5 @@
 import type {
+  EditorData,
   EditorEdge,
   EditorNode,
   EditorPropertyEdge,
@@ -23,13 +24,12 @@ export function withNodeEvidence(
   if (!relations) return unknownNode(node.id, path, "invalid-shape");
   const annotations = optionalData(record.annotations);
   const constraints = optionalData(record.constraints);
-  if (annotations === null || constraints === null)
-    return unknownNode(node.id, path, "invalid-shape");
+  if (!annotations.ok || !constraints.ok) return unknownNode(node.id, path, "invalid-shape");
   return {
     ...node,
     ...(validText(record.sourceId) ? { sourceId: record.sourceId } : {}),
-    ...(annotations === undefined ? {} : { annotations }),
-    ...(constraints === undefined ? {} : { constraints }),
+    ...(annotations.value === undefined ? {} : { annotations: annotations.value }),
+    ...(constraints.value === undefined ? {} : { constraints: constraints.value }),
     relations: Object.freeze(relations),
   } as EditorNode;
 }
@@ -194,14 +194,14 @@ export function unionNode(
     variants.push(variant);
   }
   const discriminator = optionalData(record.discriminator);
-  if (discriminator === null) return unknownNode(id, path, "invalid-shape");
+  if (!discriminator.ok) return unknownNode(id, path, "invalid-shape");
   return {
     id,
     path,
     kind: "union",
     variants: Object.freeze(variants),
     ...(validText(record.semantics) ? { semantics: record.semantics } : {}),
-    ...(discriminator === undefined ? {} : { discriminator }),
+    ...(discriminator.value === undefined ? {} : { discriminator: discriminator.value }),
     ...available(),
   };
 }
@@ -287,10 +287,14 @@ function optionalChild(
   return value === undefined ? undefined : context.child(value, freezePath(path));
 }
 
-function optionalData(value: unknown) {
-  if (value === undefined) return undefined;
+function optionalData(
+  value: unknown,
+): Readonly<{ ok: true; value?: EditorData }> | Readonly<{ ok: false }> {
+  if (value === undefined) return Object.freeze({ ok: true });
   const cloned = cloneSerializableData(value);
-  return cloned.ok ? cloned.value : null;
+  return cloned.ok
+    ? Object.freeze({ ok: true, value: cloned.value })
+    : Object.freeze({ ok: false });
 }
 
 function stringList(value: unknown): string[] | null {

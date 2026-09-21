@@ -1,5 +1,11 @@
+import {
+  createEditorGraphEdgeMeter,
+  type EditorGraphEdgeCategory,
+  type EditorGraphEdgeMeter,
+} from "./editor-admission.js";
 import { markReferenceCycles } from "./editor-cycle.js";
 import { compositeEvidenceNode, evidenceNode } from "./editor-evidence-builders.js";
+import { readEditorEvidence } from "./editor-input-validation.js";
 import {
   arrayNode,
   declaredUnknownNode,
@@ -40,7 +46,7 @@ interface GraphState {
   readonly active: WeakMap<object, string>;
   readonly references: { index: number; bindingId: string }[];
   readonly evidence: EditorUnknownEvidence[];
-  edges: number;
+  readonly meter: EditorGraphEdgeMeter;
   limitNodeIndex?: number;
 }
 
@@ -83,6 +89,7 @@ function buildGraph(inputs: readonly EditorGraphInput[], limits: EditorGraphLimi
     nodes: Object.freeze(nodes),
     definitions: Object.freeze(definitions),
     evidence: Object.freeze(state.evidence),
+    admission: state.meter.snapshot(),
   });
 }
 
@@ -101,6 +108,7 @@ function invalidGraph(
     nodes: Object.freeze([node]),
     definitions: Object.freeze([]),
     evidence: evidence(code, path),
+    admission: createEditorGraphEdgeMeter(limits.maxEdges).snapshot(),
   });
 }
 
@@ -111,7 +119,7 @@ function createState(limits: EditorGraphLimits): GraphState {
     active: new WeakMap(),
     references: [],
     evidence: [],
-    edges: 0,
+    meter: createEditorGraphEdgeMeter(limits.maxEdges),
   };
 }
 
@@ -123,7 +131,7 @@ function addDocument(
   targets: Map<string, Map<string, string>>,
 ): void {
   const path = freezePath(input.path);
-  if (!claimEdge(path, state)) return;
+  if (!claimEdge("root", path, state)) return;
   const root = addNode(input.document.root, path, 0, input.bindingId, state);
   roots.push(Object.freeze({ ...root, bindingId: input.bindingId }));
   const bindingTargets = new Map<string, string>();
@@ -145,6 +153,7 @@ function addDocument(
     addDefinition(input, inspected, state, definitions, bindingTargets);
   }
   if (sourceDefinitions.truncated) recordEvidence("edge-limit", path, state);
+  for (const code of input.document.evidence ?? []) recordEvidence(code, path, state);
 }
 
 function addDefinition(
@@ -155,7 +164,7 @@ function addDefinition(
   targets: Map<string, string>,
 ): void {
   const path = freezePath([...input.path, "$defs", definition.name]);
-  if (!claimEdge(path, state)) return;
+  if (!claimEdge("definition", path, state)) return;
   const edge = addNode(definition.shape, path, 0, input.bindingId, state);
   const item = Object.freeze({
     bindingId: input.bindingId,
@@ -269,7 +278,7 @@ function childEdge(
   bindingId: string,
   state: GraphState,
 ): EditorEdge | null {
-  if (!claimEdge(path, state)) return null;
+  if (!claimEdge("child", path, state)) return null;
   return addNode(shape, path, depth + 1, bindingId, state);
 }
 
@@ -304,7 +313,7 @@ function resolveReferences(state: GraphState, targets: Map<string, Map<string, s
     if (node?.kind !== "reference") continue;
     const target = targets.get(reference.bindingId)?.get(node.definition);
     if (!target) continue;
-    if (!claimEdge(node.path, state)) {
+    if (!claimEdge("resolution", node.path, state)) {
       state.nodes[reference.index] = {
         ...node,
         evidence: evidence("edge-limit", node.path),
@@ -325,12 +334,11 @@ function edge(nodeId: string, path: HostPath, cycle: boolean): EditorEdge {
   return Object.freeze({ nodeId, path, cycle });
 }
 
-function claimEdge(path: HostPath, state: GraphState): boolean {
-  if (state.edges >= state.limits.maxEdges) {
+function claimEdge(category: EditorGraphEdgeCategory, path: HostPath, state: GraphState): boolean {
+  if (!state.meter.claim(category)) {
     recordEvidence("edge-limit", path, state);
     return false;
   }
-  state.edges += 1;
   return true;
 }
 
@@ -348,7 +356,7 @@ function readGraphInput(input: unknown): EditorGraphInput | null {
   const inspected = readOwnDataRecord(input, 4);
   if (!inspected.ok || typeof inspected.value.bindingId !== "string") return null;
   const path = readArray(inspected.value.path, 256);
-  const document = readOwnDataRecord(inspected.value.document, 3);
+  const document = readOwnDataRecord(inspected.value.document, 4);
   if (!path || !document.ok || document.value.root === undefined) return null;
   if (!path.every((part) => typeof part === "string" || typeof part === "number")) return null;
   return {
@@ -357,6 +365,7 @@ function readGraphInput(input: unknown): EditorGraphInput | null {
     document: {
       root: document.value.root as never,
       definitions: document.value.definitions as never,
+      evidence: readEditorEvidence(document.value.evidence),
     },
   };
 }

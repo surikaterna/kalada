@@ -169,6 +169,7 @@ export interface ManualEditorDefinition {
 export interface ManualEditorShapeDocument {
   readonly root: EditorShape;
   readonly definitions?: readonly ManualEditorDefinition[];
+  readonly evidence?: readonly EditorUnknownCode[];
 }
 
 export interface EditorGraphLimits {
@@ -335,6 +336,7 @@ export interface EditorGraph {
   readonly nodes: readonly EditorNode[];
   readonly definitions: readonly EditorGraphDefinition[];
   readonly evidence: readonly EditorUnknownEvidence[];
+  readonly admission?: import("./editor-admission.js").EditorGraphEdgeUsage;
 }
 
 export interface EditorTraversalOptions {

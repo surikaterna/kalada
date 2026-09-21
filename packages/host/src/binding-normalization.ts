@@ -9,7 +9,11 @@ import type {
 } from "./contracts.js";
 import { environmentDiagnostic } from "./diagnostics.js";
 import { validateEditorDocument } from "./editor-input-validation.js";
-import type { EditorGraphInput, ManualEditorShapeDocument } from "./editor-types.js";
+import type {
+  EditorGraphInput,
+  EditorUnknownCode,
+  ManualEditorShapeDocument,
+} from "./editor-types.js";
 import { readArray, readStringArray, validName } from "./input-readers.js";
 import { cloneSemanticType } from "./semantic-type.js";
 import { cloneSerializableData, readOwnDataRecord } from "./serializable.js";
@@ -202,16 +206,38 @@ function normalizeEditorDocument(
     return null;
   }
   const definitions = normalizeDefinitions(inspected.value.definitions);
-  if (definitions === null) {
+  const evidence = normalizeEditorEvidence(inspected.value.evidence);
+  if (definitions === null || evidence === null) {
     bindingError(state, "HOST_ENVIRONMENT_INVALID_BINDING", path);
     return null;
   }
-  const document: ManualEditorShapeDocument = { root: inspected.value.root as never, definitions };
+  const document: ManualEditorShapeDocument = {
+    root: inspected.value.root as never,
+    definitions,
+    evidence,
+  };
   if (!validateEditorDocument(document)) {
     bindingError(state, "HOST_ENVIRONMENT_INVALID_BINDING", path);
     return null;
   }
   return { bindingId, path, document };
+}
+
+function normalizeEditorEvidence(input: unknown): readonly EditorUnknownCode[] | null {
+  if (input === undefined) return Object.freeze([]);
+  const items = readArray(input, 8_192);
+  if (!items) return null;
+  const allowed = [
+    "invalid-shape",
+    "unsupported-shape",
+    "depth-limit",
+    "node-limit",
+    "edge-limit",
+    "unresolved-reference",
+  ];
+  return items.every((item) => typeof item === "string" && allowed.includes(item))
+    ? Object.freeze(items as EditorUnknownCode[])
+    : null;
 }
 
 function normalizeDefinitions(input: unknown): ManualEditorShapeDocument["definitions"] | null {

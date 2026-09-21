@@ -1,20 +1,27 @@
-import type { EditorRelationShape, EditorShape, ManualEditorShapeDocument } from "@kalada/host";
-import type { Applicators, NodeRef, OwnedValue, SchemaDocument, SchemaNode } from "@scheman/core";
+import type {
+  EditorGraphAdmission,
+  EditorShape,
+  EditorUnknownCode,
+  ManualEditorShapeDocument,
+} from "@kalada/host";
+import type { NodeRef, SchemaDocument, SchemaNode } from "@scheman/core";
 import {
-  countEditorEdges,
+  countSourceEditorEdges,
+  EditorAdmissionBudget,
   type EditorCollectionSummary,
-  EditorEdgeBudget,
   RequiredNamesBudget,
-  requiredNamesLimitRelation,
   selectEditorNodes,
 } from "./editor-edge-budget.js";
+import { nodeEvidence } from "./editor-relations.js";
 import { eligibleLocalReference } from "./local-reference.js";
 import type { SchemanAnalysisLimits } from "./types.js";
 
 export interface SchemanEditorDocumentResult {
+  readonly admission: EditorGraphAdmission;
   readonly document: ManualEditorShapeDocument;
   readonly retainedNodes: number;
   readonly retainedEdges: number;
+  readonly sourceEdges: EditorCollectionSummary;
   readonly nodeTruncated: boolean;
   readonly edgeTruncated: boolean;
   readonly requiredNames: EditorCollectionSummary;
@@ -25,40 +32,75 @@ export function schemanEditorDocument(
   source: SchemaDocument,
   limits: SchemanAnalysisLimits,
 ): SchemanEditorDocumentResult {
-  const selection = selectEditorNodes(source, limits.maxNodes);
+  const selection = selectEditorNodes(source, limits.maxNodes, limits.maxEdges);
   const requiredNames = new RequiredNamesBudget(source, selection.ids, limits.maxEdges);
-  const sourceEdges = countEditorEdges(source, selection.ids, limits.maxEdges);
-  const edgeMaximum = requiredNames.structuralEdgeMaximum(limits.maxEdges, selection.ids.size);
-  const budget = new EditorEdgeBudget(edgeMaximum, sourceEdges);
-  const converted = new Map<string, EditorShape>();
-  for (const nodeId of selection.ids) {
-    const node = source.nodes[nodeId];
-    if (node) {
-      converted.set(
-        nodeId,
-        convertNode(nodeId, node, source, selection.ids, budget, requiredNames),
-      );
-    }
-  }
-  const definitions = [];
-  for (const nodeId in source.nodes) {
-    if (!Object.hasOwn(source.nodes, nodeId)) continue;
-    const shape = converted.get(nodeId);
-    if (shape) definitions.push(Object.freeze({ name: nodeId, shape }));
-  }
+  const sourceEdgeTotal = countSourceEditorEdges(source, selection.ids);
+  const budget = new EditorAdmissionBudget(
+    limits.maxEdges,
+    selection.ids.size,
+    selection.rootBounded,
+  );
+  const converted = convertDefinitions(source, selection.ids, budget, requiredNames);
+  const definitions = prioritizedDefinitions(source, selection.ids, converted);
   const requiredNamesSummary = requiredNames.summary();
+  const sourceEdges = Object.freeze({
+    retained: budget.admittedSourceEdges,
+    total: sourceEdgeTotal,
+    truncated: budget.admittedSourceEdges < sourceEdgeTotal,
+  });
+  const evidence: EditorUnknownCode[] = [];
+  if (sourceEdges.truncated || requiredNamesSummary.truncated) evidence.push("edge-limit" as const);
+  if (selection.truncated) evidence.push("node-limit" as const);
   return Object.freeze({
+    admission: budget.admission(),
     document: Object.freeze({
-      root: reference(source.root.input.nodeId, selection.ids),
+      root: selection.rootBounded
+        ? budget.limitNode(source.root.input.nodeId)
+        : reference(source.root.input.nodeId, selection.ids),
       definitions: Object.freeze(definitions),
+      evidence: Object.freeze(evidence),
     }),
     retainedNodes: definitions.length,
-    retainedEdges: budget.used,
+    retainedEdges: budget.admittedSourceEdges,
+    sourceEdges,
     nodeTruncated: selection.truncated,
-    edgeTruncated: budget.truncated,
+    edgeTruncated: sourceEdges.truncated,
     requiredNames: requiredNamesSummary,
-    truncated: selection.truncated || budget.truncated || requiredNamesSummary.truncated,
+    truncated: selection.truncated || sourceEdges.truncated || requiredNamesSummary.truncated,
   });
+}
+
+function convertDefinitions(
+  source: SchemaDocument,
+  selected: ReadonlySet<string>,
+  budget: EditorAdmissionBudget,
+  requiredNames: RequiredNamesBudget,
+): ReadonlyMap<string, EditorShape> {
+  const converted = new Map<string, EditorShape>();
+  for (const nodeId of selected) {
+    const node = source.nodes[nodeId];
+    if (node)
+      converted.set(nodeId, convertNode(nodeId, node, source, selected, budget, requiredNames));
+  }
+  return converted;
+}
+
+function prioritizedDefinitions(
+  source: SchemaDocument,
+  selected: ReadonlySet<string>,
+  converted: ReadonlyMap<string, EditorShape>,
+) {
+  const ids = [source.root.input.nodeId, ...Object.keys(source.nodes)];
+  const emitted = new Set<string>();
+  const definitions = [];
+  for (const nodeId of ids) {
+    if (emitted.has(nodeId) || !selected.has(nodeId)) continue;
+    const shape = converted.get(nodeId);
+    if (!shape) continue;
+    emitted.add(nodeId);
+    definitions.push(Object.freeze({ name: nodeId, shape }));
+  }
+  return definitions;
 }
 
 function convertNode(
@@ -66,72 +108,67 @@ function convertNode(
   node: SchemaNode,
   document: SchemaDocument,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
   requiredNames: RequiredNamesBudget,
 ): EditorShape {
-  const common = commonEvidence(nodeId, node, selected, budget, requiredNames);
-  if (budget.exhausted) return { ...budget.limitNode(nodeId), ...common };
-  const simple = simpleShape(node, common);
-  if (simple) return simple;
-  return convertConnectedNode(nodeId, node, common, document, selected, budget, requiredNames);
+  if (budget.exhausted) return budget.limitNode(nodeId);
+  const shape = convertStructure(nodeId, node, document, selected, budget, requiredNames);
+  const evidence = nodeEvidence(nodeId, node, selected, budget, requiredNames);
+  return { ...shape, ...evidence } as EditorShape;
 }
 
-function simpleShape(node: SchemaNode, common: CommonEvidence): EditorShape | undefined {
-  if (node.kind === "unknown") return { kind: "unknown", reason: node.reason, ...common };
-  if (node.kind === "opaque") return { kind: "opaque", reason: node.reason, ...common };
-  if (node.kind === "unconstrained") {
-    return { kind: "unconstrained", domain: node.domain, ...common };
-  }
-  if (node.kind === "never") return { kind: "never", ...common };
-  if (node.kind === "primitive") return { kind: "scalar", name: node.type, ...common };
-  if (node.kind === "literal") return { kind: "literal", value: node.value, ...common };
-  if (node.kind === "enum") return { kind: "enum", values: node.values, ...common };
-  return undefined;
-}
-
-function convertConnectedNode(
+function convertStructure(
   nodeId: string,
   node: SchemaNode,
-  common: CommonEvidence,
   document: SchemaDocument,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
   requiredNames: RequiredNamesBudget,
 ): EditorShape {
-  if (node.kind === "object") {
-    return objectShape(nodeId, node, common, selected, budget, requiredNames);
-  }
-  if (node.kind === "array") {
-    const element = edgeReference(node.items, `${nodeId}.items`, selected, budget);
-    return element
-      ? { kind: "array", element, ...common }
-      : { ...budget.limitNode(nodeId), ...common };
-  }
-  if (node.kind === "tuple") return tupleShape(nodeId, node, common, selected, budget);
-  if (node.kind === "record") return recordShape(nodeId, node, common, selected, budget);
-  if (node.kind === "union") return unionShape(nodeId, node, common, selected, budget);
+  const simple = simpleShape(node);
+  if (simple) return simple;
+  if (node.kind === "object") return objectShape(nodeId, node, selected, budget, requiredNames);
+  if (node.kind === "array") return singleChildShape("array", nodeId, node.items, selected, budget);
+  if (node.kind === "tuple") return tupleShape(nodeId, node, selected, budget);
+  if (node.kind === "record") return recordShape(nodeId, node, selected, budget);
+  if (node.kind === "union") return unionShape(nodeId, node, selected, budget);
   if (node.kind === "intersection") {
     return {
       kind: "intersection",
       operands: boundedReferences(node.operands, `${nodeId}.operand`, selected, budget),
-      ...common,
     };
   }
-  if (node.kind === "ref") {
-    return referenceShape(nodeId, node, common, document, selected, budget);
-  }
+  if (node.kind === "ref") return referenceShape(nodeId, node, document, selected, budget);
   if (node.kind === "wrapper") {
-    return wrapperShape(nodeId, node, common, selected, budget);
+    const inner = edgeReference(node.inner, `${nodeId}.inner`, selected, budget);
+    return inner
+      ? {
+          kind: "wrapper",
+          wrapper: node.wrapper,
+          inner,
+          ...(node.value === undefined ? {} : { value: node.value }),
+        }
+      : budget.limitNode(nodeId);
   }
-  return { kind: "unknown", reason: `unsupported:${nodeId}`, ...common };
+  return { kind: "unknown", reason: `unsupported:${nodeId}` };
+}
+
+function simpleShape(node: SchemaNode): EditorShape | undefined {
+  if (node.kind === "unknown") return { kind: "unknown", reason: node.reason };
+  if (node.kind === "opaque") return { kind: "opaque", reason: node.reason };
+  if (node.kind === "unconstrained") return { kind: "unconstrained", domain: node.domain };
+  if (node.kind === "never") return { kind: "never" };
+  if (node.kind === "primitive") return { kind: "scalar", name: node.type };
+  if (node.kind === "literal") return { kind: "literal", value: node.value };
+  if (node.kind === "enum") return { kind: "enum", values: node.values };
+  return undefined;
 }
 
 function objectShape(
   nodeId: string,
   node: Extract<SchemaNode, { kind: "object" }>,
-  common: CommonEvidence,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
   requiredNames: RequiredNamesBudget,
 ): EditorShape {
   const properties = [];
@@ -164,60 +201,68 @@ function objectShape(
     requiredNames: requiredNames.retain(node.required),
     unknownKeys: node.unknownKeys,
     ...(additional ? { additionalProperties: additional } : {}),
-    ...common,
   };
 }
 
 function tupleShape(
   nodeId: string,
   node: Extract<SchemaNode, { kind: "tuple" }>,
-  common: CommonEvidence,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape {
   const items = boundedReferences(node.items, `${nodeId}.item`, selected, budget);
   const rest = isEdgeLimit(items.at(-1))
     ? null
     : optionalEdgeReference(node.rest, `${nodeId}.rest`, selected, budget);
-  return { kind: "tuple", items, ...(rest ? { rest } : {}), ...common };
+  return { kind: "tuple", items, ...(rest ? { rest } : {}) };
 }
 
 function recordShape(
   nodeId: string,
   node: Extract<SchemaNode, { kind: "record" }>,
-  common: CommonEvidence,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape {
-  const key = edgeReference(node.key, `${nodeId}.key`, selected, budget);
-  const value = key ? edgeReference(node.value, `${nodeId}.value`, selected, budget) : null;
-  if (!key || !value) return { ...budget.limitNode(nodeId), ...common };
-  return { kind: "record", key, value, exhaustive: node.exhaustive, ...common };
+  if (!budget.claimChildren([node.key, node.value], selected)) return budget.limitNode(nodeId);
+  return {
+    kind: "record",
+    key: reference(node.key.nodeId, selected),
+    value: reference(node.value.nodeId, selected),
+    exhaustive: node.exhaustive,
+  };
 }
 
 function unionShape(
   nodeId: string,
   node: Extract<SchemaNode, { kind: "union" }>,
-  common: CommonEvidence,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape {
   return {
     kind: "union",
     variants: boundedReferences(node.alternatives, `${nodeId}.variant`, selected, budget),
     semantics: node.semantics,
     ...(node.discriminator === undefined ? {} : { discriminator: node.discriminator }),
-    ...common,
   };
+}
+
+function singleChildShape(
+  kind: "array",
+  nodeId: string,
+  value: NodeRef,
+  selected: ReadonlySet<string>,
+  budget: EditorAdmissionBudget,
+): EditorShape {
+  const element = edgeReference(value, `${nodeId}.items`, selected, budget);
+  return element ? { kind, element } : budget.limitNode(nodeId);
 }
 
 function referenceShape(
   nodeId: string,
   node: Extract<SchemaNode, { kind: "ref" }>,
-  common: CommonEvidence,
   document: SchemaDocument,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape {
   if (!eligibleLocalReference(nodeId, node, document)) {
     return {
@@ -225,133 +270,25 @@ function referenceShape(
       definition: `unsupported:${nodeId}`,
       reference: node.reference,
       unresolved: node.unresolved ?? "non-local-reference",
-      ...common,
     };
   }
-  if (!budget.claim()) return { ...budget.limitNode(nodeId), ...common };
-  if (!selected.has(node.target?.nodeId as string)) {
+  const target = node.target?.nodeId as string;
+  if (!selected.has(target)) {
     return {
       kind: "unknown",
       reason: `bounded-reference:${node.reference}`,
       evidenceCode: "node-limit",
-      ...common,
     };
   }
-  return {
-    kind: "reference",
-    definition: node.target?.nodeId as string,
-    reference: node.reference,
-    ...common,
-  };
-}
-
-function wrapperShape(
-  nodeId: string,
-  node: Extract<SchemaNode, { kind: "wrapper" }>,
-  common: CommonEvidence,
-  selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
-): EditorShape {
-  const inner = edgeReference(node.inner, `${nodeId}.inner`, selected, budget);
-  if (!inner) return { ...budget.limitNode(nodeId), ...common };
-  return {
-    kind: "wrapper",
-    wrapper: node.wrapper,
-    inner,
-    ...(node.value === undefined ? {} : { value: node.value }),
-    ...common,
-  };
-}
-
-interface CommonEvidence {
-  readonly sourceId: string;
-  readonly annotations?: OwnedValue;
-  readonly constraints?: OwnedValue;
-  readonly relations: readonly EditorRelationShape[];
-}
-
-function commonEvidence(
-  nodeId: string,
-  node: SchemaNode,
-  selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
-  requiredNames: RequiredNamesBudget,
-): CommonEvidence {
-  const collectionRelations = requiredNames.requiresEvidence(node)
-    ? requiredNamesLimitRelation(nodeId, budget)
-    : [];
-  return {
-    sourceId: nodeId,
-    ...(node.metadata === undefined ? {} : { annotations: node.metadata }),
-    ...(node.constraints === undefined ? {} : { constraints: node.constraints }),
-    relations: Object.freeze([
-      ...collectionRelations,
-      ...applicatorRelations(nodeId, node.applicators, selected, budget),
-    ]),
-  };
-}
-
-function applicatorRelations(
-  nodeId: string,
-  applicators: Applicators | undefined,
-  selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
-): readonly EditorRelationShape[] {
-  if (!applicators) return Object.freeze([]);
-  const output: EditorRelationShape[] = [];
-  for (const name of ["if", "then", "else", "not", "contains", "propertyNames"] as const) {
-    const target = applicators[name];
-    if (!target) continue;
-    const shape = edgeReference(target, `${nodeId}.${name}`, selected, budget);
-    if (!shape) break;
-    output.push({ name, shape });
-    if (isEdgeLimit(shape)) return Object.freeze(output);
-  }
-  if (
-    addKeyedRelations(
-      nodeId,
-      "patternProperties",
-      applicators.patternProperties,
-      output,
-      selected,
-      budget,
-    )
-  ) {
-    return Object.freeze(output);
-  }
-  addKeyedRelations(
-    nodeId,
-    "dependentSchemas",
-    applicators.dependentSchemas,
-    output,
-    selected,
-    budget,
-  );
-  return Object.freeze(output);
-}
-
-function addKeyedRelations(
-  nodeId: string,
-  name: string,
-  input: Readonly<Record<string, NodeRef>> | undefined,
-  output: EditorRelationShape[],
-  selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
-): boolean {
-  for (const [key, target] of Object.entries(input ?? {})) {
-    const shape = edgeReference(target, `${nodeId}.${name}.${key}`, selected, budget);
-    if (!shape) return true;
-    output.push({ name, key, shape });
-    if (isEdgeLimit(shape)) return true;
-  }
-  return false;
+  if (!budget.claimDefinitionReference()) return budget.limitNode(nodeId);
+  return { kind: "reference", definition: target, reference: node.reference };
 }
 
 function boundedReferences(
   values: readonly NodeRef[],
   source: string,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): readonly EditorShape[] {
   const output: EditorShape[] = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -369,7 +306,7 @@ function optionalEdgeReference(
   value: NodeRef | undefined,
   source: string,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape | null {
   return value ? edgeReference(value, source, selected, budget) : null;
 }
@@ -378,10 +315,10 @@ function edgeReference(
   value: NodeRef,
   source: string,
   selected: ReadonlySet<string>,
-  budget: EditorEdgeBudget,
+  budget: EditorAdmissionBudget,
 ): EditorShape | null {
-  if (budget.claim()) return reference(value.nodeId, selected);
-  return budget.limitEdge(source);
+  if (budget.claimChild(value, selected)) return reference(value.nodeId, selected);
+  return budget.evidenceEdge(source);
 }
 
 function isEdgeLimit(shape: EditorShape | undefined): boolean {
