@@ -26,9 +26,10 @@ export function schemanEditorDocument(
   limits: SchemanAnalysisLimits,
 ): SchemanEditorDocumentResult {
   const selection = selectEditorNodes(source, limits.maxNodes);
-  const sourceEdges = countEditorEdges(source, selection.ids, limits.maxEdges);
-  const budget = new EditorEdgeBudget(limits.maxEdges, sourceEdges);
   const requiredNames = new RequiredNamesBudget(source, selection.ids, limits.maxEdges);
+  const sourceEdges = countEditorEdges(source, selection.ids, limits.maxEdges);
+  const edgeMaximum = requiredNames.structuralEdgeMaximum(limits.maxEdges, selection.ids.size);
+  const budget = new EditorEdgeBudget(edgeMaximum, sourceEdges);
   const converted = new Map<string, EditorShape>();
   for (const nodeId of selection.ids) {
     const node = source.nodes[nodeId];

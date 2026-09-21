@@ -83,7 +83,10 @@ edge-limit evidence are retained. Source definition and diagnostic records are i
 to 512 records, with retained/total/truncated counts in normalized metadata and an analysis-limit
 diagnostic whenever source records are omitted. Each object's required-name collection is bounded by
 `maxEdges`; overflow retains the deterministic prefix, reserves visible edge-limit evidence, and
-records aggregate retained/total/truncated required-name counts independently from graph edges.
+records aggregate retained/total/truncated required-name counts independently from graph edges. When
+collection and structural edges overflow together, structural allocation first reserves the host root,
+one declaration edge per selected definition, and root-reference resolution so the partial input object
+and its source/presence evidence survive host normalization.
 
 Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
 are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy

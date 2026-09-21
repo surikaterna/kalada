@@ -46,13 +46,16 @@ export class EditorEdgeBudget {
 }
 
 export class RequiredNamesBudget {
+  readonly hasOverflow: boolean;
   readonly maximumPerObject: number;
   readonly total: number;
   retained = 0;
 
   constructor(document: SchemaDocument, selected: ReadonlySet<string>, maximum: number) {
     this.maximumPerObject = maximum;
-    this.total = selectedRequiredNames(document, selected);
+    const source = selectedRequiredNames(document, selected, maximum);
+    this.hasOverflow = source.hasOverflow;
+    this.total = source.total;
   }
 
   retain(values: readonly string[]): readonly string[] {
@@ -63,6 +66,10 @@ export class RequiredNamesBudget {
 
   requiresEvidence(node: SchemaNode): boolean {
     return node.kind === "object" && node.required.length > this.maximumPerObject;
+  }
+
+  structuralEdgeMaximum(maximum: number, definitionCount: number): number {
+    return this.hasOverflow ? Math.max(1, maximum - definitionCount - 2) : maximum;
   }
 
   summary(): EditorCollectionSummary {
@@ -148,13 +155,20 @@ function nodeEdges(
   return relations;
 }
 
-function selectedRequiredNames(document: SchemaDocument, selected: ReadonlySet<string>): number {
+function selectedRequiredNames(
+  document: SchemaDocument,
+  selected: ReadonlySet<string>,
+  maximum: number,
+) {
   let total = 0;
+  let hasOverflow = false;
   for (const nodeId of selected) {
     const node = document.nodes[nodeId];
-    if (node?.kind === "object") total += node.required.length;
+    if (node?.kind !== "object") continue;
+    total += node.required.length;
+    if (node.required.length > maximum) hasOverflow = true;
   }
-  return total;
+  return Object.freeze({ total, hasOverflow });
 }
 
 function relationEdges(node: SchemaNode): number {

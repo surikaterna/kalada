@@ -1,3 +1,4 @@
+import type { EditorGraph } from "@kalada/host";
 import {
   ingestSchemaDocument,
   jsonSchemaProvider,
@@ -182,6 +183,65 @@ describe("auditor adversarial regressions", () => {
     expect(result.diagnostics.some((item) => item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT")).toBe(
       false,
     );
+  });
+
+  it("reserves host structure for combined property and required-name overflow", () => {
+    const { document, names } = combinedLimitDocument();
+    const input = document.nodes[document.root.input.nodeId];
+    expect(input?.kind).toBe("object");
+    if (input?.kind !== "object") return;
+    expect(input.properties).toHaveLength(8_192);
+    expect(new Set(input.properties.map((property) => property.node.nodeId)).size).toBe(1);
+
+    const result = adaptSchemanDocument({ ...base, document });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const graph = result.environment.editorGraph;
+    const expectedRetainedEdges = 8_192 - Object.keys(document.nodes).length - 2;
+    const expectedProperties = expectedRetainedEdges - 1;
+    const expectedRequiredNames = Object.values(document.nodes).reduce(
+      (total, node) => total + (node.kind === "object" ? node.required.length : 0),
+      0,
+    );
+    const rootReference = graph.nodes.find((node) => node.id === graph.roots[0]?.nodeId);
+    expect(rootReference).toMatchObject({ kind: "reference", status: "resolved" });
+    const root = graph.nodes.find((node) => node.sourceId === document.root.input.nodeId);
+    expect(root?.kind).toBe("object");
+    if (root?.kind !== "object") return;
+    expect(root.sourceId).toBe(document.root.input.nodeId);
+    expect(root.properties).toHaveLength(expectedProperties);
+    expect(root.properties[0]).toMatchObject({
+      name: names[0],
+      presence: "required",
+      required: true,
+    });
+    expect(root.properties.at(-1)).toMatchObject({
+      name: names[expectedProperties - 1],
+      presence: "required",
+      required: true,
+    });
+    expect(root.requiredNames).toHaveLength(8_192);
+    expect(result.environment.bindings[0]?.metadata).toMatchObject({
+      scheman: {
+        bounded: {
+          edges: { retained: expectedRetainedEdges, truncated: true },
+          requiredNames: { retained: 8_192, total: expectedRequiredNames, truncated: true },
+          truncated: true,
+        },
+      },
+    });
+    expect(
+      graph.nodes.some((node) => node.evidence.some((evidence) => evidence.code === "edge-limit")),
+    ).toBe(true);
+    expect(
+      result.diagnostics.some(
+        (item) =>
+          item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT" &&
+          item.sourcePointer === "/nodes/*/required",
+      ),
+    ).toBe(true);
+    expect(claimedGraphEdges(graph)).toBeLessThanOrEqual(graph.limits.maxEdges);
+    expect(graph.nodes.length).toBeLessThanOrEqual(graph.limits.maxNodes);
   });
 
   it("reports bounded definition provenance independently from node selection", () => {
@@ -430,4 +490,38 @@ function requiredNamesDocument(count: number) {
     { provider: jsonSchemaProvider() },
   );
   return { document, names };
+}
+
+function combinedLimitDocument() {
+  const names = Array.from({ length: 8_193 }, (_, index) => `combined-${index}`);
+  const shared = { type: "string" } as const;
+  const properties = Object.fromEntries(names.slice(0, 8_192).map((name) => [name, shared]));
+  const { document } = ingestSchemaDocument(
+    { type: "object", properties, required: names, additionalProperties: false },
+    { provider: jsonSchemaProvider() },
+  );
+  return { document, names };
+}
+
+function claimedGraphEdges(graph: EditorGraph): number {
+  return (
+    graph.roots.length +
+    graph.definitions.length +
+    graph.nodes.reduce((total, node) => total + nodeClaimedEdges(node), 0)
+  );
+}
+
+function nodeClaimedEdges(node: EditorGraph["nodes"][number]): number {
+  const relations = node.relations?.length ?? 0;
+  if (node.kind === "object") {
+    return relations + node.properties.length + (node.additionalProperties ? 1 : 0);
+  }
+  if (node.kind === "array") return relations + 1;
+  if (node.kind === "tuple") return relations + node.items.length + (node.rest ? 1 : 0);
+  if (node.kind === "union") return relations + node.variants.length;
+  if (node.kind === "intersection") return relations + node.operands.length;
+  if (node.kind === "record") return relations + 2;
+  if (node.kind === "wrapper") return relations + 1;
+  if (node.kind === "reference" && node.target) return relations + 1;
+  return relations;
 }
