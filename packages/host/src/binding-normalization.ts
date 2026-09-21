@@ -21,6 +21,10 @@ export interface BindingState {
   readonly providerProvenance: ProvenanceEntry;
 }
 
+type MetadataNormalization =
+  | Readonly<{ ok: true; value: SerializableValue | undefined }>
+  | Readonly<{ ok: false }>;
+
 export function normalizeBindings(
   input: unknown,
   capabilities: CapabilityState,
@@ -82,14 +86,14 @@ function addValidBinding(
     return;
   }
   const metadata = normalizeMetadata(record.metadata, path, state);
-  if (metadata === null) return;
+  if (!metadata.ok) return;
   const provenance = normalizeProvenance(record.provenance, path, state);
   if (!provenance) return;
   const refs = resolveCapabilityRefs(record, capabilities, path, state);
   if (!refs) return;
   const editor = normalizeEditorDocument(record.editorShape, record.id as string, path, state);
   if (editor === null) return;
-  state.bindings.push(makeBinding(record, path, semantic.value, metadata, provenance, refs));
+  state.bindings.push(makeBinding(record, path, semantic.value, metadata.value, provenance, refs));
   if (editor) state.graphInputs.push(editor);
 }
 
@@ -116,12 +120,12 @@ function normalizeMetadata(
   input: unknown,
   path: readonly string[],
   state: BindingState,
-): SerializableValue | undefined | null {
-  if (input === undefined) return undefined;
+): MetadataNormalization {
+  if (input === undefined) return { ok: true, value: undefined };
   const cloned = cloneSerializableData(input);
-  if (cloned.ok) return cloned.value;
+  if (cloned.ok) return { ok: true, value: cloned.value };
   bindingError(state, "HOST_ENVIRONMENT_INVALID_METADATA", path);
-  return null;
+  return { ok: false };
 }
 
 function normalizeProvenance(
