@@ -1,0 +1,33 @@
+export type {
+  AnalysisCheckpoint,
+  AnalysisOutcome,
+  AnalysisResult,
+  CancellationToken,
+  CancelledResult,
+  DiagnosticsOutcome,
+  DiagnosticsResult,
+  DocumentIdentity,
+  DocumentOpen,
+  DocumentSnapshot,
+  DocumentUpdate,
+  EnvironmentSnapshot,
+  EnvironmentUpdate,
+  FormatCheckpoint,
+  FormatOutcome,
+  FormatResult,
+  LanguageAnalysis,
+  LanguageService,
+  LanguageServiceCheckpoint,
+  LanguageServiceDiagnostic,
+  LanguageServiceErrorCode,
+  LanguageServiceOperation,
+  RequestOptions,
+  ResultStatus,
+  SnapshotIdentity,
+  TextEdit,
+  Utf16LineIndex,
+  WorkspaceSnapshot,
+} from "./contracts.js";
+export { LanguageServiceError } from "./errors.js";
+export { createUtf16LineIndex } from "./line-index.js";
+export { createLanguageService } from "./service.js";

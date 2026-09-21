@@ -1,0 +1,233 @@
+import { formatKaladaV1Expression, type KaladaSyntaxDiagnostic } from "@kalada/syntax";
+import { runAnalysisPhases } from "./analysis.js";
+import type {
+  AnalysisOutcome,
+  CancellationToken,
+  DiagnosticsOutcome,
+  DocumentOpen,
+  DocumentSnapshot,
+  DocumentUpdate,
+  EnvironmentSnapshot,
+  EnvironmentUpdate,
+  FormatCheckpoint,
+  FormatOutcome,
+  LanguageService,
+  LanguageServiceCheckpoint,
+  LanguageServiceDiagnostic,
+  LanguageServiceOperation,
+  RequestOptions,
+  SnapshotIdentity,
+  WorkspaceSnapshot,
+} from "./contracts.js";
+import { DocumentStore, validVersion } from "./documents.js";
+import { LanguageServiceError } from "./errors.js";
+
+export function createLanguageService(initial: EnvironmentUpdate): LanguageService {
+  return new LanguageServiceInstance(initial);
+}
+
+class LanguageServiceInstance implements LanguageService {
+  private readonly store = new DocumentStore();
+  private environment: EnvironmentSnapshot;
+
+  constructor(initial: EnvironmentUpdate) {
+    validVersion(initial.generation);
+    this.environment = freezeEnvironment(initial);
+  }
+
+  openDocument(input: DocumentOpen): DocumentSnapshot {
+    return this.store.open(input);
+  }
+
+  updateDocument(input: DocumentUpdate): DocumentSnapshot {
+    return this.store.update(input);
+  }
+
+  closeDocument(uri: string): DocumentSnapshot {
+    return this.store.close(uri);
+  }
+
+  getDocument(uri: string): DocumentSnapshot | undefined {
+    return this.store.documents.get(uri);
+  }
+
+  updateEnvironment(input: EnvironmentUpdate): EnvironmentSnapshot {
+    validVersion(input.generation);
+    if (input.generation <= this.environment.generation) {
+      throw new LanguageServiceError("ENVIRONMENT_GENERATION_NOT_MONOTONIC");
+    }
+    this.environment = freezeEnvironment(input);
+    return this.environment;
+  }
+
+  getEnvironment(): EnvironmentSnapshot {
+    return this.environment;
+  }
+
+  getWorkspaceSnapshot(): WorkspaceSnapshot {
+    const documents = [...this.store.documents.values()]
+      .map(({ uri, version }) => Object.freeze({ uri, version }))
+      .sort((left, right) => left.uri.localeCompare(right.uri));
+    return Object.freeze({
+      environmentGeneration: this.environment.generation,
+      documents: Object.freeze(documents),
+    });
+  }
+
+  analyze(uri: string, options?: RequestOptions): AnalysisOutcome {
+    return this.runAnalysis("analyze", uri, options) as AnalysisOutcome;
+  }
+
+  diagnostics(uri: string, options?: RequestOptions): DiagnosticsOutcome {
+    return this.runAnalysis("diagnostics", uri, options) as DiagnosticsOutcome;
+  }
+
+  format(uri: string, options?: RequestOptions): FormatOutcome {
+    const captured = this.capture(uri);
+    const first = this.formatCancellation("captured", captured.identity, options?.cancellation);
+    if (first) return first;
+    const formatted = formatKaladaV1Expression(captured.document.text);
+    const second = this.formatCancellation("formatted", captured.identity, options?.cancellation);
+    if (second) return second;
+    const final = this.formatCancellation("complete", captured.identity, options?.cancellation);
+    if (final) return final;
+    return this.formatResult(captured.document, captured.identity, formatted);
+  }
+
+  isCurrent(identity: SnapshotIdentity): boolean {
+    const document = this.store.documents.get(identity.uri);
+    return (
+      document?.version === identity.version &&
+      this.environment.generation === identity.environmentGeneration
+    );
+  }
+
+  isWorkspaceCurrent(snapshot: WorkspaceSnapshot): boolean {
+    if (snapshot.environmentGeneration !== this.environment.generation) return false;
+    const current = this.getWorkspaceSnapshot().documents;
+    return (
+      current.length === snapshot.documents.length &&
+      current.every(sameDocument(snapshot.documents))
+    );
+  }
+
+  private runAnalysis(
+    operation: "analyze" | "diagnostics",
+    uri: string,
+    options?: RequestOptions,
+  ): AnalysisOutcome | DiagnosticsOutcome {
+    const captured = this.capture(uri);
+    const run = runAnalysisPhases(captured.document, captured.environment, options?.cancellation);
+    if (run.cancelled) return this.cancelled(operation, captured.identity, run.checkpoint);
+    const base = { ...captured.identity, status: this.status(captured.identity) } as const;
+    if (operation === "diagnostics") {
+      return Object.freeze({ kind: "diagnostics", ...base, diagnostics: run.diagnostics });
+    }
+    return Object.freeze({
+      kind: "analysis",
+      ...base,
+      diagnostics: run.diagnostics,
+      analysis: run.analysis,
+    });
+  }
+
+  private capture(uri: string) {
+    const document = this.store.require(uri);
+    const environment = this.environment;
+    const identity = Object.freeze({
+      uri: document.uri,
+      version: document.version,
+      environmentGeneration: environment.generation,
+    });
+    return { document, environment, identity };
+  }
+
+  private cancelled(
+    operation: LanguageServiceOperation,
+    identity: SnapshotIdentity,
+    checkpoint: LanguageServiceCheckpoint,
+  ) {
+    return Object.freeze({
+      kind: "cancelled" as const,
+      operation,
+      checkpoint,
+      ...identity,
+      status: this.status(identity),
+    });
+  }
+
+  private formatCancellation(
+    checkpoint: FormatCheckpoint,
+    identity: SnapshotIdentity,
+    cancellation?: CancellationToken,
+  ) {
+    return cancellation?.isCancellationRequested()
+      ? this.cancelled("format", identity, checkpoint)
+      : null;
+  }
+
+  private formatResult(
+    document: DocumentSnapshot,
+    identity: SnapshotIdentity,
+    formatted: ReturnType<typeof formatKaladaV1Expression>,
+  ): FormatOutcome {
+    const diagnostics = formatted.ok
+      ? []
+      : formatted.diagnostics.map((cause) => formatDiagnostic(cause, document));
+    const edit =
+      formatted.ok && formatted.text !== document.text
+        ? wholeDocumentEdit(document, formatted.text)
+        : null;
+    return Object.freeze({
+      kind: "format",
+      ...identity,
+      status: this.status(identity),
+      diagnostics: Object.freeze(diagnostics),
+      edit,
+    });
+  }
+
+  private status(identity: SnapshotIdentity) {
+    return this.isCurrent(identity) ? ("current" as const) : ("stale" as const);
+  }
+}
+
+function freezeEnvironment(input: EnvironmentUpdate): EnvironmentSnapshot {
+  return Object.freeze({ generation: input.generation, description: input.description });
+}
+
+function sameDocument(expected: readonly { uri: string; version: number }[]) {
+  return (document: { uri: string; version: number }, index: number) => {
+    const other = expected[index];
+    return document.uri === other?.uri && document.version === other.version;
+  };
+}
+
+function wholeDocumentEdit(document: DocumentSnapshot, text: string) {
+  return Object.freeze({
+    range: Object.freeze({
+      start: Object.freeze({ line: 0, character: 0 }),
+      end: document.lineIndex.positionAt(document.text.length),
+    }),
+    text,
+  });
+}
+
+function formatDiagnostic(
+  cause: KaladaSyntaxDiagnostic,
+  document: DocumentSnapshot,
+): LanguageServiceDiagnostic {
+  return Object.freeze({
+    code: cause.code,
+    phase: cause.phase === "lower" ? "lower" : "parse",
+    message: cause.message,
+    source: Object.freeze({
+      uri: document.uri,
+      range: Object.freeze({
+        start: document.lineIndex.positionAt(cause.range.start),
+        end: document.lineIndex.positionAt(cause.range.end),
+      }),
+    }),
+    cause,
+  });
+}

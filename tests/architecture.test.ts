@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const core = resolve(root, "packages/core");
 const host = resolve(root, "packages/host");
+const languageService = resolve(root, "packages/language-service");
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -19,7 +20,7 @@ describe("package boundaries", () => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort(),
-    ).toEqual(["core", "host", "projection", "syntax"]);
+    ).toEqual(["core", "host", "language-service", "projection", "syntax"]);
   });
 
   it("keeps core free of runtime dependencies", async () => {
@@ -39,6 +40,36 @@ describe("package boundaries", () => {
       expect(manifest[field], field).toBeUndefined();
     }
     expect(JSON.stringify(manifest)).not.toMatch(/@scheman\/core|zod/iu);
+  });
+
+  it("keeps language service on public Kalada dependencies", async () => {
+    const manifest = await readJson(resolve(languageService, "package.json"));
+    expect(manifest.dependencies).toEqual({
+      "@kalada/core": "^0.5.0",
+      "@kalada/host": "^0.0.0",
+      "@kalada/syntax": "^0.0.0",
+    });
+    const hostSource = await readFile(resolve(host, "src/index.ts"), "utf8");
+    expect(hostSource).not.toContain("@kalada/language-service");
+  });
+
+  it("keeps the language-service source graph headless and evaluation-free", async () => {
+    const sourceDirectory = resolve(languageService, "src");
+    const names = (await readdir(sourceDirectory)).filter((name) => name.endsWith(".ts"));
+    const production = names.filter(
+      (name) => !name.endsWith(".test.ts") && name !== "test-support.ts",
+    );
+    const source = (
+      await Promise.all(production.map((name) => readFile(resolve(sourceDirectory, name), "utf8")))
+    ).join("\n");
+    expect(source).not.toMatch(/codemirror|vscode|json-rpc|node:fs|node:net|\.evaluate\s*\(/iu);
+    const imports = [...source.matchAll(/from\s+["']([^"']+)["']/gu)].map((match) => match[1]);
+    expect(imports.filter((name) => name?.startsWith("@"))).toEqual(
+      expect.arrayContaining(["@kalada/core", "@kalada/host", "@kalada/syntax"]),
+    );
+    expect(imports.every((name) => name?.startsWith(".") || name?.startsWith("@kalada/"))).toBe(
+      true,
+    );
   });
 
   it("keeps compiler, evaluator, and profile APIs off the root entry point", async () => {
