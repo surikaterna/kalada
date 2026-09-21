@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const core = resolve(root, "packages/core");
+const host = resolve(root, "packages/host");
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -13,11 +14,12 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 describe("package boundaries", () => {
   it("creates only the intended packages", async () => {
     const entries = await readdir(resolve(root, "packages"), { withFileTypes: true });
-    expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([
-      "core",
-      "projection",
-      "syntax",
-    ]);
+    expect(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort(),
+    ).toEqual(["core", "host", "projection", "syntax"]);
   });
 
   it("keeps core free of runtime dependencies", async () => {
@@ -25,6 +27,18 @@ describe("package boundaries", () => {
     for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
       expect(manifest[field], field).toBeUndefined();
     }
+  });
+
+  it("keeps host limited to Kalada dependencies and free of schema vendors", async () => {
+    const manifest = await readJson(resolve(host, "package.json"));
+    expect(manifest.dependencies).toEqual({
+      "@kalada/core": "^0.5.0",
+      "@kalada/syntax": "^0.0.0",
+    });
+    for (const field of ["optionalDependencies", "peerDependencies"]) {
+      expect(manifest[field], field).toBeUndefined();
+    }
+    expect(JSON.stringify(manifest)).not.toMatch(/@scheman\/core|zod/iu);
   });
 
   it("keeps compiler, evaluator, and profile APIs off the root entry point", async () => {

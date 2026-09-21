@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { copyChangesetReleaseWorkspace } from "./smoke-release-workspace.js";
 
 interface PackResult {
   readonly filename: string;
@@ -29,29 +30,27 @@ function run(command: string[], cwd: string): string {
 }
 
 async function createReleasePlan(directory: string): Promise<void> {
-  await mkdir(directory, { recursive: true });
-  await mkdir(join(directory, "packages"));
-  await Promise.all([
-    cp(join(root, ".changeset"), join(directory, ".changeset"), { recursive: true }),
-    copyFile(join(root, "package.json"), join(directory, "package.json")),
-    copyFile(join(root, "bun.lock"), join(directory, "bun.lock")),
-    ...["core", "projection", "syntax"].map((name) =>
-      cp(join(root, "packages", name), join(directory, "packages", name), {
-        recursive: true,
-        filter: (path) => !path.includes("/node_modules/"),
-      }),
-    ),
-  ]);
+  await copyChangesetReleaseWorkspace(root, directory);
   run([resolve(root, "node_modules/.bin/changeset"), "version"], directory);
   const syntax = JSON.parse(
     await readFile(join(directory, "packages/syntax/package.json"), "utf8"),
   );
   const core = JSON.parse(await readFile(join(directory, "packages/core/package.json"), "utf8"));
-  if (syntax.version !== "0.1.0" || core.version !== "0.6.0") {
-    throw new Error(`Unexpected release versions: syntax ${syntax.version}, core ${core.version}`);
+  const host = JSON.parse(await readFile(join(directory, "packages/host/package.json"), "utf8"));
+  if (syntax.version !== "0.1.0" || core.version !== "0.6.0" || host.version !== "0.1.0") {
+    throw new Error(
+      `Unexpected release versions: syntax ${syntax.version}, core ${core.version}, host ${host.version}`,
+    );
   }
   if (syntax.dependencies?.["@kalada/core"] !== "^0.6.0") {
     throw new Error("Changesets did not rewrite syntax to the core 0.6 release line");
+  }
+  const expectedHostDependencies = {
+    "@kalada/core": "^0.6.0",
+    "@kalada/syntax": "^0.1.0",
+  };
+  if (JSON.stringify(host.dependencies) !== JSON.stringify(expectedHostDependencies)) {
+    throw new Error("Changesets did not rewrite host to the released core and syntax lines");
   }
 }
 

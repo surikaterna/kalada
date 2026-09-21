@@ -19,6 +19,14 @@
       "name": "@kalada/core",
       "version": "0.5.0",
     },
+    "packages/host": {
+      "name": "@kalada/host",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kalada/core": "^0.5.0",
+        "@kalada/syntax": "^0.0.0",
+      },
+    },
     "packages/projection": {
       "name": "@kalada/projection",
       "version": "0.1.0",
@@ -148,6 +156,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@kalada/core": ["@kalada/core@workspace:packages/core"],
+
+    "@kalada/host": ["@kalada/host@workspace:packages/host"],
 
     "@kalada/projection": ["@kalada/projection@workspace:packages/projection"],
 
