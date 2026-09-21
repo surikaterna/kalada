@@ -15,6 +15,14 @@
         "vitest": "5.0.1",
       },
     },
+    "packages/adapter-scheman": {
+      "name": "@kalada/adapter-scheman",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kalada/host": "^0.0.0",
+        "@scheman/core": "^2.0.0",
+      },
+    },
     "packages/core": {
       "name": "@kalada/core",
       "version": "0.5.0",
@@ -155,6 +163,8 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
+    "@kalada/adapter-scheman": ["@kalada/adapter-scheman@workspace:packages/adapter-scheman"],
+
     "@kalada/core": ["@kalada/core@workspace:packages/core"],
 
     "@kalada/host": ["@kalada/host@workspace:packages/host"],
@@ -256,6 +266,10 @@
     "@rollup/rollup-win32-x64-gnu": ["@rollup/rollup-win32-x64-gnu@4.63.3", "", { "os": "win32", "cpu": "x64" }, "sha512-WuWtSJRNo549vzcfZyEgfqb6zeSgn1F+UE5kQ+BCjzz0W4MGCjntUHkZVc1VRuAM7+ULaSyhiPxD1spyewFvkQ=="],
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.63.3", "", { "os": "win32", "cpu": "x64" }, "sha512-+lIKX7O0+IGe7WuhATaAMMeT7B76vfhXH/l9wLQL+nvyhbw2ohYCKIdWL56JfDu75CWt5oKRP4QFH/jkMtBquA=="],
+
+    "@scheman/core": ["@scheman/core@2.0.0", "", { "dependencies": { "@standard-schema/spec": "1.1.0" }, "peerDependencies": { "zod": ">=3.24.0 <4 || >=4.0.0 <5" }, "optionalPeers": ["zod"] }, "sha512-Z16Hk4BL6nxVXogfhjo/nPQ9oi3yD1Zh14WYudFScrd79tHbnJrshiDqz5OkJnOyZXrQSvFwezdXiqkVJxRRjA=="],
+
+    "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 
