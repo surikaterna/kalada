@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   EditorObjectShape,
+  EditorShape,
   HostDiagnostic,
   HostDiagnosticPhase,
   ManualProviderInput,
@@ -146,6 +147,32 @@ describe("audit regressions", () => {
     });
   });
 
+  it("marks a late recursive definition after repeated long acyclic references", () => {
+    const graph = compoundReferenceGraph();
+    const loopDefinition = graph.definitions.find(({ name }) => name === "Loop");
+    const loopNode = graph.nodes.find(({ id }) => id === loopDefinition?.nodeId);
+    const selfEdge = loopNode?.kind === "object" ? loopNode.properties[0] : undefined;
+    const selfReference = graph.nodes.find(({ id }) => id === selfEdge?.nodeId);
+    const metadataCycle = selfReference?.kind === "reference" && selfReference.target?.cycle;
+    const traversalCycle = traverseEditorGraph(graph).some(
+      ({ nodeId, cycle }) => nodeId === loopDefinition?.nodeId && cycle,
+    );
+    expect(graph.evidence).toEqual([]);
+    expect(metadataCycle).toBe(true);
+    expect(metadataCycle).toBe(traversalCycle);
+  });
+
+  it("keeps complete acyclic analysis bounded and stack-safe at its retained boundary", () => {
+    const graph = repeatedAcyclicGraph(16, 128);
+    const references = graph.nodes.filter((node) => node.kind === "reference");
+    expect(graph.evidence).toEqual([]);
+    expect(references).toHaveLength(16);
+    expect(references.every((node) => node.kind === "reference" && !node.target?.cycle)).toBe(true);
+    const traversal = traverseEditorGraph(graph);
+    expect(traversal.length).toBeLessThanOrEqual(graph.limits.maxEdges + graph.limits.maxNodes);
+    expect(traversal.some(({ cycle }) => cycle)).toBe(false);
+  });
+
   it("does not invoke accessors in editor child collections", () => {
     let accessed = false;
     const properties: unknown[] = [];
@@ -228,4 +255,75 @@ function limitedReferenceGraph(maxEdges: number) {
     ],
     { maxEdges },
   );
+}
+
+function compoundReferenceGraph() {
+  const longReferences = Array.from({ length: 5 }, (_, index) => ({
+    name: `long-${index}`,
+    required: true,
+    shape: { kind: "reference" as const, definition: "Long" },
+  }));
+  return createEditorGraph(
+    [
+      {
+        bindingId: "compound",
+        path: ["compound"],
+        document: {
+          root: {
+            kind: "object",
+            properties: [
+              ...longReferences,
+              { name: "loop", required: true, shape: { kind: "reference", definition: "Loop" } },
+            ],
+          },
+          definitions: [
+            { name: "Long", shape: nestedArrayShape(8) },
+            {
+              name: "Loop",
+              shape: {
+                kind: "object",
+                properties: [
+                  {
+                    name: "self",
+                    required: true,
+                    shape: { kind: "reference", definition: "Loop" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+    { maxEdges: 30, maxNodes: 100, maxDepth: 32 },
+  );
+}
+
+function repeatedAcyclicGraph(referenceCount: number, depth: number) {
+  return createEditorGraph(
+    [
+      {
+        bindingId: "acyclic-boundary",
+        path: ["acyclic-boundary"],
+        document: {
+          root: {
+            kind: "object",
+            properties: Array.from({ length: referenceCount }, (_, index) => ({
+              name: `reference-${index}`,
+              required: true,
+              shape: { kind: "reference" as const, definition: "Long" },
+            })),
+          },
+          definitions: [{ name: "Long", shape: nestedArrayShape(depth) }],
+        },
+      },
+    ],
+    { maxEdges: 200, maxNodes: 180, maxDepth: 160 },
+  );
+}
+
+function nestedArrayShape(depth: number): EditorShape {
+  let shape: EditorShape = { kind: "scalar", name: "string" };
+  for (let level = 0; level < depth; level += 1) shape = { kind: "array", element: shape };
+  return shape;
 }

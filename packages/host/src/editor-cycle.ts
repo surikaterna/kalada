@@ -3,14 +3,12 @@ import type { EditorEdge, EditorNode } from "./editor-types.js";
 export function markReferenceCycles(
   nodes: EditorNode[],
   references: readonly { readonly index: number }[],
-  maximumWork: number,
 ): void {
-  const budget = { remaining: maximumWork };
+  const byId = new Map(nodes.map((node) => [node.id, node]));
   for (const reference of references) {
-    if (budget.remaining <= 0) return;
     const node = nodes[reference.index];
     if (node?.kind !== "reference" || !node.target) continue;
-    if (!isReachable(nodes, node.target.nodeId, node.id, budget)) continue;
+    if (!isReachable(byId, node.target.nodeId, node.id)) continue;
     nodes[reference.index] = {
       ...node,
       target: cycleEdge(node.target),
@@ -19,24 +17,32 @@ export function markReferenceCycles(
 }
 
 function isReachable(
-  nodes: readonly EditorNode[],
+  nodes: ReadonlyMap<string, EditorNode>,
   start: string,
   target: string,
-  budget: { remaining: number },
 ): boolean {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
   const pending = [start];
-  const visited = new Set<string>();
-  while (pending.length > 0 && budget.remaining > 0) {
-    budget.remaining -= 1;
+  const discovered = new Set([start]);
+  while (pending.length > 0) {
     const id = pending.pop();
-    if (!id || visited.has(id)) continue;
+    if (!id) continue;
     if (id === target) return true;
-    visited.add(id);
-    const node = byId.get(id);
-    if (node) pending.push(...outgoingNodeIds(node));
+    const node = nodes.get(id);
+    if (node) addUndiscovered(outgoingNodeIds(node), discovered, pending);
   }
   return false;
+}
+
+function addUndiscovered(
+  next: readonly string[],
+  discovered: Set<string>,
+  pending: string[],
+): void {
+  for (const id of next) {
+    if (discovered.has(id)) continue;
+    discovered.add(id);
+    pending.push(id);
+  }
 }
 
 function outgoingNodeIds(node: EditorNode): string[] {

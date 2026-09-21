@@ -71,7 +71,7 @@ function buildGraph(inputs: readonly EditorGraphInput[], limits: EditorGraphLimi
   }
   if (sourceDocuments.truncated) recordEvidence("edge-limit", Object.freeze([]), state);
   resolveReferences(state, targets);
-  markReferenceCycles(state.nodes, state.references, limits.maxEdges);
+  markReferenceCycles(state.nodes, state.references);
   const nodes = state.nodes.map((node) => Object.freeze(node));
   return Object.freeze({
     format: "kalada-editor-graph-v1",
