@@ -17,6 +17,7 @@
     "changeset:check": "bun scripts/check-changesets.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "package:policy": "bun run build && bun scripts/package-policy.ts",
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",
     "projection:smoke": "bun run build && bun scripts/projection-package-smoke.ts",
     "release": "changeset publish",
