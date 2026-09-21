@@ -46,8 +46,9 @@ export function normalizeBindings(
     return state;
   }
   const identities = new Set<string>();
+  const names = new Set<string>();
   const paths = new Set<string>();
-  for (const item of items) addBinding(item, capabilities, identities, paths, state);
+  for (const item of items) addBinding(item, capabilities, identities, names, paths, state);
   return state;
 }
 
@@ -55,6 +56,7 @@ function addBinding(
   input: unknown,
   capabilities: CapabilityState,
   identities: Set<string>,
+  names: Set<string>,
   paths: Set<string>,
   state: BindingState,
 ): void {
@@ -69,11 +71,16 @@ function addBinding(
     bindingError(state, "HOST_ENVIRONMENT_INVALID_BINDING");
     return;
   }
-  if (identities.has(record.id) || paths.has(JSON.stringify(path))) {
+  if (
+    identities.has(record.id) ||
+    names.has(record.name as string) ||
+    paths.has(JSON.stringify(path))
+  ) {
     bindingError(state, "HOST_ENVIRONMENT_DUPLICATE_BINDING", path);
     return;
   }
   identities.add(record.id);
+  names.add(record.name as string);
   paths.add(JSON.stringify(path));
   addValidBinding(record, path, capabilities, state);
 }

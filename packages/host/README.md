@@ -1,7 +1,7 @@
 # `@kalada/host`
 
-`@kalada/host` defines immutable, schema-neutral environment descriptors for Kalada. It is a
-foundation package: it does not compile, link, validate, transform, or evaluate values.
+`@kalada/host` defines immutable, schema-neutral environment descriptors and a synchronous
+parse/compile/link/prepared execution pipeline for Kalada.
 
 ## Authority separation
 
@@ -63,10 +63,10 @@ const described = describeEnvironment(provider);
 if (!described.ok) throw new Error(described.diagnostics[0]?.code);
 ```
 
-Capability declarations and the provider explicitly state `mode: "sync" | "async"`; this package
-records that mode but invokes no callback and offers no asynchronous API. A capability is referenced
-from a binding by its declared handle. The normalized declaration is data-only while the matching
-`decode` or `convert` function exists only in `capabilitySnapshot`.
+Capability declarations and the provider explicitly state `mode: "sync" | "async"`; synchronous
+execution rejects async declarations before callback invocation and offers no asynchronous API. A
+capability is referenced from a binding by its declared handle. The normalized declaration is
+data-only while the matching `decode` or `convert` function exists only in `capabilitySnapshot`.
 
 Reusable cacheability requires all three provider fields (`providerId`, `providerVersion`, and
 `configurationDigest`) and all three capability fields (`capabilityId`, `capabilityVersion`, and
@@ -76,5 +76,26 @@ environment explicitly non-cacheable; this package emits no link fingerprint.
 All failures use a frozen `phase: "environment"` diagnostic with a stable code and fixed message.
 Diagnostics may include a copied binding path and allow-listed provenance strings, but never include
 input values, callback/provider objects, exception messages, stacks, source text, or secrets.
-The public `HostDiagnostic` envelope also reserves parse, lower, compile, link, bind, and evaluate
-phases plus UTF-16 source and immutable syntax/core cause fields for later orchestration packages.
+The public `HostDiagnostic` envelope covers parse, lower, compile, link, bind, and evaluate phases,
+UTF-16 sources, and immutable syntax/core causes.
+
+## Prepared execution
+
+```ts
+import { evaluateExpression, prepareExpression } from "@kalada/host";
+
+const prepared = prepareExpression("customerTotal + shipping", provider, {
+  parse: { sourceUri: "memory:///checkout.kalada" },
+});
+if (prepared.ok) {
+  const first = prepared.value.evaluate({ customerTotal: 10, shipping: 2 });
+  const second = prepared.value.evaluate({ customerTotal: 20, shipping: 3 });
+}
+const oneShot = evaluateExpression("customerTotal + shipping", provider, values);
+```
+
+`prepareExpression` composes environment description, `parseExpression`, `compileExpression`, and
+`linkExpression`. A prepared evaluation repeats own-data-property lookup, synchronous validation,
+explicit conversion, canonical semantic validation, freezing, binding, and core evaluation. It does
+not repeat source or link phases. Non-cacheable providers remain executable but omit
+`linkFingerprint`; the package owns no hidden cache.

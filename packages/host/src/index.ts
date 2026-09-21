@@ -1,3 +1,4 @@
+export { compileExpression, parseExpression } from "./compile-expression.js";
 export type {
   Cacheability,
   CapabilityDeclaration,
@@ -6,6 +7,8 @@ export type {
   CapabilityMode,
   CapabilitySnapshot,
   DescribeEnvironmentResult,
+  HostCompileBinding,
+  HostCompileProjection,
   HostDiagnostic,
   HostDiagnosticCause,
   HostDiagnosticPhase,
@@ -94,6 +97,29 @@ export type {
   ManualEditorDefinition,
   ManualEditorShapeDocument,
 } from "./editor-types.js";
+export { evaluateExpression, prepareExpression } from "./execution.js";
+export type {
+  CompiledExpression,
+  CompileExpressionResult,
+  EvaluateExpressionResult,
+  HostCompileOptions,
+  HostExecutionDiagnosticCode,
+  HostExpressionSource,
+  HostLinkPlanSlot,
+  HostParseOptions,
+  HostPrepareOptions,
+  HostResult,
+  LinkExpressionResult,
+  ParsedExpression,
+  ParseExpressionResult,
+  PreparedExpression,
+  PrepareExpressionResult,
+} from "./execution-contracts.js";
+export {
+  HOST_COMPILE_FINGERPRINT_VERSION,
+  HOST_LINK_FINGERPRINT_VERSION,
+} from "./fingerprint.js";
+export { linkExpression } from "./link-expression.js";
 export {
   createManualProvider,
   describeEnvironment,
