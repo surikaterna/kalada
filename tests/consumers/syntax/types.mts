@@ -1,4 +1,8 @@
-import type { KaladaParseResult, KaladaSourceMapEntry } from "@kalada/syntax";
+import type {
+  KaladaParseResult,
+  KaladaSourceMapEntry,
+  KaladaSyntaxStaticType,
+} from "@kalada/syntax";
 import { lowerKaladaV1Expression, parseKaladaV1Expression } from "@kalada/syntax";
 
 const parsed: KaladaParseResult = parseKaladaV1Expression("item");
@@ -13,5 +17,7 @@ const lowered = lowerKaladaV1Expression<{ id: string }>(parsed, {
 });
 if (lowered.ok) {
   const entries: readonly KaladaSourceMapEntry[] = lowered.sourceMap;
+  const resultType: KaladaSyntaxStaticType = lowered.resultType;
   void entries;
+  void resultType;
 }

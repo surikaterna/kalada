@@ -93,6 +93,20 @@ function checkArithmeticPair(operator: "+" | "-", left: Domain, right: Domain): 
 }
 
 describe("static dispatch", () => {
+  it("projects authoritative successful result types without exposing internal option(dynamic)", () => {
+    const number = lower("1 + 2");
+    const dynamic = lower("value", { value: "dynamic" });
+    const optionalDynamic = lower("value?.field", { value: "dynamic" });
+    const optionalNull = lower("value?.field", { value: type("null") });
+    expect(number).toMatchObject({ ok: true, resultType: type("number") });
+    expect(dynamic).toMatchObject({ ok: true, resultType: "dynamic" });
+    expect(optionalDynamic).toMatchObject({ ok: true, resultType: "dynamic" });
+    expect(optionalNull).toMatchObject({
+      ok: true,
+      resultType: { kind: "option-type", value: type("null") },
+    });
+  });
+
   it.each([
     ["n+n", { n: type("number") }, "numeric-binary"],
     ["i+d", { i: type("Instant"), d: type("Duration") }, "temporal-arithmetic"],

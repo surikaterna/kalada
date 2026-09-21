@@ -8,6 +8,13 @@ export interface StaticOption {
 
 export type StaticType = "dynamic" | KaladaType | StaticOption;
 
+export function projectStaticType(type: StaticType): "dynamic" | KaladaType {
+  if (type === "dynamic") return type;
+  if (!("shape" in type)) return type;
+  const value = projectStaticType(type.value);
+  return value === "dynamic" ? "dynamic" : deepFreeze({ kind: "option-type", value });
+}
+
 export const primitive = (
   name: Extract<KaladaType, { kind: "primitive-type" }>["name"],
 ): KaladaType => Object.freeze({ kind: "primitive-type", name });

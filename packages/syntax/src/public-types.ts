@@ -77,6 +77,7 @@ export type KaladaLowerOutcome<R extends JsonValue = string> =
       readonly ok: true;
       readonly program: KaladaV1Program<R>;
       readonly sourceMap: readonly KaladaSourceMapEntry[];
+      readonly resultType: KaladaSyntaxStaticType;
     }
   | { readonly ok: false; readonly diagnostics: readonly KaladaSyntaxDiagnostic[] };
 
