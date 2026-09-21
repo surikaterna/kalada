@@ -1,6 +1,13 @@
 import type { EditorRelationShape, EditorShape, ManualEditorShapeDocument } from "@kalada/host";
 import type { Applicators, NodeRef, OwnedValue, SchemaDocument, SchemaNode } from "@scheman/core";
-import { countEditorEdges, EditorEdgeBudget } from "./editor-edge-budget.js";
+import {
+  countEditorEdges,
+  type EditorCollectionSummary,
+  EditorEdgeBudget,
+  RequiredNamesBudget,
+  requiredNamesLimitRelation,
+  selectEditorNodes,
+} from "./editor-edge-budget.js";
 import { eligibleLocalReference } from "./local-reference.js";
 import type { SchemanAnalysisLimits } from "./types.js";
 
@@ -10,6 +17,7 @@ export interface SchemanEditorDocumentResult {
   readonly retainedEdges: number;
   readonly nodeTruncated: boolean;
   readonly edgeTruncated: boolean;
+  readonly requiredNames: EditorCollectionSummary;
   readonly truncated: boolean;
 }
 
@@ -17,13 +25,19 @@ export function schemanEditorDocument(
   source: SchemaDocument,
   limits: SchemanAnalysisLimits,
 ): SchemanEditorDocumentResult {
-  const selection = selectNodes(source, limits.maxNodes);
+  const selection = selectEditorNodes(source, limits.maxNodes);
   const sourceEdges = countEditorEdges(source, selection.ids, limits.maxEdges);
   const budget = new EditorEdgeBudget(limits.maxEdges, sourceEdges);
+  const requiredNames = new RequiredNamesBudget(source, selection.ids, limits.maxEdges);
   const converted = new Map<string, EditorShape>();
   for (const nodeId of selection.ids) {
     const node = source.nodes[nodeId];
-    if (node) converted.set(nodeId, convertNode(nodeId, node, source, selection.ids, budget));
+    if (node) {
+      converted.set(
+        nodeId,
+        convertNode(nodeId, node, source, selection.ids, budget, requiredNames),
+      );
+    }
   }
   const definitions = [];
   for (const nodeId in source.nodes) {
@@ -31,6 +45,7 @@ export function schemanEditorDocument(
     const shape = converted.get(nodeId);
     if (shape) definitions.push(Object.freeze({ name: nodeId, shape }));
   }
+  const requiredNamesSummary = requiredNames.summary();
   return Object.freeze({
     document: Object.freeze({
       root: reference(source.root.input.nodeId, selection.ids),
@@ -40,27 +55,9 @@ export function schemanEditorDocument(
     retainedEdges: budget.used,
     nodeTruncated: selection.truncated,
     edgeTruncated: budget.truncated,
-    truncated: selection.truncated || budget.truncated,
+    requiredNames: requiredNamesSummary,
+    truncated: selection.truncated || budget.truncated || requiredNamesSummary.truncated,
   });
-}
-
-function selectNodes(document: SchemaDocument, maximum: number) {
-  const ids = new Set<string>();
-  let truncated = false;
-  const add = (nodeId: string): void => {
-    if (ids.has(nodeId) || !Object.hasOwn(document.nodes, nodeId)) return;
-    if (ids.size < maximum) ids.add(nodeId);
-    else truncated = true;
-  };
-  add(document.root.input.nodeId);
-  add(document.root.output.nodeId);
-  for (const definition of document.definitions) add(definition.node.nodeId);
-  for (const nodeId in document.nodes) {
-    if (!Object.hasOwn(document.nodes, nodeId)) continue;
-    add(nodeId);
-    if (truncated) break;
-  }
-  return Object.freeze({ ids, truncated });
 }
 
 function convertNode(
@@ -69,12 +66,13 @@ function convertNode(
   document: SchemaDocument,
   selected: ReadonlySet<string>,
   budget: EditorEdgeBudget,
+  requiredNames: RequiredNamesBudget,
 ): EditorShape {
-  const common = commonEvidence(nodeId, node, selected, budget);
+  const common = commonEvidence(nodeId, node, selected, budget, requiredNames);
   if (budget.exhausted) return { ...budget.limitNode(nodeId), ...common };
   const simple = simpleShape(node, common);
   if (simple) return simple;
-  return convertConnectedNode(nodeId, node, common, document, selected, budget);
+  return convertConnectedNode(nodeId, node, common, document, selected, budget, requiredNames);
 }
 
 function simpleShape(node: SchemaNode, common: CommonEvidence): EditorShape | undefined {
@@ -97,8 +95,11 @@ function convertConnectedNode(
   document: SchemaDocument,
   selected: ReadonlySet<string>,
   budget: EditorEdgeBudget,
+  requiredNames: RequiredNamesBudget,
 ): EditorShape {
-  if (node.kind === "object") return objectShape(nodeId, node, common, selected, budget);
+  if (node.kind === "object") {
+    return objectShape(nodeId, node, common, selected, budget, requiredNames);
+  }
   if (node.kind === "array") {
     const element = edgeReference(node.items, `${nodeId}.items`, selected, budget);
     return element
@@ -130,6 +131,7 @@ function objectShape(
   common: CommonEvidence,
   selected: ReadonlySet<string>,
   budget: EditorEdgeBudget,
+  requiredNames: RequiredNamesBudget,
 ): EditorShape {
   const properties = [];
   let limited = false;
@@ -158,7 +160,7 @@ function objectShape(
   return {
     kind: "object",
     properties,
-    requiredNames: node.required.slice(0, budget.maximum),
+    requiredNames: requiredNames.retain(node.required),
     unknownKeys: node.unknownKeys,
     ...(additional ? { additionalProperties: additional } : {}),
     ...common,
@@ -272,12 +274,19 @@ function commonEvidence(
   node: SchemaNode,
   selected: ReadonlySet<string>,
   budget: EditorEdgeBudget,
+  requiredNames: RequiredNamesBudget,
 ): CommonEvidence {
+  const collectionRelations = requiredNames.requiresEvidence(node)
+    ? requiredNamesLimitRelation(nodeId, budget)
+    : [];
   return {
     sourceId: nodeId,
     ...(node.metadata === undefined ? {} : { annotations: node.metadata }),
     ...(node.constraints === undefined ? {} : { constraints: node.constraints }),
-    relations: applicatorRelations(nodeId, node.applicators, selected, budget),
+    relations: Object.freeze([
+      ...collectionRelations,
+      ...applicatorRelations(nodeId, node.applicators, selected, budget),
+    ]),
   };
 }
 

@@ -65,7 +65,7 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
     diagnostics: Object.freeze([
       ...sourceDiagnostics(sourceEvidence.diagnostics.values),
       ...projection.diagnostics,
-      ...sourceLimitDiagnostics(sourceEvidence),
+      ...sourceLimitDiagnostics(sourceEvidence, editor),
     ]),
     ...(options.validator ? { retainedValidator: options.validator.validator } : {}),
   });
@@ -143,11 +143,13 @@ function environmentMetadata(
           truncated: editor.nodeTruncated,
         },
         edges: { retained: editor.retainedEdges, truncated: editor.edgeTruncated },
+        requiredNames: editor.requiredNames,
         definitions: sourceEvidence.definitions.summary,
         diagnostics: sourceEvidence.diagnostics.summary,
         truncated:
           editor.nodeTruncated ||
           editor.edgeTruncated ||
+          editor.requiredNames.truncated ||
           sourceEvidence.definitions.summary.truncated ||
           sourceEvidence.diagnostics.summary.truncated,
       },
@@ -198,16 +200,29 @@ function boundedRecords<T>(values: readonly T[], maximum: number): BoundedSource
   };
 }
 
-function sourceLimitDiagnostics(evidence: SourceEvidence): readonly SchemanAdapterDiagnostic[] {
-  if (!evidence.definitions.summary.truncated && !evidence.diagnostics.summary.truncated) return [];
-  return [
-    {
-      code: "SCHEMAN_ADAPTER_ANALYSIS_LIMIT",
-      severity: "warning",
-      side: "output",
-      sourcePointer: evidence.definitions.summary.truncated ? "/definitions" : "/diagnostics",
-    },
-  ];
+function sourceLimitDiagnostics(
+  evidence: SourceEvidence,
+  editor: ReturnType<typeof schemanEditorDocument>,
+): readonly SchemanAdapterDiagnostic[] {
+  const sourcePointer = limitSourcePointer(evidence, editor);
+  if (!sourcePointer) return Object.freeze([]);
+  const diagnostic = Object.freeze({
+    code: "SCHEMAN_ADAPTER_ANALYSIS_LIMIT" as const,
+    severity: "warning" as const,
+    side: "output" as const,
+    sourcePointer,
+  });
+  return Object.freeze([diagnostic]);
+}
+
+function limitSourcePointer(
+  evidence: SourceEvidence,
+  editor: ReturnType<typeof schemanEditorDocument>,
+): string | undefined {
+  if (evidence.definitions.summary.truncated) return "/definitions";
+  if (evidence.diagnostics.summary.truncated) return "/diagnostics";
+  if (editor.requiredNames.truncated) return "/nodes/*/required";
+  return undefined;
 }
 
 function wrapSourceDiagnostic(diagnostic: Diagnostic): SchemanSourceDiagnostic {

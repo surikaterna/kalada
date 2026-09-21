@@ -1,4 +1,10 @@
-import type { OwnedValue, SchemaDocument, SchemaNode } from "@scheman/core";
+import {
+  ingestSchemaDocument,
+  jsonSchemaProvider,
+  type OwnedValue,
+  type SchemaDocument,
+  type SchemaNode,
+} from "@scheman/core";
 import { describe, expect, it } from "vitest";
 import { adaptSchemanDocument } from "./adapter.js";
 import { DEFAULT_SCHEMAN_ANALYSIS_LIMITS } from "./analysis-limits.js";
@@ -115,6 +121,69 @@ describe("auditor adversarial regressions", () => {
     ).toBe(true);
   });
 
+  it("reports a deterministic required-name prefix from the real JSON provider", () => {
+    const { document, names } = requiredNamesDocument(8_193);
+    const result = adaptSchemanDocument({ ...base, document });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const root = result.environment.editorGraph.nodes.find(
+      (node) => node.sourceId === document.root.input.nodeId,
+    );
+    expect(root?.kind).toBe("object");
+    if (root?.kind !== "object") return;
+    expect(root.requiredNames).toHaveLength(8_192);
+    expect(root.requiredNames?.[0]).toBe(names[0]);
+    expect(root.requiredNames?.at(-1)).toBe(names[8_191]);
+    expect(root.properties).toMatchObject([
+      { name: names[0], presence: "required", required: true },
+      { name: names[8_192], presence: "required", required: true },
+    ]);
+    expect(result.environment.bindings[0]?.metadata).toMatchObject({
+      scheman: {
+        bounded: {
+          requiredNames: { retained: 16_384, total: 16_386, truncated: true },
+          truncated: true,
+        },
+      },
+    });
+    expect(
+      result.environment.editorGraph.nodes.some((node) =>
+        node.evidence.some((evidence) => evidence.code === "edge-limit"),
+      ),
+    ).toBe(true);
+    const diagnostic = result.diagnostics.find(
+      (item) =>
+        item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT" &&
+        item.sourcePointer === "/nodes/*/required",
+    );
+    expect(diagnostic).toBeDefined();
+    expect(Object.isFrozen(diagnostic)).toBe(true);
+  });
+
+  it("retains the exact required-name bound without limit evidence", () => {
+    const { document } = requiredNamesDocument(8_192);
+    const result = adaptSchemanDocument({ ...base, document });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const root = result.environment.editorGraph.nodes.find(
+      (node) => node.sourceId === document.root.input.nodeId,
+    );
+    expect(root).toMatchObject({ kind: "object", requiredNames: { length: 8_192 } });
+    expect(result.environment.bindings[0]?.metadata).toMatchObject({
+      scheman: {
+        bounded: { requiredNames: { retained: 16_384, total: 16_384, truncated: false } },
+      },
+    });
+    expect(
+      result.environment.editorGraph.nodes.some((node) =>
+        node.evidence.some((evidence) => evidence.code === "edge-limit"),
+      ),
+    ).toBe(false);
+    expect(result.diagnostics.some((item) => item.code === "SCHEMAN_ADAPTER_ANALYSIS_LIMIT")).toBe(
+      false,
+    );
+  });
+
   it("reports bounded definition provenance independently from node selection", () => {
     const source = documentWithNodes("root", { root: { kind: "primitive", type: "string" } });
     const document: SchemaDocument = {
@@ -146,6 +215,7 @@ describe("auditor adversarial regressions", () => {
     });
     expect(result.diagnostics).toHaveLength(513);
     expect(result.diagnostics.at(-1)?.code).toBe("SCHEMAN_ADAPTER_ANALYSIS_LIMIT");
+    expect(Object.isFrozen(result.diagnostics.at(-1))).toBe(true);
   });
 
   it("refuses an external reference target spoof in semantics and editor links", () => {
@@ -344,4 +414,20 @@ function profiledDocument(profile: OwnedValue): SchemaDocument {
 function profileCode(metadata: OwnedValue) {
   const document = testDocument({ kind: "primitive", type: "string", metadata });
   return adaptSchemanDocument({ ...base, document }).diagnostics[0]?.code;
+}
+
+function requiredNamesDocument(count: number) {
+  const names = Array.from({ length: count }, (_, index) => `required-${index}`);
+  const first = names[0] as string;
+  const last = names.at(-1) as string;
+  const { document } = ingestSchemaDocument(
+    {
+      type: "object",
+      properties: { [first]: { type: "string" }, [last]: { type: "string" } },
+      required: names,
+      additionalProperties: false,
+    },
+    { provider: jsonSchemaProvider() },
+  );
+  return { document, names };
 }

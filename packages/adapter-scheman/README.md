@@ -81,7 +81,9 @@ definitions prioritized. Editor properties, tuple items, variants, intersections
 relations consume the edge bound before host validation; a deterministic prefix and explicit
 edge-limit evidence are retained. Source definition and diagnostic records are independently bounded
 to 512 records, with retained/total/truncated counts in normalized metadata and an analysis-limit
-diagnostic whenever source records are omitted.
+diagnostic whenever source records are omitted. Each object's required-name collection is bounded by
+`maxEdges`; overflow retains the deterministic prefix, reserves visible edge-limit evidence, and
+records aggregate retained/total/truncated required-name counts independently from graph edges.
 
 Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
 are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy

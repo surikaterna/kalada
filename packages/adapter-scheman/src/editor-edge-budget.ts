@@ -1,6 +1,12 @@
-import type { EditorShape } from "@kalada/host";
+import type { EditorRelationShape, EditorShape } from "@kalada/host";
 import type { SchemaDocument, SchemaNode } from "@scheman/core";
 import { eligibleLocalReference } from "./local-reference.js";
+
+export interface EditorCollectionSummary {
+  readonly retained: number;
+  readonly total: number;
+  readonly truncated: boolean;
+}
 
 export class EditorEdgeBudget {
   readonly maximum: number;
@@ -39,6 +45,70 @@ export class EditorEdgeBudget {
   }
 }
 
+export class RequiredNamesBudget {
+  readonly maximumPerObject: number;
+  readonly total: number;
+  retained = 0;
+
+  constructor(document: SchemaDocument, selected: ReadonlySet<string>, maximum: number) {
+    this.maximumPerObject = maximum;
+    this.total = selectedRequiredNames(document, selected);
+  }
+
+  retain(values: readonly string[]): readonly string[] {
+    const retained = values.slice(0, this.maximumPerObject);
+    this.retained += retained.length;
+    return retained;
+  }
+
+  requiresEvidence(node: SchemaNode): boolean {
+    return node.kind === "object" && node.required.length > this.maximumPerObject;
+  }
+
+  summary(): EditorCollectionSummary {
+    return Object.freeze({
+      retained: this.retained,
+      total: this.total,
+      truncated: this.retained < this.total,
+    });
+  }
+}
+
+export function selectEditorNodes(document: SchemaDocument, maximum: number) {
+  const ids = new Set<string>();
+  let truncated = false;
+  const add = (nodeId: string): void => {
+    if (ids.has(nodeId) || !Object.hasOwn(document.nodes, nodeId)) return;
+    if (ids.size < maximum) ids.add(nodeId);
+    else truncated = true;
+  };
+  add(document.root.input.nodeId);
+  add(document.root.output.nodeId);
+  for (const definition of document.definitions) add(definition.node.nodeId);
+  for (const nodeId in document.nodes) {
+    if (!Object.hasOwn(document.nodes, nodeId)) continue;
+    add(nodeId);
+    if (truncated) break;
+  }
+  return Object.freeze({ ids, truncated });
+}
+
+export function requiredNamesLimitRelation(
+  nodeId: string,
+  budget: EditorEdgeBudget,
+): readonly EditorRelationShape[] {
+  const sourceId = `${nodeId}.requiredNames`;
+  const shape = budget.claim()
+    ? {
+        kind: "unknown" as const,
+        reason: `bounded-required-names:${nodeId}`,
+        evidenceCode: "edge-limit" as const,
+        sourceId,
+      }
+    : budget.limitEdge(sourceId);
+  return shape ? [{ name: "requiredNames", shape }] : [];
+}
+
 export function countEditorEdges(
   document: SchemaDocument,
   selected: ReadonlySet<string>,
@@ -49,16 +119,24 @@ export function countEditorEdges(
     if (!selected.has(nodeId) || !Object.hasOwn(document.nodes, nodeId)) continue;
     const node = document.nodes[nodeId];
     if (!node) continue;
-    count += nodeEdges(nodeId, node, document);
+    count += nodeEdges(nodeId, node, document, maximum);
     if (count > maximum) return maximum + 1;
   }
   return count;
 }
 
-function nodeEdges(nodeId: string, node: SchemaNode, document: SchemaDocument): number {
+function nodeEdges(
+  nodeId: string,
+  node: SchemaNode,
+  document: SchemaDocument,
+  maximum: number,
+): number {
   const relations = relationEdges(node);
   if (node.kind === "object") {
-    return relations + node.properties.length + (node.additionalProperties ? 1 : 0);
+    const requiredEvidence = node.required.length > maximum ? 1 : 0;
+    return (
+      relations + requiredEvidence + node.properties.length + (node.additionalProperties ? 1 : 0)
+    );
   }
   if (node.kind === "array") return relations + 1;
   if (node.kind === "tuple") return relations + node.items.length + (node.rest ? 1 : 0);
@@ -68,6 +146,15 @@ function nodeEdges(nodeId: string, node: SchemaNode, document: SchemaDocument): 
   if (node.kind === "wrapper") return relations + 1;
   if (node.kind === "ref" && eligibleLocalReference(nodeId, node, document)) return relations + 1;
   return relations;
+}
+
+function selectedRequiredNames(document: SchemaDocument, selected: ReadonlySet<string>): number {
+  let total = 0;
+  for (const nodeId of selected) {
+    const node = document.nodes[nodeId];
+    if (node?.kind === "object") total += node.required.length;
+  }
+  return total;
 }
 
 function relationEdges(node: SchemaNode): number {
