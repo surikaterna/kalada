@@ -1,6 +1,8 @@
 import type { OwnedValue, SchemaDocument, SchemaNode } from "@scheman/core";
 import { describe, expect, it } from "vitest";
 import { adaptSchemanDocument } from "./adapter.js";
+import { DEFAULT_SCHEMAN_ANALYSIS_LIMITS } from "./analysis-limits.js";
+import { schemanEditorDocument } from "./editor-document.js";
 import { testDocument } from "./test-document.js";
 
 const base = {
@@ -73,6 +75,77 @@ describe("auditor adversarial regressions", () => {
         node.evidence.some((evidence) => evidence.code === "node-limit"),
       ),
     ).toBe(true);
+  });
+
+  it("bounds exactly 8,193 property edges before host validation", () => {
+    const properties = Array.from({ length: 8_193 }, (_, index) => ({
+      name: `property-${index}`,
+      presence: "optional" as const,
+      node: { nodeId: "leaf" },
+    }));
+    const root: SchemaNode = {
+      kind: "object",
+      properties,
+      required: [],
+      unknownKeys: "reject",
+    };
+    const document = testDocument(root, root, { leaf: { kind: "primitive", type: "string" } });
+    const editor = schemanEditorDocument(document, DEFAULT_SCHEMAN_ANALYSIS_LIMITS);
+    const definition = editor.document.definitions?.find((item) => item.name === "input");
+    expect(editor).toMatchObject({ edgeTruncated: true, retainedEdges: 8_192 });
+    expect(definition?.shape.kind).toBe("object");
+    if (definition?.shape.kind !== "object") return;
+    expect(definition.shape.properties).toHaveLength(8_192);
+    expect(definition.shape.properties[0]?.name).toBe("property-0");
+    expect(definition.shape.properties[1]?.name).toBe("property-1");
+    expect(definition.shape.properties.at(-1)?.shape).toMatchObject({
+      kind: "unknown",
+      evidenceCode: "edge-limit",
+    });
+    const result = adaptSchemanDocument({ ...base, document });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.environment.bindings[0]?.metadata).toMatchObject({
+      scheman: { bounded: { edges: { retained: 8_192, truncated: true } } },
+    });
+    expect(
+      result.environment.editorGraph.nodes.some((node) =>
+        node.evidence.some((evidence) => evidence.code === "edge-limit"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports bounded definition provenance independently from node selection", () => {
+    const source = documentWithNodes("root", { root: { kind: "primitive", type: "string" } });
+    const document: SchemaDocument = {
+      ...source,
+      definitions: Array.from({ length: 3_000 }, (_, index) => ({
+        side: "input" as const,
+        sourcePointer: `/$defs/${index}`,
+        name: `definition-${index}`,
+        node: { nodeId: "root" },
+      })),
+      diagnostics: Array.from({ length: 3_000 }, (_, index) => ({
+        code: `SOURCE_${index}`,
+        severity: "warning" as const,
+        side: "input" as const,
+        sourcePointer: `/diagnostics/${index}`,
+      })),
+    };
+    const result = adaptSchemanDocument({ ...base, document });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.environment.bindings[0]?.metadata).toMatchObject({
+      scheman: {
+        bounded: {
+          nodes: { retained: 1, total: 1, truncated: false },
+          definitions: { retained: 512, total: 3_000, truncated: true },
+          diagnostics: { retained: 512, total: 3_000, truncated: true },
+        },
+      },
+    });
+    expect(result.diagnostics).toHaveLength(513);
+    expect(result.diagnostics.at(-1)?.code).toBe("SCHEMAN_ADAPTER_ANALYSIS_LIMIT");
   });
 
   it("refuses an external reference target spoof in semantics and editor links", () => {
@@ -198,6 +271,30 @@ describe("auditor adversarial regressions", () => {
       } as never),
     ).toBe("SCHEMAN_ADAPTER_PROFILE_CONFLICT");
   });
+
+  it.each([null, "metadata", 42, true, ["annotation"]] as const)(
+    "treats profile-free OwnedValue %j containers as valid",
+    (value) => {
+      for (const node of [
+        { kind: "primitive", type: "string", metadata: value },
+        { kind: "primitive", type: "string", constraints: value },
+        { kind: "primitive", type: "string", metadata: { annotations: value } },
+        { kind: "primitive", type: "string", metadata: { extensions: value } },
+      ] as const) {
+        const result = adaptSchemanDocument({
+          ...base,
+          document: testDocument(node as SchemaNode),
+        });
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.environment.bindings[0]?.semanticType).toEqual({
+            kind: "primitive-type",
+            name: "string",
+          });
+        }
+      }
+    },
+  );
 });
 
 function documentWithNodes(rootId: string, nodes: Record<string, SchemaNode>): SchemaDocument {

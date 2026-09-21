@@ -208,9 +208,15 @@ function reflectRecord(input: object) {
 }
 
 function optionalRecord(input: unknown): OptionalRecordResult {
-  if (input === undefined) return Object.freeze({ ok: true });
+  if (input === undefined || isProfileFreeOwnedValue(input)) return Object.freeze({ ok: true });
   const record = ownRecord(input);
   return record.ok ? Object.freeze({ ok: true, value: record }) : Object.freeze({ ok: false });
+}
+
+function isProfileFreeOwnedValue(input: unknown): boolean {
+  if (input === null || typeof input === "string" || typeof input === "boolean") return true;
+  if (typeof input === "number") return Number.isFinite(input);
+  return Array.isArray(input);
 }
 
 function nestedRecord(parent: OwnRecord | undefined, key: string): OptionalRecordResult {

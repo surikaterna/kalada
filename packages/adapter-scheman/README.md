@@ -77,8 +77,11 @@ Semantic and JSON-safety analysis is iterative and bounded by `analysisLimits` (
 `maxEdges: 8192`, and `maxTypeDepth: 32` by default and as hard maxima). Reaching a limit produces
 deterministic `SCHEMAN_ADAPTER_ANALYSIS_LIMIT`/dynamic evidence rather than recursion failure.
 Editor definitions are selected within the same node bound with input root, output root, and declared
-definitions prioritized. Omitted edges become explicit node-limit evidence; normalized metadata
-records retained/truncated counts.
+definitions prioritized. Editor properties, tuple items, variants, intersections, references, and
+relations consume the edge bound before host validation; a deterministic prefix and explicit
+edge-limit evidence are retained. Source definition and diagnostic records are independently bounded
+to 512 records, with retained/total/truncated counts in normalized metadata and an analysis-limit
+diagnostic whenever source records are omitted.
 
 Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
 are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy

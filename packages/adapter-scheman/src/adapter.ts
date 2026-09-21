@@ -18,6 +18,7 @@ import type {
 
 const validatorHandle = "scheman-validator";
 const codecHandle = "scheman-codec";
+const maximumSourceRecords = 512;
 
 export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptSchemanResult {
   const document = options.document as SchemaDocument & { readonly formatVersion: number };
@@ -28,6 +29,10 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
   const profile = resolveProfile(options, projection.type);
   if (!profile.ok) return Object.freeze({ ok: false, diagnostics: profile.diagnostics });
   const editor = schemanEditorDocument(document, limits);
+  const sourceEvidence = boundedSourceEvidence(
+    document,
+    Math.min(limits.maxNodes, maximumSourceRecords),
+  );
   const capabilities = configuredCapabilities(options);
   const described = describeEnvironment(
     createManualProvider({
@@ -46,7 +51,7 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
           editorShape: editor.document,
           ...(options.validator ? { validatorHandle } : {}),
           ...(profile.value.codec ? { codecHandle } : {}),
-          metadata: environmentMetadata(document, profile.value, limits, editor),
+          metadata: environmentMetadata(document, profile.value, limits, editor, sourceEvidence),
           provenance: [schemanProvenance(document)],
         },
       ],
@@ -57,7 +62,11 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
     ok: true,
     environment: described.environment,
     capabilitySnapshot: described.capabilitySnapshot,
-    diagnostics: Object.freeze([...sourceDiagnostics(document), ...projection.diagnostics]),
+    diagnostics: Object.freeze([
+      ...sourceDiagnostics(sourceEvidence.diagnostics.values),
+      ...projection.diagnostics,
+      ...sourceLimitDiagnostics(sourceEvidence),
+    ]),
     ...(options.validator ? { retainedValidator: options.validator.validator } : {}),
   });
 }
@@ -113,6 +122,7 @@ function environmentMetadata(
   profile: ResolvedProfile,
   limits: ReturnType<typeof resolveAnalysisLimits>,
   editor: ReturnType<typeof schemanEditorDocument>,
+  sourceEvidence: SourceEvidence,
 ): SerializableValue {
   return {
     scheman: {
@@ -120,13 +130,26 @@ function environmentMetadata(
       nodeIdScope: "document-local",
       roots: { input: document.root.input.nodeId, output: document.root.output.nodeId },
       capabilities: document.capabilities,
-      definitions: document.definitions.slice(0, limits.maxNodes),
-      diagnostics: document.diagnostics.slice(0, limits.maxEdges),
+      definitions: sourceEvidence.definitions.values,
+      diagnostics: sourceEvidence.diagnostics.values,
       metadata: document.metadata,
       bounded: {
         limits,
         retainedNodes: editor.retainedNodes,
-        truncated: editor.truncated,
+        retainedEdges: editor.retainedEdges,
+        nodes: {
+          retained: editor.retainedNodes,
+          total: Object.keys(document.nodes).length,
+          truncated: editor.nodeTruncated,
+        },
+        edges: { retained: editor.retainedEdges, truncated: editor.edgeTruncated },
+        definitions: sourceEvidence.definitions.summary,
+        diagnostics: sourceEvidence.diagnostics.summary,
+        truncated:
+          editor.nodeTruncated ||
+          editor.edgeTruncated ||
+          sourceEvidence.definitions.summary.truncated ||
+          sourceEvidence.diagnostics.summary.truncated,
       },
     },
     policy: profile,
@@ -142,8 +165,49 @@ function schemanProvenance(document: SchemaDocument) {
   });
 }
 
-function sourceDiagnostics(document: SchemaDocument): SchemanSourceDiagnostic[] {
-  return document.diagnostics.map((diagnostic) => wrapSourceDiagnostic(diagnostic));
+function sourceDiagnostics(diagnostics: readonly Diagnostic[]): SchemanSourceDiagnostic[] {
+  return diagnostics.map((diagnostic) => wrapSourceDiagnostic(diagnostic));
+}
+
+interface BoundedSourceRecords<T> {
+  readonly values: readonly T[];
+  readonly summary: Readonly<{ retained: number; total: number; truncated: boolean }>;
+}
+
+interface SourceEvidence {
+  readonly definitions: BoundedSourceRecords<SchemaDocument["definitions"][number]>;
+  readonly diagnostics: BoundedSourceRecords<Diagnostic>;
+}
+
+function boundedSourceEvidence(document: SchemaDocument, maximum: number): SourceEvidence {
+  return {
+    definitions: boundedRecords(document.definitions, maximum),
+    diagnostics: boundedRecords(document.diagnostics, maximum),
+  };
+}
+
+function boundedRecords<T>(values: readonly T[], maximum: number): BoundedSourceRecords<T> {
+  const retained = values.slice(0, maximum);
+  return {
+    values: retained,
+    summary: {
+      retained: retained.length,
+      total: values.length,
+      truncated: retained.length < values.length,
+    },
+  };
+}
+
+function sourceLimitDiagnostics(evidence: SourceEvidence): readonly SchemanAdapterDiagnostic[] {
+  if (!evidence.definitions.summary.truncated && !evidence.diagnostics.summary.truncated) return [];
+  return [
+    {
+      code: "SCHEMAN_ADAPTER_ANALYSIS_LIMIT",
+      severity: "warning",
+      side: "output",
+      sourcePointer: evidence.definitions.summary.truncated ? "/definitions" : "/diagnostics",
+    },
+  ];
 }
 
 function wrapSourceDiagnostic(diagnostic: Diagnostic): SchemanSourceDiagnostic {
