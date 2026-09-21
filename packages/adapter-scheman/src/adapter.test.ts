@@ -96,10 +96,12 @@ describe("Scheman v2 adapter", () => {
         true,
       );
       const refs = result.environment.editorGraph.nodes.filter((node) => node.kind === "reference");
-      expect(refs.some((node) => node.reference === "#item" && node.status === "resolved")).toBe(true);
-      expect(refs.some((node) => node.reference?.startsWith("https://") && node.status === "unresolved")).toBe(
+      expect(refs.some((node) => node.reference === "#item" && node.status === "resolved")).toBe(
         true,
       );
+      expect(
+        refs.some((node) => node.reference?.startsWith("https://") && node.status === "unresolved"),
+      ).toBe(true);
     } finally {
       globalThis.fetch = priorFetch;
     }
