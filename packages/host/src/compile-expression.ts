@@ -5,6 +5,12 @@ import {
   lowerKaladaV1Expression,
   parseKaladaV1Expression,
 } from "@kalada/syntax";
+import {
+  HOST_COMPILE_OPTIONS_CONTRACT,
+  type NormalizedCompileOptions,
+  normalizeCompileOptions,
+} from "./compile-options.js";
+import { createCompiledArtifact } from "./compiled-artifact.js";
 import type { HostCompileProjection } from "./contracts.js";
 import type {
   CompileExpressionResult,
@@ -74,7 +80,7 @@ export function compileExpression(
 function compiledArtifact(
   parsed: Parameters<typeof compileExpression>[0],
   projection: HostCompileProjection,
-  options: Readonly<{ profile: string; limits: Readonly<Record<string, number>> }>,
+  options: NormalizedCompileOptions,
   lower: Extract<KaladaLowerOutcome<string>, { ok: true }>,
   core: CompiledKaladaV1Program<string>,
 ) {
@@ -82,6 +88,7 @@ function compiledArtifact(
   const compileFingerprint = createFingerprint(HOST_COMPILE_FINGERPRINT_VERSION, {
     syntaxContract: SYNTAX_CONTRACT,
     coreContract: CORE_CONTRACT,
+    compileOptionsContract: HOST_COMPILE_OPTIONS_CONTRACT,
     source: parsed.source,
     parseOptions: parsed.parseFingerprintInput,
     profile: options.profile,
@@ -89,18 +96,18 @@ function compiledArtifact(
     projection,
     program: lower.program,
   });
-  return Object.freeze({
-    format: "kalada-host-compiled-expression-v1" as const,
-    source: parsed.source,
-    parsed,
-    program: lower.program,
-    sourceMap: lower.sourceMap,
-    coreCompilation: core,
-    dependencies: core.dependencies,
-    resultType: lower.resultType,
-    compileProjectionFingerprint: projectionFingerprint,
-    compileFingerprint,
-  });
+  return createCompiledArtifact(
+    {
+      source: parsed.source,
+      parsed,
+      program: lower.program,
+      sourceMap: lower.sourceMap,
+      resultType: lower.resultType,
+      compileProjectionFingerprint: projectionFingerprint,
+      compileFingerprint,
+    },
+    core,
+  );
 }
 
 function normalizeParseInput(source: unknown, options: unknown) {
@@ -120,31 +127,6 @@ function parseInput(text: string, uri: string, syntax: KaladaParseOptions | unde
   const source = Object.freeze({ uri, text });
   const fingerprintInput = Object.freeze({ uri, syntax: syntax ?? null });
   return { source, syntax, fingerprintInput };
-}
-
-function normalizeCompileOptions(
-  options: unknown,
-): Readonly<{ profile: string; limits: Readonly<Record<string, number>> }> | null {
-  if (options === undefined)
-    return Object.freeze({ profile: "default", limits: Object.freeze({}) });
-  const inspected = readOwnDataRecord(options, 4);
-  if (!inspected.ok) return null;
-  const profile = inspected.value.profile ?? "default";
-  if (typeof profile !== "string" || profile.length === 0) return null;
-  const limits = cloneLimits(inspected.value.limits);
-  return limits ? Object.freeze({ profile, limits }) : null;
-}
-
-function cloneLimits(input: unknown): Readonly<Record<string, number>> | null {
-  if (input === undefined) return Object.freeze({});
-  const inspected = readOwnDataRecord(input, 32);
-  if (!inspected.ok) return null;
-  const output: Record<string, number> = Object.create(null);
-  for (const [key, value] of Object.entries(inspected.value)) {
-    if (typeof value !== "number" || !Number.isFinite(value)) return null;
-    output[key] = value;
-  }
-  return Object.freeze(output);
 }
 
 function normalizeProjection(input: unknown): HostCompileProjection | null {

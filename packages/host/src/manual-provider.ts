@@ -1,9 +1,9 @@
 import { type BindingState, normalizeBindings } from "./binding-normalization.js";
 import { type CapabilityState, normalizeCapabilities } from "./capability-normalization.js";
+import { createCapabilitySnapshot } from "./capability-snapshot.js";
 import type {
   Cacheability,
   CapabilityDeclaration,
-  CapabilitySnapshot,
   DescribeEnvironmentResult,
   HostEnvironmentDiagnostic,
   HostEnvironmentDiagnosticCode,
@@ -99,26 +99,24 @@ function success(
       ...(roots.has(binding.id) ? { editorShapeRoot: roots.get(binding.id) } : {}),
     }),
   );
-  const snapshot: CapabilitySnapshot = Object.freeze({
-    scope: "instance",
-    capabilities: Object.freeze(capabilities.live),
+  const environment = Object.freeze({
+    format: "kalada-host-environment-v1" as const,
+    provider: providerDeclaration(providerRecord, providerIdentity),
+    cacheability: environmentCacheability(providerIdentity, capabilities.declarations),
+    compileProjection: Object.freeze({
+      format: "kalada-host-compile-projection-v1" as const,
+      bindings: Object.freeze(
+        normalized.map(({ id, name, semanticType }) => Object.freeze({ id, name, semanticType })),
+      ),
+    }),
+    bindings: Object.freeze(normalized),
+    capabilities: Object.freeze(capabilities.declarations),
+    editorGraph: graph,
   });
+  const snapshot = createCapabilitySnapshot(environment, Object.freeze(capabilities.live));
   return Object.freeze({
     ok: true,
-    environment: Object.freeze({
-      format: "kalada-host-environment-v1",
-      provider: providerDeclaration(providerRecord, providerIdentity),
-      cacheability: environmentCacheability(providerIdentity, capabilities.declarations),
-      compileProjection: Object.freeze({
-        format: "kalada-host-compile-projection-v1" as const,
-        bindings: Object.freeze(
-          normalized.map(({ id, name, semanticType }) => Object.freeze({ id, name, semanticType })),
-        ),
-      }),
-      bindings: Object.freeze(normalized),
-      capabilities: Object.freeze(capabilities.declarations),
-      editorGraph: graph,
-    }),
+    environment,
     capabilitySnapshot: snapshot,
   });
 }

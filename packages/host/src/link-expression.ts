@@ -1,3 +1,5 @@
+import { capabilitySnapshotMatches } from "./capability-snapshot.js";
+import { isAuthenticCompiledExpression } from "./compiled-artifact.js";
 import type {
   CapabilityDeclaration,
   CapabilitySnapshot,
@@ -20,7 +22,9 @@ export function linkExpression(
   snapshot: CapabilitySnapshot,
 ): LinkExpressionResult {
   try {
+    if (!isAuthenticCompiledExpression(compiled)) return incompatible();
     if (!compatibleProjection(compiled, environment)) return incompatible();
+    if (!capabilitySnapshotMatches(snapshot, environment)) return invalidSnapshot();
     if (environment.provider.mode === "async") return asyncUnsupported();
     const slots: InternalLinkSlot[] = [];
     for (const dependency of compiled.dependencies) {
@@ -109,19 +113,20 @@ function linkedArtifact(
 ): LinkExpressionResult {
   const internal = Object.freeze([...slots]);
   const linkPlan = Object.freeze(slots.map(({ plan }) => plan));
-  const linkFingerprint = reusable(environment, slots)
+  const linkFingerprint = reusable(environment)
     ? createFingerprint(
         HOST_LINK_FINGERPRINT_VERSION,
         linkFingerprintInput(compiled, environment, linkPlan),
       )
     : undefined;
+  const evaluate = Object.freeze((values: unknown) => evaluateLinked(compiled, internal, values));
   const prepared = Object.freeze({
     format: "kalada-host-prepared-expression-v1" as const,
     compiled,
     environment,
     linkPlan,
     ...(linkFingerprint ? { linkFingerprint } : {}),
-    evaluate: (values: unknown) => evaluateLinked(compiled, internal, values),
+    evaluate,
   });
   return Object.freeze({ ok: true, value: prepared });
 }
@@ -138,15 +143,8 @@ function compatibleProjection(
   );
 }
 
-function reusable(environment: NormalizedEnvironment, slots: readonly InternalLinkSlot[]): boolean {
-  return (
-    environment.provider.identity.cacheable &&
-    slots.every(
-      ({ plan }) =>
-        (!plan.validator || plan.validator.identity.cacheable) &&
-        (!plan.codec || plan.codec.identity.cacheable),
-    )
-  );
+function reusable(environment: NormalizedEnvironment): boolean {
+  return environment.cacheability.cacheable;
 }
 
 function linkFingerprintInput(
@@ -180,6 +178,10 @@ function missingBinding(): LinkExpressionResult {
 
 function invalidCapability(binding: NormalizedBinding): LinkExpressionResult {
   return failure(bindingDiagnostic("HOST_LINK_INVALID_CAPABILITY", binding));
+}
+
+function invalidSnapshot(): LinkExpressionResult {
+  return failure(executionDiagnostic("HOST_LINK_INVALID_CAPABILITY", "link"));
 }
 
 function asyncUnsupported(binding?: NormalizedBinding): LinkExpressionResult {

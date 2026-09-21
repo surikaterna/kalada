@@ -205,7 +205,6 @@ describe("synchronous prepared execution", () => {
     "rejects validator %s thenables without reading then or entering core",
     (kind) => {
       let thenReads = 0;
-      let coreCalls = 0;
       const output = thenable(kind, () => {
         thenReads += 1;
       });
@@ -226,33 +225,15 @@ describe("synchronous prepared execution", () => {
       const result = advanced("left", input);
       expect(result.linked.ok).toBe(true);
       if (!result.linked.ok) return;
-      const forged = {
-        ...result.compiled.value,
-        coreCompilation: {
-          ...result.compiled.value.coreCompilation,
-          evaluate() {
-            coreCalls += 1;
-            return { ok: true as const, value: 0 };
-          },
-        },
-      };
-      const relinked = linkExpression(
-        forged,
-        result.described.environment,
-        result.described.capabilitySnapshot,
-      );
-      expect(relinked.ok).toBe(true);
-      if (!relinked.ok) return;
-      expect(relinked.value.evaluate({ left: 1 })).toMatchObject({
+      expect(result.linked.value.evaluate({ left: 1 })).toMatchObject({
         ok: false,
         diagnostics: [{ code: "HOST_BINDING_DECODE", phase: "bind" }],
       });
-      expect({ thenReads, coreCalls }).toEqual({ thenReads: 0, coreCalls: 0 });
+      expect(thenReads).toBe(0);
     },
   );
 
   it("applies the same thenable guard and no-core rule to codecs", () => {
-    let coreCalls = 0;
     const input = provider({
       bindings: [
         {
@@ -269,26 +250,10 @@ describe("synchronous prepared execution", () => {
     });
     const result = advanced("left", input);
     if (!result.linked.ok) return;
-    const forged = {
-      ...result.compiled.value,
-      coreCompilation: {
-        ...result.compiled.value.coreCompilation,
-        evaluate() {
-          coreCalls += 1;
-          return { ok: true as const, value: 0 };
-        },
-      },
-    };
-    const linked = linkExpression(
-      forged,
-      result.described.environment,
-      result.described.capabilitySnapshot,
-    );
-    expect(linked.ok && linked.value.evaluate({ left: 1 })).toMatchObject({
+    expect(result.linked.value.evaluate({ left: 1 })).toMatchObject({
       ok: false,
       diagnostics: [{ code: "HOST_BINDING_CONVERSION" }],
     });
-    expect(coreCalls).toBe(0);
   });
 
   it("maps immutable diagnostics to UTF-16 source and preserves cause identity", () => {
@@ -418,11 +383,98 @@ describe("synchronous prepared execution", () => {
     expect(Object.isFrozen(prepared)).toBe(true);
     expect(Object.isFrozen(prepared.linkPlan)).toBe(true);
     expect(Object.isFrozen(prepared.compiled)).toBe(true);
+    expectRecursivelyFrozen(prepared);
+    expect(() => Object.assign(prepared.evaluate, { audit: "mutable" })).toThrow();
+    expect(() =>
+      Object.assign(prepared.compiled.coreCompilation.evaluate, { audit: "mutable" }),
+    ).toThrow();
     expect(containsIdentity(prepared, runtimeValues)).toBe(false);
   });
 });
 
 describe("fingerprints and compatibility", () => {
+  it("rejects spread or evaluator-replaced compiled artifacts before evaluator invocation", () => {
+    let calls = 0;
+    const result = advanced("1", provider());
+    const forged = {
+      ...result.compiled.value,
+      compileFingerprint: "forged",
+      coreCompilation: {
+        ...result.compiled.value.coreCompilation,
+        evaluate() {
+          calls += 1;
+          return { ok: true as const, value: 777 };
+        },
+      },
+    };
+    expect(
+      linkExpression(forged, result.described.environment, result.described.capabilitySnapshot),
+    ).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "HOST_LINK_INCOMPATIBLE_ENVIRONMENT", phase: "link" }],
+    });
+    expect(calls).toBe(0);
+  });
+
+  it("rejects cross-instance snapshots whenever either environment is non-cacheable", () => {
+    const first = nonCacheableValidatorProvider(() => 1);
+    const second = nonCacheableValidatorProvider(() => 2);
+    const result = advanced("left", first);
+    const other = describeEnvironment(second);
+    expect(other.ok).toBe(true);
+    if (!result.linked.ok || !other.ok) return;
+    expect(result.linked.value.evaluate({ left: 0 })).toEqual({ ok: true, value: 1 });
+    expect(
+      linkExpression(result.compiled.value, result.described.environment, other.capabilitySnapshot),
+    ).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "HOST_LINK_INVALID_CAPABILITY", phase: "link" }],
+    });
+  });
+
+  it("omits link identity when any environment capability is non-cacheable", () => {
+    const prepared = prepareExpression(
+      "1",
+      provider({
+        bindings: [],
+        capabilities: [
+          { handle: "unused", kind: "validator", mode: "sync", decode: (value) => value },
+        ],
+      }),
+    );
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    expect(prepared.value.environment.cacheability).toEqual({
+      cacheable: false,
+      reason: "capability-not-cacheable",
+    });
+    expect(Object.hasOwn(prepared.value, "linkFingerprint")).toBe(false);
+  });
+
+  it.each([
+    { limits: { maxEvaluationSteps: 0 } },
+    { limits: { maxEvaluationSteps: 1.5 } },
+    { limits: { maxEvaluationSteps: 100_001 } },
+    { limits: { notALimit: 1 } },
+    { unknownOption: 1 },
+  ])("rejects undeclared or illegal compile options %# before lowering", (options) => {
+    const described = describeEnvironment(provider({ bindings: [] }));
+    const parsed = parseExpression("1");
+    if (!described.ok || !parsed.ok) throw new Error("fixture");
+    expect(
+      compileExpression(parsed.value, described.environment.compileProjection, options as never),
+    ).toEqual({
+      ok: false,
+      diagnostics: [
+        {
+          code: "HOST_COMPILE_INVALID_OPTIONS",
+          phase: "compile",
+          message: "The expression compile options are invalid.",
+        },
+      ],
+    });
+  });
+
   it("invalidates compile identity at source, URI, option, profile, and projection boundaries", () => {
     const base = compileFingerprint("left", provider(), "memory:///a", {});
     const matrix = [
@@ -553,6 +605,21 @@ function cacheableProvider(path: string, providerDigest: string, capabilityDiges
   });
 }
 
+function nonCacheableValidatorProvider(decode: (value: unknown) => unknown) {
+  return provider({
+    bindings: [
+      {
+        id: "left-id",
+        name: "left",
+        path: ["left"],
+        semanticType: numberType,
+        validatorHandle: "validator",
+      },
+    ],
+    capabilities: [{ handle: "validator", kind: "validator", mode: "sync", decode }],
+  });
+}
+
 function linkFingerprint(input: ReturnType<typeof provider>) {
   const prepared = prepareExpression("left", input);
   if (!prepared.ok) throw new Error("fixture");
@@ -570,4 +637,15 @@ function containsIdentity(input: unknown, target: object, seen = new Set<object>
       return true;
   }
   return false;
+}
+
+function expectRecursivelyFrozen(input: unknown, seen = new Set<object>()): void {
+  if ((typeof input !== "object" || input === null) && typeof input !== "function") return;
+  if (seen.has(input as object)) return;
+  seen.add(input as object);
+  expect(Object.isFrozen(input)).toBe(true);
+  for (const key of Reflect.ownKeys(input as object)) {
+    const descriptor = Object.getOwnPropertyDescriptor(input, key);
+    if (descriptor && "value" in descriptor) expectRecursivelyFrozen(descriptor.value, seen);
+  }
 }
