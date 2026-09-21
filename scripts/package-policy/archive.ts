@@ -39,7 +39,6 @@ function assertManifest(manifest: Record<string, unknown>, policy: PackagePolicy
   equal(manifest.files, policy.filesField, `${policy.workspace} files`);
   equal(manifest.exports, policy.exports, `${policy.workspace} exports and condition order`);
   equal(manifest.engines, { node: ">=22.0.0" }, `${policy.workspace} engines`);
-  equal(manifest.dependencies ?? {}, policy.dependencies, `${policy.workspace} dependencies`);
   if ("browser" in manifest || JSON.stringify(manifest.exports).includes('"browser"')) {
     throw new Error(`${policy.workspace} must not declare a browser field or condition`);
   }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { assertPackedPackage, packPackage } from "./package-policy/archive.js";
 import { assertPackedConsumers } from "./package-policy/consumer.js";
+import { assertDependencyPolicy } from "./package-policy/dependencies.js";
 import { packagePolicies } from "./package-policy/model.js";
 import type { PackedPackage } from "./package-policy/types.js";
 
@@ -51,6 +52,14 @@ async function main(): Promise<void> {
     await Promise.all([mkdir(archives), mkdir(consumer)]);
     const packages = packagePolicies.map((policy) => packPackage(policy, archives, root));
     await Promise.all(packages.map((packed) => assertPackedPackage(packed, root)));
+    assertDependencyPolicy(
+      packages.map(({ manifest, policy }) => ({
+        name: policy.workspace,
+        version: String(manifest.version),
+        dependencies: manifest.dependencies,
+        allowedDependencies: policy.dependencyNames,
+      })),
+    );
     const consumerEvidence = await assertPackedConsumers(consumer, root, packages);
     printPackedEvidence(packages);
     console.log(JSON.stringify(consumerEvidence));

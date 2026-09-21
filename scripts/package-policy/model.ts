@@ -14,7 +14,6 @@ const runtimeFiles = [
 ] as const;
 
 const dualRuntimeFiles = [...runtimeFiles, "dist/index.js.map"] as const;
-const coreDependency = { "@kalada/core": "^0.5.0" } as const;
 const coreImports = {
   "dist/index.js": ["./index.cjs"],
   "dist/index.cjs": [],
@@ -36,7 +35,7 @@ export const packagePolicies: readonly PackagePolicy[] = [
       "provenance/kuery-2.1.0.json",
     ],
     exports: { ".": rootExport, "./package.json": "./package.json" },
-    dependencies: {},
+    dependencyNames: [],
     runtimeImports: coreImports,
   },
   {
@@ -44,7 +43,7 @@ export const packagePolicies: readonly PackagePolicy[] = [
     filesField: ["dist", "README.md"],
     packedFiles: ["README.md", ...dualRuntimeFiles, "package.json"],
     exports: { ".": rootExport, "./package.json": "./package.json" },
-    dependencies: coreDependency,
+    dependencyNames: ["@kalada/core"],
     runtimeImports: dependentImports,
   },
   {
@@ -59,7 +58,7 @@ export const packagePolicies: readonly PackagePolicy[] = [
       },
       "./package.json": "./package.json",
     },
-    dependencies: coreDependency,
+    dependencyNames: ["@kalada/core"],
     runtimeImports: dependentImports,
   },
 ];

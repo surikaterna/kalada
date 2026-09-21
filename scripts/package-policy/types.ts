@@ -12,7 +12,7 @@ export interface PackagePolicy {
   readonly filesField: readonly string[];
   readonly packedFiles: readonly string[];
   readonly exports: Readonly<Record<string, unknown>>;
-  readonly dependencies: Readonly<Record<string, string>>;
+  readonly dependencyNames: readonly string[];
   readonly runtimeImports: Readonly<Record<"dist/index.js" | "dist/index.cjs", readonly string[]>>;
 }
 
