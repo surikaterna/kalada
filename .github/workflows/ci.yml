@@ -32,6 +32,8 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bun run package:smoke
+      - run: bun run host:smoke
+      - run: bun run host:browser-smoke
       - run: bun run projection:smoke
       - run: bun run syntax:smoke
       - run: bun run syntax:browser-smoke
