@@ -255,17 +255,18 @@ function referenceNode(
   if (typeof record.definition !== "string" || record.definition.length === 0) {
     return unknownNode(id, path, "invalid-shape");
   }
+  const unresolved = typeof record.unresolved === "string" ? record.unresolved : undefined;
   const node: EditorReferenceNode = {
     id,
     path,
     kind: "reference",
     definition: record.definition,
     status: "unresolved",
-    availability: "unknown",
+    availability: unresolved === undefined ? "unknown" : "unavailable",
     evidence: evidence("unresolved-reference", path),
     relations: Object.freeze([]),
     ...(typeof record.reference === "string" ? { reference: record.reference } : {}),
-    ...(typeof record.unresolved === "string" ? { unresolved: record.unresolved } : {}),
+    ...(unresolved === undefined ? {} : { unresolved }),
   };
   state.references.push({ index: state.nodes.length - 1, bindingId });
   return node;
@@ -310,7 +311,7 @@ function appendUnknownEvidence(
 function resolveReferences(state: GraphState, targets: Map<string, Map<string, string>>): void {
   for (const reference of state.references) {
     const node = state.nodes[reference.index];
-    if (node?.kind !== "reference") continue;
+    if (node?.kind !== "reference" || node.unresolved !== undefined) continue;
     const target = targets.get(reference.bindingId)?.get(node.definition);
     if (!target) continue;
     if (!claimEdge("resolution", node.path, state)) {

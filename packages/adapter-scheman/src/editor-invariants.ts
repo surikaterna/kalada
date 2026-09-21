@@ -10,7 +10,7 @@ export function validNormalizedEditorGraph(
   if (!root) return false;
   const rootNode = nodeById(graph, root.nodeId);
   if (!rootNode || !validRootNode(graph, rootNode, intendedSourceId)) return false;
-  return graph.nodes.every((node) => !isRetainedLocalReference(node) || node.status === "resolved");
+  return graph.nodes.every(validReferenceBoundary);
 }
 
 function validRootNode(graph: EditorGraph, root: EditorNode, intendedSourceId: string): boolean {
@@ -22,11 +22,13 @@ function validRootNode(graph: EditorGraph, root: EditorNode, intendedSourceId: s
   );
 }
 
-function isRetainedLocalReference(
-  node: EditorNode,
-): node is Extract<EditorNode, { kind: "reference" }> {
-  if (node.kind !== "reference" || node.unresolved) return false;
-  return node.reference === undefined || node.reference.startsWith("#");
+function validReferenceBoundary(node: EditorNode): boolean {
+  if (node.kind !== "reference") return true;
+  if (node.unresolved !== undefined) {
+    return node.status === "unresolved" && node.availability === "unavailable" && !node.target;
+  }
+  if (node.reference !== undefined && !node.reference.startsWith("#")) return true;
+  return node.status === "resolved";
 }
 
 function intentionalBoundedUnknown(node: EditorNode): boolean {

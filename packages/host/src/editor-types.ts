@@ -204,7 +204,7 @@ export interface EditorRelationEdge extends EditorEdge {
 export interface EditorNodeBase {
   readonly id: string;
   readonly path: HostPath;
-  readonly availability: "available" | "unknown";
+  readonly availability: "available" | "unavailable" | "unknown";
   readonly evidence: readonly EditorUnknownEvidence[];
   readonly sourceId?: string;
   readonly annotations?: EditorData;
@@ -363,5 +363,5 @@ export interface EditorTraversalStep {
     | "relation"
     | "reference";
   readonly cycle: boolean;
-  readonly availability: "available" | "unknown";
+  readonly availability: "available" | "unavailable" | "unknown";
 }

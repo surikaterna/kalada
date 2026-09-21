@@ -332,8 +332,38 @@ describe("auditor adversarial regressions", () => {
     expect(ref).toMatchObject({
       kind: "reference",
       status: "unresolved",
+      availability: "unavailable",
       reference: "https://evil.test/schema",
     });
+  });
+
+  it("keeps unsupported references unavailable when synthetic names collide", () => {
+    const root: SchemaNode = {
+      kind: "ref",
+      reference: "https://evil.test/schema",
+      target: { nodeId: "target" },
+    };
+    const result = adaptSchemanDocument({
+      ...base,
+      document: testDocument(root, root, {
+        target: { kind: "primitive", type: "string" },
+        "unsupported:input": { kind: "primitive", type: "number" },
+      }),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.environment.bindings[0]?.semanticType).toBe("dynamic");
+    const reference = result.environment.editorGraph.nodes.find(
+      (node) => node.kind === "reference" && node.sourceId === "input",
+    );
+    expect(reference).toMatchObject({
+      kind: "reference",
+      definition: "unsupported:input",
+      status: "unresolved",
+      availability: "unavailable",
+      unresolved: "non-local-reference",
+    });
+    expect(reference).not.toHaveProperty("target");
   });
 
   it.each(["dynamic-reference-unsupported", "resource-rebase-unsupported", "unresolved-reference"])(

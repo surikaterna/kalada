@@ -135,6 +135,35 @@ describe("editor graph", () => {
     expect(first.nodes[0]?.id).toBe(second.nodes[0]?.id);
     expect(first.roots[0]?.bindingId).not.toBe(second.roots[0]?.bindingId);
   });
+
+  it("does not resolve explicitly unavailable references on definition-name collisions", () => {
+    const graph = createEditorGraph([
+      {
+        bindingId: "collision",
+        path: ["collision"],
+        document: {
+          root: {
+            kind: "reference",
+            definition: "unsupported:input",
+            reference: "https://evil.test/schema",
+            unresolved: "non-local-reference",
+          },
+          definitions: [{ name: "unsupported:input", shape: { kind: "scalar", name: "number" } }],
+        },
+      },
+    ]);
+    const reference = graph.nodes.find((node) => node.kind === "reference");
+
+    expect(reference).toMatchObject({
+      kind: "reference",
+      definition: "unsupported:input",
+      status: "unresolved",
+      availability: "unavailable",
+      unresolved: "non-local-reference",
+    });
+    expect(reference).not.toHaveProperty("target");
+    expect(graph.admission?.resolution).toBe(0);
+  });
 });
 
 function nestedArray(depth: number): EditorShape {
