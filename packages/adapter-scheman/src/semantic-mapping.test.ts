@@ -27,6 +27,10 @@ describe("closed semantic mapping", () => {
     expect(new Set(SCHEMAN_MAPPING_FIXTURE_MATRIX.map(([name]) => name)).size).toBe(21);
   });
 
+  it.each(SCHEMAN_MAPPING_FIXTURE_MATRIX)("executes exported fixture row %s", (name) => {
+    matrixExecutors[name]();
+  });
+
   it.each([
     ["null", "null"],
     ["boolean", "boolean"],
@@ -130,4 +134,151 @@ function withBranches(kind: "union" | "intersection", left: SchemaNode, right: S
   const root: SchemaNode =
     kind === "union" ? { kind, alternatives: refs, semantics: "anyOf" } : { kind, operands: refs };
   return testDocument(root, root, { left, right });
+}
+
+type MatrixName = (typeof SCHEMAN_MAPPING_FIXTURE_MATRIX)[number][0];
+const matrixExecutors: Record<MatrixName, () => void> = {
+  "primitive-null": () =>
+    expect(projected(testDocument({ kind: "primitive", type: "null" }))).toEqual(type("null")),
+  "primitive-boolean": () =>
+    expect(projected(testDocument({ kind: "primitive", type: "boolean" }))).toEqual(
+      type("boolean"),
+    ),
+  "primitive-string": () =>
+    expect(projected(testDocument({ kind: "primitive", type: "string" }))).toEqual(type("string")),
+  "primitive-number": () =>
+    expect(projected(testDocument({ kind: "primitive", type: "number" }))).toEqual(type("number")),
+  "primitive-integer": () =>
+    expect(projected(testDocument({ kind: "primitive", type: "integer" }))).toEqual(type("number")),
+  "literal-primitive": () =>
+    expect(projected(testDocument({ kind: "literal", value: "literal" }))).toEqual(type("string")),
+  "enum-single-domain": () =>
+    expect(projected(testDocument({ kind: "enum", values: [true, false] }))).toEqual(
+      type("boolean"),
+    ),
+  "enum-mixed-domain": () =>
+    expect(projected(testDocument({ kind: "enum", values: [true, "false"] }))).toBe("dynamic"),
+  "array-concrete-item": () =>
+    expect(
+      projected(withTarget({ kind: "array", items: { nodeId: "target" } }, stringNode())),
+    ).toEqual({
+      kind: "array-type",
+      element: type("string"),
+    }),
+  "array-dynamic-item": () =>
+    expect(
+      projected(
+        withTarget(
+          { kind: "array", items: { nodeId: "target" } },
+          { kind: "unknown", reason: "partial" },
+        ),
+      ),
+    ).toBe("dynamic"),
+  "json-safe-object-record-tuple": () => assertJsonStructures(),
+  "homogeneous-union-intersection": () => {
+    expect(projected(withBranches("union", stringNode(), stringNode()))).toEqual(type("string"));
+    expect(projected(withBranches("intersection", stringNode(), stringNode()))).toEqual(
+      type("string"),
+    );
+  },
+  "heterogeneous-union": () =>
+    expect(
+      projected(withBranches("union", stringNode(), { kind: "primitive", type: "number" })),
+    ).toBe("dynamic"),
+  "resolved-local-ref": () =>
+    expect(
+      projected(
+        withTarget(
+          { kind: "ref", reference: "#target", target: { nodeId: "target" } },
+          stringNode(),
+        ),
+      ),
+    ).toEqual(type("string")),
+  "unresolved-or-external-ref": () =>
+    expect(
+      projected(
+        withTarget(
+          { kind: "ref", reference: "https://example.test", target: { nodeId: "target" } },
+          stringNode(),
+        ),
+      ),
+    ).toBe("dynamic"),
+  "readonly-or-brand-wrapper": () => {
+    for (const wrapper of ["readonly", "brand"] as const) {
+      expect(
+        projected(
+          withTarget({ kind: "wrapper", wrapper, inner: { nodeId: "target" } }, stringNode()),
+        ),
+      ).toEqual(type("string"));
+    }
+  },
+  "json-unconstrained": () =>
+    expect(projected(testDocument({ kind: "unconstrained", domain: "json" }))).toEqual(
+      type("json"),
+    ),
+  "unknown-opaque-never-js-unconstrained": () => {
+    for (const node of unsupportedStructuralNodes())
+      expect(projected(testDocument(node))).toBe("dynamic");
+  },
+  "undefined-void-bigint-symbol-date-nan": () => {
+    for (const source of ["undefined", "void", "bigint", "symbol", "date", "NaN"] as const) {
+      expect(projected(testDocument({ kind: "primitive", type: source }))).toBe("dynamic");
+    }
+  },
+  "optional-nullable-default-catch-effect-pipeline-coerce": () => {
+    for (const wrapper of [
+      "optional",
+      "nullable",
+      "default",
+      "catch",
+      "effect",
+      "pipeline",
+      "coerce",
+    ] as const) {
+      expect(
+        projected(
+          withTarget({ kind: "wrapper", wrapper, inner: { nodeId: "target" } }, stringNode()),
+        ),
+      ).toBe("dynamic");
+    }
+  },
+  "unsupported-applicator": () =>
+    expect(
+      projected(
+        withTarget(
+          { kind: "primitive", type: "string", applicators: { contains: { nodeId: "target" } } },
+          stringNode(),
+        ),
+      ),
+    ).toBe("dynamic"),
+};
+
+function assertJsonStructures(): void {
+  const object: SchemaNode = {
+    kind: "object",
+    properties: [],
+    required: [],
+    unknownKeys: "reject",
+  };
+  expect(projected(testDocument(object))).toEqual(type("json"));
+  const record: SchemaNode = {
+    kind: "record",
+    key: { nodeId: "key" },
+    value: { nodeId: "value" },
+    exhaustive: true,
+  };
+  expect(
+    projected(testDocument(record, record, { key: stringNode(), value: stringNode() })),
+  ).toEqual(type("json"));
+  const tuple: SchemaNode = { kind: "tuple", items: [{ nodeId: "value" }] };
+  expect(projected(testDocument(tuple, tuple, { value: stringNode() }))).toEqual(type("json"));
+}
+
+function unsupportedStructuralNodes(): SchemaNode[] {
+  return [
+    { kind: "unknown", reason: "partial" },
+    { kind: "opaque", reason: "vendor" },
+    { kind: "never" },
+    { kind: "unconstrained", domain: "js" },
+  ];
 }

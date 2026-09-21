@@ -73,6 +73,13 @@ External/multi-resource refs, nested `$id` rebasing, dynamic refs/anchors, uneva
 and unsupported dialect evidence remain visible and unsupported. The adapter performs no network or
 filesystem fetch.
 
+Semantic and JSON-safety analysis is iterative and bounded by `analysisLimits` (`maxNodes: 2048`,
+`maxEdges: 8192`, and `maxTypeDepth: 32` by default and as hard maxima). Reaching a limit produces
+deterministic `SCHEMAN_ADAPTER_ANALYSIS_LIMIT`/dynamic evidence rather than recursion failure.
+Editor definitions are selected within the same node bound with input root, output root, and declared
+definitions prioritized. Omitted edges become explicit node-limit evidence; normalized metadata
+records retained/truncated counts.
+
 Runtime invocation, sync-thenable rejection, codec execution, and final converted-value validation
 are owned by Kalada issue #73. This package declares and checks all pre-link permissions and policy
 preconditions but intentionally does not duplicate that execution layer.

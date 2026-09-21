@@ -5,6 +5,7 @@ import {
   type SerializableValue,
 } from "@kalada/host";
 import type { Diagnostic, SchemaDocument, StandardSchemaV1 } from "@scheman/core";
+import { resolveAnalysisLimits } from "./analysis-limits.js";
 import { schemanEditorDocument } from "./editor-document.js";
 import { type ResolvedProfile, resolveProfile } from "./profile.js";
 import { projectOutput } from "./semantic-mapping.js";
@@ -22,9 +23,11 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
   const document = options.document as SchemaDocument & { readonly formatVersion: number };
   const invalid = validateDocument(document);
   if (invalid) return failure(invalid);
-  const projection = projectOutput(document);
+  const limits = resolveAnalysisLimits(options.analysisLimits);
+  const projection = projectOutput(document, limits);
   const profile = resolveProfile(options, projection.type);
   if (!profile.ok) return Object.freeze({ ok: false, diagnostics: profile.diagnostics });
+  const editor = schemanEditorDocument(document, limits);
   const capabilities = configuredCapabilities(options);
   const described = describeEnvironment(
     createManualProvider({
@@ -40,10 +43,10 @@ export function adaptSchemanDocument(options: AdaptSchemanOptions): AdaptScheman
           name: options.binding.name,
           path: options.binding.path,
           semanticType: profile.value.type,
-          editorShape: schemanEditorDocument(document),
+          editorShape: editor.document,
           ...(options.validator ? { validatorHandle } : {}),
           ...(profile.value.codec ? { codecHandle } : {}),
-          metadata: environmentMetadata(document, profile.value),
+          metadata: environmentMetadata(document, profile.value, limits, editor),
           provenance: [schemanProvenance(document)],
         },
       ],
@@ -108,6 +111,8 @@ function liveValidate(validator: StandardSchemaV1, value: unknown): unknown {
 function environmentMetadata(
   document: SchemaDocument,
   profile: ResolvedProfile,
+  limits: ReturnType<typeof resolveAnalysisLimits>,
+  editor: ReturnType<typeof schemanEditorDocument>,
 ): SerializableValue {
   return {
     scheman: {
@@ -115,9 +120,14 @@ function environmentMetadata(
       nodeIdScope: "document-local",
       roots: { input: document.root.input.nodeId, output: document.root.output.nodeId },
       capabilities: document.capabilities,
-      definitions: document.definitions,
-      diagnostics: document.diagnostics,
+      definitions: document.definitions.slice(0, limits.maxNodes),
+      diagnostics: document.diagnostics.slice(0, limits.maxEdges),
       metadata: document.metadata,
+      bounded: {
+        limits,
+        retainedNodes: editor.retainedNodes,
+        truncated: editor.truncated,
+      },
     },
     policy: profile,
   } as unknown as SerializableValue;

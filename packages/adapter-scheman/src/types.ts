@@ -49,6 +49,13 @@ export interface AdaptSchemanOptions extends ProviderIdentityInput {
   readonly binding: SchemanBindingOptions;
   readonly validator?: SchemanValidatorOptions;
   readonly codec?: SchemanCodecOptions;
+  readonly analysisLimits?: Partial<SchemanAnalysisLimits>;
+}
+
+export interface SchemanAnalysisLimits {
+  readonly maxNodes: number;
+  readonly maxEdges: number;
+  readonly maxTypeDepth: number;
 }
 
 export type SchemanAdapterDiagnosticCode =
@@ -61,7 +68,8 @@ export type SchemanAdapterDiagnosticCode =
   | "SCHEMAN_ADAPTER_PROFILE_INCOMPATIBLE"
   | "SCHEMAN_ADAPTER_CODEC_REQUIRED"
   | "SCHEMAN_ADAPTER_CODEC_MISMATCH"
-  | "SCHEMAN_ADAPTER_UNSUPPORTED_EVIDENCE";
+  | "SCHEMAN_ADAPTER_UNSUPPORTED_EVIDENCE"
+  | "SCHEMAN_ADAPTER_ANALYSIS_LIMIT";
 
 export interface SchemanAdapterDiagnostic {
   readonly code: SchemanAdapterDiagnosticCode;

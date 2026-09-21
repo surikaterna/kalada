@@ -22,6 +22,17 @@ export function resolveProfile(
   options: AdaptSchemanOptions,
   conservative: SemanticType,
 ): ProfileResult {
+  try {
+    return resolveProfileSafely(options, conservative);
+  } catch {
+    return failed("SCHEMAN_ADAPTER_PROFILE_MALFORMED", "<unavailable>");
+  }
+}
+
+function resolveProfileSafely(
+  options: AdaptSchemanOptions,
+  conservative: SemanticType,
+): ProfileResult {
   const nodeId = options.document.root.output.nodeId;
   const node = options.document.nodes[nodeId];
   if (!node) return failed("SCHEMAN_ADAPTER_UNRESOLVED_ROOT", nodeId);
@@ -47,28 +58,30 @@ export function resolveProfile(
 }
 
 function readNodeProfile(node: SchemaNode, nodeId: string): OptionalProfileResult {
-  const metadata = ownRecord(node.metadata);
-  const constraints = ownRecord(node.constraints);
-  const direct = metadata ? ownValue(metadata, "x-kalada") : undefined;
-  const extensions = metadata ? ownRecord(ownValue(metadata, "extensions")) : null;
-  const extension = extensions ? ownValue(extensions, "x-kalada") : undefined;
-  const annotations = metadata ? ownRecord(ownValue(metadata, "annotations")) : null;
-  const misplaced = Boolean(
-    (annotations && ownValue(annotations, "x-kalada") !== undefined) ||
-      (constraints && ownValue(constraints, "x-kalada") !== undefined),
-  );
-  if (misplaced || (direct !== undefined && extension !== undefined)) {
+  const metadata = optionalRecord(node.metadata);
+  const constraints = optionalRecord(node.constraints);
+  if (!metadata.ok || !constraints.ok) return failed("SCHEMAN_ADAPTER_PROFILE_MALFORMED", nodeId);
+  const direct = ownSlot(metadata.value, "x-kalada");
+  const extensions = nestedRecord(metadata.value, "extensions");
+  const annotations = nestedRecord(metadata.value, "annotations");
+  if (!extensions.ok || !annotations.ok) return failed("SCHEMAN_ADAPTER_PROFILE_MALFORMED", nodeId);
+  const extension = ownSlot(extensions.value, "x-kalada");
+  const annotation = ownSlot(annotations.value, "x-kalada");
+  const constrained = ownSlot(constraints.value, "x-kalada");
+  if (annotation.present || constrained.present || (direct.present && extension.present)) {
     return failed("SCHEMAN_ADAPTER_PROFILE_CONFLICT", nodeId);
   }
-  const payload = direct ?? extension;
-  if (payload === undefined) return Object.freeze({ ok: true });
-  return readPayload(payload, true, nodeId);
+  const payload = direct.present ? direct : extension;
+  if (!payload.present) return Object.freeze({ ok: true });
+  return readPayload(payload.value, true, nodeId);
 }
 
 function readPayload(input: unknown, versioned: boolean, nodeId: string): ProfileResult {
-  const record = ownRecord(input);
+  const inspected = ownRecord(input);
   const allowed = versioned ? ["version", "type", "codec", "lossy"] : ["type", "codec", "lossy"];
-  if (!record || !exactAllowedKeys(record, allowed) || (versioned && record.version !== 1)) {
+  if (!inspected.ok) return failed("SCHEMAN_ADAPTER_PROFILE_MALFORMED", nodeId);
+  const record = inspected.value;
+  if (!exactAllowedKeys(inspected, allowed) || (versioned && record.version !== 1)) {
     return failed("SCHEMAN_ADAPTER_PROFILE_MALFORMED", nodeId);
   }
   const type = readSemanticType(record.type);
@@ -147,23 +160,67 @@ function readLossPolicy(value: unknown): KaladaLossPolicy | undefined | null {
     : null;
 }
 
-function exactAllowedKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
-  const keys = Object.keys(record);
-  return keys.includes("type") && keys.every((key) => allowed.includes(key));
+function exactAllowedKeys(record: OwnRecord, allowed: readonly string[]): boolean {
+  return record.keys.includes("type") && record.keys.every((key) => allowed.includes(key));
 }
 
-function ownRecord(input: unknown): Record<string, unknown> | null {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) return null;
-  const prototype = Object.getPrototypeOf(input);
-  if (prototype !== null && prototype !== Object.prototype) return null;
-  const descriptors = Object.getOwnPropertyDescriptors(input);
-  if (Object.getOwnPropertySymbols(input).length > 0) return null;
-  if (Object.values(descriptors).some((item) => !("value" in item))) return null;
-  return Object.fromEntries(Object.entries(descriptors).map(([key, item]) => [key, item.value]));
+interface OwnRecord {
+  readonly ok: true;
+  readonly value: Record<string, unknown>;
+  readonly keys: readonly string[];
 }
 
-function ownValue(record: Record<string, unknown>, key: string): unknown {
-  return Object.hasOwn(record, key) ? record[key] : undefined;
+type OwnRecordResult = OwnRecord | Readonly<{ ok: false }>;
+type OptionalRecordResult = Readonly<{ ok: true; value?: OwnRecord }> | Readonly<{ ok: false }>;
+type OwnSlot = Readonly<{ present: false }> | Readonly<{ present: true; value: unknown }>;
+
+function ownRecord(input: unknown): OwnRecordResult {
+  if (typeof input !== "object" || input === null) return Object.freeze({ ok: false });
+  const reflected = reflectRecord(input);
+  if (!reflected) return Object.freeze({ ok: false });
+  const output: Record<string, unknown> = Object.create(null);
+  for (const key of reflected.keys) output[key] = reflected.descriptors[key]?.value;
+  return Object.freeze({
+    ok: true,
+    value: Object.freeze(output),
+    keys: Object.freeze(reflected.keys),
+  });
+}
+
+function reflectRecord(input: object) {
+  try {
+    if (Array.isArray(input)) return null;
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== null && prototype !== Object.prototype) return null;
+    const ownKeys = Reflect.ownKeys(input);
+    if (ownKeys.some((key) => typeof key !== "string")) return null;
+    const keys = ownKeys as string[];
+    const descriptors: Record<string, PropertyDescriptor> = Object.create(null);
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (!descriptor || !("value" in descriptor)) return null;
+      descriptors[key] = descriptor;
+    }
+    return { keys, descriptors };
+  } catch {
+    return null;
+  }
+}
+
+function optionalRecord(input: unknown): OptionalRecordResult {
+  if (input === undefined) return Object.freeze({ ok: true });
+  const record = ownRecord(input);
+  return record.ok ? Object.freeze({ ok: true, value: record }) : Object.freeze({ ok: false });
+}
+
+function nestedRecord(parent: OwnRecord | undefined, key: string): OptionalRecordResult {
+  const slot = ownSlot(parent, key);
+  return slot.present ? optionalRecord(slot.value) : Object.freeze({ ok: true });
+}
+
+function ownSlot(record: OwnRecord | undefined, key: string): OwnSlot {
+  if (!record?.keys.includes(key)) return Object.freeze({ present: false });
+  return Object.freeze({ present: true, value: record.value[key] });
 }
 
 function success(value: ResolvedProfile): ProfileResult {
