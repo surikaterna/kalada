@@ -10,6 +10,9 @@ for (const name of ["Buffer", "process", "require", "module"]) {
 }
 vm.runInNewContext(source, context, { filename: "browser.js" });
 const outcome = JSON.stringify(context.syntaxBrowserOutcome);
-if (outcome !== '{"kind":"numeric-binary","text":"(1 + 2) * 3"}') {
+if (
+  outcome !==
+  '{"kind":"numeric-binary","resultType":{"kind":"primitive-type","name":"number"},"text":"(1 + 2) * 3"}'
+) {
   throw new Error(`Isolated browser execution mismatch: ${outcome}`);
 }

@@ -18,7 +18,11 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("ESM su
 
 const parsed = parseKaladaV1Expression("value?.field ?? fallback");
 const lowered = lowerKaladaV1Expression(parsed);
-if (!lowered.ok || lowered.program.expression.kind !== "option-coalesce") {
+if (
+  !lowered.ok ||
+  lowered.program.expression.kind !== "option-coalesce" ||
+  lowered.resultType !== "dynamic"
+) {
   throw new Error("ESM lowering failed");
 }
 const compiled = compileKaladaV1Program(lowered.program);

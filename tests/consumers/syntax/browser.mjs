@@ -10,5 +10,6 @@ const formatted = formatKaladaV1Expression(" (1+2)*3 ");
 if (!lowered.ok || !formatted.ok) throw new Error("Browser syntax failed");
 globalThis.syntaxBrowserOutcome = {
   kind: lowered.program.expression.kind,
+  resultType: lowered.resultType,
   text: formatted.text,
 };

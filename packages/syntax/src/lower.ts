@@ -26,7 +26,7 @@ import type {
 } from "./public-types.js";
 import { type LowerConfiguration, readLowerConfiguration } from "./reference-environment.js";
 import { addMap, finishMap, rangeForPath, widenNode } from "./source-map.js";
-import { literalType, type StaticType } from "./static-types.js";
+import { literalType, projectStaticType, type StaticType } from "./static-types.js";
 
 interface Lowered<R extends JsonValue> {
   readonly expression: KaladaV1Expression<R>;
@@ -80,6 +80,7 @@ export function lowerKaladaV1Expression<R extends JsonValue = string>(
       ok: true,
       program: compiled.value.program,
       sourceMap: finishMap(state.entries),
+      resultType: projectStaticType(lowered.type),
     });
   } catch (error) {
     const problem =
