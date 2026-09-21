@@ -1,4 +1,5 @@
 import { markReferenceCycles } from "./editor-cycle.js";
+import { compositeEvidenceNode, evidenceNode } from "./editor-evidence-builders.js";
 import {
   arrayNode,
   declaredUnknownNode,
@@ -9,6 +10,7 @@ import {
   tupleNode,
   unionNode,
   unknownNode,
+  withNodeEvidence,
 } from "./editor-node-builders.js";
 import type {
   EditorEdge,
@@ -201,6 +203,18 @@ function readNode(
   if (!inspected.ok) return unknownNode(id, path, "invalid-shape");
   const record = inspected.value;
   const context = nodeContext(depth, bindingId, state);
+  const node = buildNode(record, id, path, bindingId, state, context);
+  return withNodeEvidence(node, record, path, context);
+}
+
+function buildNode(
+  record: Record<string, unknown>,
+  id: string,
+  path: HostPath,
+  bindingId: string,
+  state: GraphState,
+  context: NodeBuildContext,
+): EditorNode {
   if (record.kind === "scalar") return scalarNode(record, id, path);
   if (record.kind === "unknown") return declaredUnknownNode(record, id, path);
   if (record.kind === "object") return objectNode(record, id, path, context);
@@ -208,7 +222,11 @@ function readNode(
   if (record.kind === "tuple") return tupleNode(record, id, path, context);
   if (record.kind === "union") return unionNode(record, id, path, context);
   if (record.kind === "reference") return referenceNode(record, id, path, bindingId, state);
-  return unknownNode(id, path, "unsupported-shape");
+  return (
+    evidenceNode(record, id, path) ??
+    compositeEvidenceNode(record, id, path, context) ??
+    unknownNode(id, path, "unsupported-shape")
+  );
 }
 
 function nodeContext(depth: number, bindingId: string, state: GraphState): NodeBuildContext {
@@ -236,6 +254,9 @@ function referenceNode(
     status: "unresolved",
     availability: "unknown",
     evidence: evidence("unresolved-reference", path),
+    relations: Object.freeze([]),
+    ...(typeof record.reference === "string" ? { reference: record.reference } : {}),
+    ...(typeof record.unresolved === "string" ? { unresolved: record.unresolved } : {}),
   };
   state.references.push({ index: state.nodes.length - 1, bindingId });
   return node;

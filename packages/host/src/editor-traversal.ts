@@ -59,8 +59,12 @@ function walk(
 }
 
 function walkChildren(node: EditorNode, depth: number, state: TraversalState): void {
+  for (const relation of node.relations) walk(relation, "relation", depth + 1, state);
   if (node.kind === "object") {
     for (const property of node.properties) walk(property, "property", depth + 1, state);
+    if (node.additionalProperties) {
+      walk(node.additionalProperties, "additional-property", depth + 1, state);
+    }
     return;
   }
   if (node.kind === "array") {
@@ -73,6 +77,23 @@ function walkChildren(node: EditorNode, depth: number, state: TraversalState): v
   }
   if (node.kind === "union") {
     for (const variant of node.variants) walk(variant, "variant", depth + 1, state);
+    return;
+  }
+  walkComposite(node, depth, state);
+}
+
+function walkComposite(node: EditorNode, depth: number, state: TraversalState): void {
+  if (node.kind === "intersection") {
+    for (const operand of node.operands) walk(operand, "operand", depth + 1, state);
+    return;
+  }
+  if (node.kind === "record") {
+    walk(node.key, "record-key", depth + 1, state);
+    walk(node.value, "record-value", depth + 1, state);
+    return;
+  }
+  if (node.kind === "wrapper") {
+    walk(node.inner, "wrapper", depth + 1, state);
     return;
   }
   if (node.kind === "reference" && node.target) {

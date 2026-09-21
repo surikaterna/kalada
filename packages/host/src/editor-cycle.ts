@@ -46,14 +46,29 @@ function addUndiscovered(
 }
 
 function outgoingNodeIds(node: EditorNode): string[] {
-  if (node.kind === "object") return node.properties.map(({ nodeId }) => nodeId);
-  if (node.kind === "array") return [node.element.nodeId];
-  if (node.kind === "tuple") {
-    return [...node.items.map(({ nodeId }) => nodeId), ...(node.rest ? [node.rest.nodeId] : [])];
+  const relations = node.relations.map(({ nodeId }) => nodeId);
+  if (node.kind === "object") {
+    return [
+      ...relations,
+      ...node.properties.map(({ nodeId }) => nodeId),
+      ...(node.additionalProperties ? [node.additionalProperties.nodeId] : []),
+    ];
   }
-  if (node.kind === "union") return node.variants.map(({ nodeId }) => nodeId);
-  if (node.kind === "reference" && node.target) return [node.target.nodeId];
-  return [];
+  if (node.kind === "array") return [...relations, node.element.nodeId];
+  if (node.kind === "tuple") {
+    return [
+      ...relations,
+      ...node.items.map(({ nodeId }) => nodeId),
+      ...(node.rest ? [node.rest.nodeId] : []),
+    ];
+  }
+  if (node.kind === "union") return [...relations, ...node.variants.map(({ nodeId }) => nodeId)];
+  if (node.kind === "intersection")
+    return [...relations, ...node.operands.map(({ nodeId }) => nodeId)];
+  if (node.kind === "record") return [...relations, node.key.nodeId, node.value.nodeId];
+  if (node.kind === "wrapper") return [...relations, node.inner.nodeId];
+  if (node.kind === "reference" && node.target) return [...relations, node.target.nodeId];
+  return relations;
 }
 
 function cycleEdge(edge: EditorEdge): EditorEdge {
