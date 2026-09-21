@@ -39,7 +39,7 @@ interface GraphState {
   readonly references: { index: number; bindingId: string }[];
   readonly evidence: EditorUnknownEvidence[];
   edges: number;
-  limitNodeId?: string;
+  limitNodeIndex?: number;
 }
 
 export function createEditorGraph(
@@ -253,11 +253,28 @@ function childEdge(
 }
 
 function unknownEdge(code: EditorUnknownCode, path: HostPath, state: GraphState): EditorEdge {
-  if (state.limitNodeId) return edge(state.limitNodeId, path, false);
+  if (state.limitNodeIndex !== undefined) {
+    const index = state.limitNodeIndex;
+    appendUnknownEvidence(index, code, path, state);
+    return edge(`n${index}`, path, false);
+  }
   const id = `n${state.nodes.length}`;
-  state.limitNodeId = id;
+  state.limitNodeIndex = state.nodes.length;
   state.nodes.push(unknownNode(id, path, code));
   return edge(id, path, false);
+}
+
+function appendUnknownEvidence(
+  index: number,
+  code: EditorUnknownCode,
+  path: HostPath,
+  state: GraphState,
+): void {
+  const node = state.nodes[index];
+  if (node?.kind !== "unknown" || node.evidence.length >= state.limits.maxEdges) return;
+  if (node.evidence.some((item) => item.code === code && samePath(item.path, path))) return;
+  const item = Object.freeze({ code, path: freezePath(path) });
+  state.nodes[index] = { ...node, evidence: Object.freeze([...node.evidence, item]) };
 }
 
 function resolveReferences(state: GraphState, targets: Map<string, Map<string, string>>): void {
@@ -297,8 +314,13 @@ function claimEdge(path: HostPath, state: GraphState): boolean {
 }
 
 function recordEvidence(code: EditorUnknownCode, path: HostPath, state: GraphState): void {
-  if (state.evidence.some((item) => item.code === code)) return;
+  if (state.evidence.length >= state.limits.maxEdges) return;
+  if (state.evidence.some((item) => item.code === code && samePath(item.path, path))) return;
   state.evidence.push(Object.freeze({ code, path: freezePath(path) }));
+}
+
+function samePath(left: HostPath, right: HostPath): boolean {
+  return left.length === right.length && left.every((part, index) => part === right[index]);
 }
 
 function readGraphInput(input: unknown): EditorGraphInput | null {
