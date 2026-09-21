@@ -41,7 +41,7 @@ function walk(
   if (depth > state.maxDepth || state.steps.length >= state.maxVisits) return;
   const node = state.nodes.get(edge.nodeId);
   if (!node) return;
-  const cycle = edge.cycle || state.active.has(edge.nodeId);
+  const cycle = state.active.has(edge.nodeId);
   state.steps.push(
     Object.freeze({
       nodeId: edge.nodeId,
