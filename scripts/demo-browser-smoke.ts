@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium, type Page } from "playwright";
 
@@ -18,6 +18,36 @@ function build(): void {
   const metafile = readFileSync(resolve(app, "dist/demo-metafile.json"), "utf8");
   if (/node:|@scheman\/.*packages\/(?:host|language-service|core)/u.test(metafile)) {
     throw new Error("Demo bundle contains a forbidden package boundary");
+  }
+  const output = JSON.parse(metafile) as BundleEvidence;
+  const main = output.entries.find((entry) => entry.type === "chunk" && entry.imports.length === 0);
+  if (
+    !main ||
+    main.modules.some((name) => name.includes("@cfworker") || name.includes("@scheman/core"))
+  ) {
+    throw new Error("Optional schema vendors leaked into the initial chunk");
+  }
+  inspectJavaScript();
+}
+
+interface BundleEvidence {
+  readonly entries: readonly {
+    readonly file: string;
+    readonly type: string;
+    readonly imports: readonly string[];
+    readonly modules: readonly string[];
+  }[];
+}
+
+function inspectJavaScript(): void {
+  const assets = resolve(app, "dist/assets");
+  const forbidden =
+    /\beval\s*\(|new\s+Function\s*\(|\bfetch\s*\(|\b(?:XMLHttpRequest|WebSocket)\b|["']node:/u;
+  for (const name of readdirSync(assets)) {
+    if (!name.endsWith(".js")) continue;
+    if (forbidden.test(readFileSync(resolve(assets, name), "utf8"))) {
+      throw new Error(`Forbidden dynamic-code/network/Node primitive in ${name}`);
+    }
   }
 }
 
