@@ -20,15 +20,24 @@ export const FORBIDDEN_PROPERTIES = new Set([...FORBIDDEN_GLOBALS, "constructor"
 export const GLOBAL_HOSTS = new Set(["global", "globalThis", "navigator", "self", "window"]);
 export const HOST_CHILDREN = new Set(["globalThis", "navigator", "self", "window"]);
 export const CALL_WRAPPERS = new Set(["apply", "bind", "call"]);
-export const SAFE_EMITTED_HOST_KEYS = new Set([
-  "EditContext",
+export const AMBIENT_TIMERS = new Set(["setInterval", "setTimeout"]);
+export const SAFE_EMITTED_HOST_CALLS = new Set([
+  "addEventListener",
   "dispatchEvent",
   "getComputedStyle",
+  "isInputPending",
+  "matchMedia",
+  "onerror",
+  "scrollBy",
+  "slice",
+  "toString",
+  "updateCharacterBounds",
+]);
+export const SAFE_EMITTED_HOST_CONSTRUCTORS = new Set(["EditContext"]);
+export const SAFE_EMITTED_HOST_VALUES = new Set([
   "innerHeight",
   "innerWidth",
   "location",
-  "matchMedia",
-  "onerror",
   "platform",
   "scheduling",
   "userAgent",
@@ -47,8 +56,12 @@ export function isMemberExpression(
   return ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node);
 }
 
-export function isInvocation(node: ts.Node): node is ts.CallExpression | ts.NewExpression {
-  return ts.isCallExpression(node) || ts.isNewExpression(node);
+export type InvocationNode = ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression;
+
+export function isInvocation(node: ts.Node): node is InvocationNode {
+  return (
+    ts.isCallExpression(node) || ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)
+  );
 }
 
 export function isFunctionExpression(
@@ -139,6 +152,14 @@ export function lexicalScope(node: ts.Node): ts.Node {
   return current ?? node.getSourceFile();
 }
 
+export function declarationScope(node: ts.Node): ts.Node {
+  const declaration = bindingDeclaration(node);
+  if (declaration && ts.isVariableDeclaration(declaration) && isVarDeclaration(declaration)) {
+    return hoistScope(declaration);
+  }
+  return lexicalScope(node);
+}
+
 export function parentScope(scope: ts.Node): ts.Node | undefined {
   let current: ts.Node | undefined = scope.parent;
   while (current && !isLexicalScope(current)) current = current.parent;
@@ -146,5 +167,44 @@ export function parentScope(scope: ts.Node): ts.Node | undefined {
 }
 
 function isLexicalScope(node: ts.Node): boolean {
-  return ts.isSourceFile(node) || ts.isBlock(node) || ts.isFunctionLike(node);
+  return (
+    ts.isSourceFile(node) ||
+    ts.isBlock(node) ||
+    ts.isFunctionLike(node) ||
+    ts.isClassLike(node) ||
+    ts.isCatchClause(node) ||
+    ts.isForStatement(node) ||
+    ts.isForInStatement(node) ||
+    ts.isForOfStatement(node) ||
+    ts.isCaseBlock(node)
+  );
+}
+
+function bindingDeclaration(node: ts.Node): ts.Node | undefined {
+  let current: ts.Node | undefined = node;
+  while (
+    current &&
+    (ts.isIdentifier(current) ||
+      ts.isBindingElement(current) ||
+      ts.isObjectBindingPattern(current) ||
+      ts.isArrayBindingPattern(current))
+  ) {
+    current = current.parent;
+  }
+  return current;
+}
+
+function isVarDeclaration(node: ts.VariableDeclaration): boolean {
+  return (
+    ts.isVariableDeclarationList(node.parent) &&
+    (node.parent.flags & ts.NodeFlags.BlockScoped) === 0
+  );
+}
+
+function hoistScope(node: ts.Node): ts.Node {
+  let current: ts.Node | undefined = node.parent;
+  while (current && !ts.isSourceFile(current) && !ts.isFunctionLike(current)) {
+    current = current.parent;
+  }
+  return current ?? node.getSourceFile();
 }

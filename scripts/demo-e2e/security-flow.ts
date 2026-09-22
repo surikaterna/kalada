@@ -11,6 +11,9 @@ export enum Flow {
   DescriptorGet = 1 << 7,
   ReflectConstruct = 1 << 8,
   SafeHostDerived = 1 << 9,
+  SafeHostCall = 1 << 10,
+  Timer = 1 << 11,
+  SafeHostNew = 1 << 12,
 }
 
 export interface AbstractValue {
@@ -70,12 +73,22 @@ export function hasFlow(value: AbstractValue, flow: Flow): boolean {
 
 export function hasHostFlow(value: AbstractValue): boolean {
   return (
-    (value.flow & (Flow.Host | Flow.HostDerived | Flow.UnknownHost | Flow.SafeHostDerived)) !== 0
+    (value.flow &
+      (Flow.Host |
+        Flow.HostDerived |
+        Flow.UnknownHost |
+        Flow.SafeHostDerived |
+        Flow.SafeHostCall |
+        Flow.SafeHostNew)) !==
+    0
   );
 }
 
 export function hasCapabilityFlow(value: AbstractValue): boolean {
-  return (value.flow & ~Flow.SafeHostDerived) !== 0 || value.descriptor !== undefined;
+  return (
+    (value.flow & ~(Flow.SafeHostDerived | Flow.SafeHostCall | Flow.SafeHostNew)) !== 0 ||
+    value.descriptor !== undefined
+  );
 }
 
 export function hasCallableCapability(value: AbstractValue): boolean {

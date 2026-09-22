@@ -13,7 +13,12 @@ import {
   unwrapExpression,
   valueSignature,
 } from "./security-flow.js";
-import { isDeclarationBinding, lexicalScope, parentScope } from "./security-policy.js";
+import {
+  declarationScope,
+  isDeclarationBinding,
+  lexicalScope,
+  parentScope,
+} from "./security-policy.js";
 
 export interface BindingContext {
   readonly assign: (name: string, value: AbstractValue, target: ts.Node) => boolean;
@@ -47,7 +52,11 @@ export class ScopedBindings {
   }
 
   declare(name: string, value: AbstractValue, target: ts.Node): boolean {
-    return this.merge(lexicalScope(target), name, value, target);
+    return this.merge(declarationScope(target), name, value, target);
+  }
+
+  declareAt(name: string, value: AbstractValue, scope: ts.Node, target: ts.Node): boolean {
+    return this.merge(scope, name, value, target);
   }
 
   private merge(scope: ts.Node, name: string, value: AbstractValue, target: ts.Node): boolean {
@@ -65,7 +74,7 @@ export class ScopedBindings {
   }
 
   private assignmentScope(name: string, target: ts.Node): ts.Node {
-    if (isDeclarationBinding(target)) return lexicalScope(target);
+    if (isDeclarationBinding(target)) return declarationScope(target);
     let scope: ts.Node | undefined = lexicalScope(target);
     while (scope) {
       if (this.scopes.get(scope)?.has(name)) return scope;
