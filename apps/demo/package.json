@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "browser:smoke": "bun ../../scripts/demo-browser-smoke.ts",
+    "browser:smoke": "bun run test:e2e",
     "preview": "vite preview",
     "test": "vitest run --config ../../vitest.config.ts src tests",
+    "test:e2e": "bun ../../scripts/demo-browser-smoke.ts",
+    "test:e2e:deployed": "bun ../../scripts/demo-browser-smoke.ts --deployed",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

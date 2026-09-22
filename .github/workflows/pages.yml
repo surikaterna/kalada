@@ -1,0 +1,79 @@
+name: Pages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Install managed Chromium and system dependencies
+        run: bunx playwright install --with-deps chromium
+      - name: Verify the production Pages artifact
+        run: bun run --filter @kalada/demo test:e2e
+      - name: Upload E2E failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: demo-e2e-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/demo/test-results/demo-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload exact verified Pages artifact
+        if: github.repository == 'surikaterna/kalada' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/demo/dist
+          retention-days: 1
+
+  deploy:
+    if: github.repository == 'surikaterna/kalada' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Read existing Pages configuration
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        with:
+          enablement: false
+      - name: Assert canonical Pages URL and no custom domain
+        env:
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+          PAGES_ORIGIN: ${{ steps.pages.outputs.origin }}
+          PAGES_HOST: ${{ steps.pages.outputs.host }}
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          test "$PAGES_BASE_URL" = "https://surikaterna.github.io/kalada"
+          test "$PAGES_ORIGIN" = "https://surikaterna.github.io"
+          test "$PAGES_HOST" = "surikaterna.github.io"
+          test "$PAGES_BASE_PATH" = "/kalada"
+      - name: Deploy verified artifact
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
