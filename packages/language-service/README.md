@@ -1,6 +1,7 @@
 # @kalada/language-service
 
-Headless document analysis, diagnostics, UTF-16 coordinate conversion, and formatting for Kalada.
+Headless document analysis, diagnostics, completion, hover, UTF-16 coordinate conversion, and
+formatting for Kalada.
 The package has no editor, transport, filesystem, network, DOM, scheduling, or evaluation behavior.
 
 Create a service with a host `DescribeEnvironmentResult`, then explicitly open and version documents.
@@ -21,6 +22,13 @@ Analysis composes the public host parse, compile, and link phases. It exposes on
 normalized environment, program, and source map artifacts available at the completed phase. Link
 diagnostics are published, but the prepared evaluator is discarded and never exposed or invoked.
 Capability snapshots are passed only to host linking; capability callbacks are never invoked.
+
+`completion(uri, position)` and `hover(uri, position)` synchronously capture the same document and
+environment identities as analysis. They use parser recovery for incomplete source and query only the
+immutable normalized editor graph. Completion edits and hover ranges are UTF-16. Structural input
+shape, presence/provenance evidence, and Kalada output semantics remain separate. Unknown graph or
+semantic branches stay conditional; runtime values, capability callbacks, and schema-vendor APIs are
+never read.
 
 `getWorkspaceSnapshot()` contains only document identities and the environment generation. Documents
 share an environment but have no imports, module resolution, or cross-file expression semantics.

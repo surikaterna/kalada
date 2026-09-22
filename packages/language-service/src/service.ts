@@ -1,9 +1,11 @@
+import type { Utf16Position } from "@kalada/host";
 import { formatKaladaV1Expression, type KaladaSyntaxDiagnostic } from "@kalada/syntax";
 import { runAnalysisPhases } from "./analysis.js";
 import type {
   AnalysisOutcome,
   CancellationToken,
   CancelledResult,
+  CompletionOutcome,
   DiagnosticsOutcome,
   DocumentOpen,
   DocumentSnapshot,
@@ -12,6 +14,7 @@ import type {
   EnvironmentUpdate,
   FormatCheckpoint,
   FormatOutcome,
+  HoverOutcome,
   LanguageService,
   LanguageServiceCheckpoint,
   LanguageServiceDiagnostic,
@@ -23,6 +26,7 @@ import type {
 } from "./contracts.js";
 import { DocumentStore, validVersion } from "./documents.js";
 import { LanguageServiceError } from "./errors.js";
+import { runCompletion, runHover } from "./tooling.js";
 
 export function createLanguageService(initial: EnvironmentUpdate): LanguageService {
   return new LanguageServiceInstance(initial);
@@ -91,6 +95,33 @@ class LanguageServiceInstance implements LanguageService {
     const final = this.formatCancellation("complete", captured.identity, options?.cancellation);
     if (final) return final;
     return this.formatResult(captured.document, captured.identity, formatted);
+  }
+
+  completion(uri: string, position: Utf16Position, options?: RequestOptions): CompletionOutcome {
+    const captured = this.capture(uri);
+    const run = runCompletion(
+      captured.document,
+      captured.environment,
+      position,
+      options?.cancellation,
+    );
+    if (run.cancelled) return this.cancelled("completion", captured.identity, run.checkpoint);
+    return Object.freeze({
+      ...run.value,
+      ...captured.identity,
+      status: this.status(captured.identity),
+    });
+  }
+
+  hover(uri: string, position: Utf16Position, options?: RequestOptions): HoverOutcome {
+    const captured = this.capture(uri);
+    const run = runHover(captured.document, captured.environment, position, options?.cancellation);
+    if (run.cancelled) return this.cancelled("hover", captured.identity, run.checkpoint);
+    return Object.freeze({
+      ...run.value,
+      ...captured.identity,
+      status: this.status(captured.identity),
+    });
   }
 
   isCurrent(identity: SnapshotIdentity): boolean {
