@@ -103,6 +103,24 @@ describe("package boundaries", () => {
     expect(source).not.toMatch(/parseKalada|editorGraph|evaluate\s*\(/u);
   });
 
+  it("keeps DOM ambient types and imports out of headless packages", async () => {
+    const rootConfig = await readJson(resolve(root, "tsconfig.json"));
+    const rootCompiler = rootConfig.compilerOptions as { readonly lib?: readonly string[] };
+    expect(rootCompiler.lib).toEqual(["ES2024"]);
+    const codeMirrorConfig = await readJson(resolve(codeMirror, "tsconfig.json"));
+    const codeMirrorCompiler = codeMirrorConfig.compilerOptions as {
+      readonly lib?: readonly string[];
+    };
+    expect(codeMirrorCompiler.lib).toContain("DOM");
+    for (const directory of [core, host, languageService]) {
+      const config = await readJson(resolve(directory, "tsconfig.json"));
+      const compiler = config.compilerOptions as { readonly lib?: readonly string[] };
+      expect(compiler.lib).toBeUndefined();
+      const source = await productionSource(resolve(directory, "src"));
+      expect(source).not.toMatch(/from\s+["'](?:@codemirror\/|codemirror|@kalada\/codemirror)/u);
+    }
+  });
+
   it("keeps compiler, evaluator, and profile APIs off the root entry point", async () => {
     const source = await readFile(resolve(core, "src/index.ts"), "utf8");
     const file = ts.createSourceFile("index.ts", source, ts.ScriptTarget.Latest, true);
@@ -121,3 +139,16 @@ describe("package boundaries", () => {
     expect(delivery).not.toContain("calls.pop");
   });
 });
+
+async function productionSource(directory: string): Promise<string> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const chunks = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) return productionSource(path);
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) return "";
+      return readFile(path, "utf8");
+    }),
+  );
+  return chunks.join("\n");
+}

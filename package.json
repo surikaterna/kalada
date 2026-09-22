@@ -30,7 +30,7 @@
     "syntax:browser-smoke": "bun run build && bun scripts/syntax-package-smoke.ts --browser-only",
     "syntax:smoke": "bun run build && bun scripts/syntax-package-smoke.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun run --filter '*' typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
