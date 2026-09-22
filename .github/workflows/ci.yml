@@ -39,6 +39,7 @@ jobs:
       - run: bun run projection:smoke
       - run: bun run syntax:smoke
       - run: bun run syntax:browser-smoke
+      - run: bun run adapter-scheman:smoke
       - name: Validate ordinary PR Changesets
         if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
         env:

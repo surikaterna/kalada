@@ -31,24 +31,50 @@ export type {
   Utf16Position,
   Utf16Range,
 } from "./contracts.js";
+export type {
+  EditorGraphAdmission,
+  EditorGraphAdmissionRequest,
+  EditorGraphEdgeCategory,
+  EditorGraphEdgeMeter,
+  EditorGraphEdgeUsage,
+} from "./editor-admission.js";
+export {
+  calculateEditorGraphAdmission,
+  createEditorGraphEdgeMeter,
+} from "./editor-admission.js";
 export { createEditorGraph, DEFAULT_EDITOR_GRAPH_LIMITS } from "./editor-graph.js";
 export { traverseEditorGraph } from "./editor-traversal.js";
 export type {
   EditorArrayNode,
   EditorArrayShape,
+  EditorData,
   EditorEdge,
+  EditorEnumNode,
+  EditorEnumShape,
   EditorGraph,
   EditorGraphDefinition,
   EditorGraphInput,
   EditorGraphLimits,
   EditorGraphRoot,
+  EditorIntersectionNode,
+  EditorIntersectionShape,
+  EditorLiteralNode,
+  EditorLiteralShape,
+  EditorNeverNode,
+  EditorNeverShape,
   EditorNode,
   EditorObjectNode,
   EditorObjectPropertyShape,
   EditorObjectShape,
+  EditorOpaqueNode,
+  EditorOpaqueShape,
   EditorPropertyEdge,
+  EditorRecordNode,
+  EditorRecordShape,
   EditorReferenceNode,
   EditorReferenceShape,
+  EditorRelationEdge,
+  EditorRelationShape,
   EditorScalarName,
   EditorScalarNode,
   EditorScalarShape,
@@ -57,12 +83,16 @@ export type {
   EditorTraversalStep,
   EditorTupleNode,
   EditorTupleShape,
+  EditorUnconstrainedNode,
+  EditorUnconstrainedShape,
   EditorUnionNode,
   EditorUnionShape,
   EditorUnknownCode,
   EditorUnknownEvidence,
   EditorUnknownNode,
   EditorUnknownShape,
+  EditorWrapperNode,
+  EditorWrapperShape,
   HostPath,
   ManualEditorDefinition,
   ManualEditorShapeDocument,
@@ -95,6 +125,8 @@ export {
   describeEnvironment,
   normalizeManualEnvironment,
 } from "./manual-provider.js";
+export type { SemanticTypeResult } from "./semantic-type.js";
+export { readSemanticType } from "./semantic-type.js";
 export type {
   SerializableCloneResult,
   SerializableLimits,

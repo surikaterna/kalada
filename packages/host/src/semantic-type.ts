@@ -22,6 +22,10 @@ export function cloneSemanticType(input: unknown): SemanticTypeResult {
   return Object.freeze({ ok: true, value: cloned.value as KaladaSyntaxStaticType });
 }
 
+export function readSemanticType(input: unknown): SemanticTypeResult {
+  return cloneSemanticType(input);
+}
+
 function isKaladaType(input: unknown, depth: number): boolean {
   if (depth > 32) return false;
   const inspected = readOwnDataRecord(input, 64);

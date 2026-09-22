@@ -17,6 +17,15 @@ are bounded, with limit evidence retained in the graph. Node IDs such as `n0` ar
 deterministic traversal identities scoped only to that normalized document (`nodeIdScope` is
 `document-local`); they are not hashes, cache keys, or cross-document fingerprints.
 
+The schema-neutral graph can also retain literal, enum, never, unconstrained, opaque, record,
+intersection, wrapper, relation, additional-property, presence, source-ID, annotation, and
+constraint evidence. These constructs carry editor/provider evidence only; they do not infer the
+binding's semantic type. `readSemanticType` is the public bounded reader for generic adapter-owned
+type declarations.
+New normalized evidence fields on pre-existing public node/property interfaces are optional for
+source compatibility; host-produced normalized graphs always populate deterministic relation,
+presence, and required-name values.
+
 Normalized environments contain only recursively frozen serializable data. Validator and codec
 callbacks are held separately in the returned, instance-scoped `capabilitySnapshot`. There is no
 global provider registry, ambient lookup, cache, or import-time registration.
