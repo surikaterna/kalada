@@ -1,16 +1,40 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ROOT } from "./config.js";
-import { assertJavaScriptSecurity } from "./security-ast.js";
-import type { BundleEntry, BundleEvidence } from "./types.js";
+import type { BundleClosures, BundleEntry, BundleEvidence } from "./types.js";
 
 const VENDOR =
   /(?:node_modules\/(?:@cfworker\/json-schema|@scheman\/core)|packages\/adapter-scheman)\//u;
+const DEMO_DEPENDENCIES = {
+  "@cfworker/json-schema": "4.1.1",
+  "@codemirror/autocomplete": "6.20.3",
+  "@codemirror/commands": "6.11.1",
+  "@codemirror/lang-json": "6.0.2",
+  "@codemirror/lint": "6.9.7",
+  "@codemirror/state": "6.7.6",
+  "@codemirror/view": "6.43.13",
+  "@kalada/adapter-scheman": "workspace:*",
+  "@kalada/codemirror": "workspace:*",
+  "@kalada/core": "workspace:*",
+  "@kalada/host": "workspace:*",
+  "@kalada/language-service": "workspace:*",
+  "@kalada/syntax": "workspace:*",
+  "@scheman/core": "2.0.0",
+};
 
 export function assertExactPins(): void {
   const root = packageJson(resolve(ROOT, "package.json"));
   const demo = packageJson(resolve(ROOT, "apps/demo/package.json"));
   const lock = readFileSync(resolve(ROOT, "bun.lock"), "utf8");
+  if (demo.name !== "@kalada/demo" || demo.private !== true) {
+    throw new Error("Demo package must remain private");
+  }
+  if (JSON.stringify(demo.dependencies) !== JSON.stringify(DEMO_DEPENDENCIES)) {
+    throw new Error("Demo dependency pins drifted");
+  }
+  if (JSON.stringify(demo.devDependencies) !== JSON.stringify({ vite: "8.3.0" })) {
+    throw new Error("Demo development dependency pins drifted");
+  }
   if (root.devDependencies?.playwright !== "1.63.0") throw new Error("Playwright pin drifted");
   if (demo.dependencies?.["@cfworker/json-schema"] !== "4.1.1") {
     throw new Error("cfworker pin drifted");
@@ -25,15 +49,14 @@ export function assertExactPins(): void {
   }
 }
 
-export { assertJavaScriptSecurity };
-
-export function assertBundleBoundaries(evidence: BundleEvidence): Set<string> {
+export function assertBundleBoundaries(evidence: BundleEvidence): BundleClosures {
   const byFile = new Map(evidence.entries.map((entry) => [entry.file, entry]));
   const entry = evidence.entries.find((item) => item.type === "chunk" && item.isEntry);
   if (!entry) throw new Error("Bundle entry chunk is missing");
   const staticFiles = closure(byFile, [entry.file], false);
   const dynamicRoots = [...staticFiles].flatMap((file) => byFile.get(file)?.dynamicImports ?? []);
   const dynamicFiles = closure(byFile, dynamicRoots, true);
+  for (const file of staticFiles) dynamicFiles.delete(file);
   const environment = evidence.entries.find((item) =>
     item.modules.some((module) => module.endsWith("/apps/demo/src/schema/environment.ts")),
   );
@@ -41,7 +64,7 @@ export function assertBundleBoundaries(evidence: BundleEvidence): Set<string> {
     throw new Error("Lazy environment chunk is missing from the dynamic closure");
   }
   assertVendorPlacement(evidence.entries, staticFiles, dynamicFiles, environment.file);
-  return staticFiles;
+  return { staticFiles, dynamicFiles };
 }
 
 function assertVendorPlacement(
@@ -123,6 +146,8 @@ function hasScheman(entry: BundleEntry): boolean {
 }
 
 function packageJson(path: string): {
+  name?: string;
+  private?: boolean;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 } {

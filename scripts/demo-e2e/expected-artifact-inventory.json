@@ -1,0 +1,321 @@
+{
+  "format": "kalada-demo-artifact-v1",
+  "scope": "bounded-observed-syntax-not-general-javascript-proof",
+  "base": "/kalada/",
+  "files": [
+    {
+      "file": "assets/environment-BBcbKOEi.js",
+      "sha256": "f268644da7f38595b3b01babb6b4b4863299d8813c515fdffecddee017e00eea",
+      "closure": "lazy-environment",
+      "imports": [
+        {
+          "name": "static:./index-D_y5Df_N.js",
+          "count": 1
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "identifier:location",
+          "count": 2
+        },
+        {
+          "name": "identifier:self",
+          "count": 5
+        },
+        {
+          "name": "identifier:URL",
+          "count": 6
+        }
+      ],
+      "urlLiterals": [
+        {
+          "name": "foreign:https://github.com/cfworker",
+          "count": 1
+        },
+        {
+          "name": "foreign:https://json-schema.org/draft/2020-12/schema",
+          "count": 1
+        },
+        {
+          "name": "root:/",
+          "count": 12
+        },
+        {
+          "name": "root:/definitions",
+          "count": 1
+        },
+        {
+          "name": "root:/diagnostics",
+          "count": 1
+        },
+        {
+          "name": "root:/nodes/*/required",
+          "count": 1
+        }
+      ],
+      "contributors": [
+        "apps/demo/src/schema/admission.ts",
+        "apps/demo/src/schema/environment.ts",
+        "apps/demo/src/schema/references.ts",
+        "apps/demo/src/schema/validator.ts",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/deep-compare-strict.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/dereference.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/format.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/pointer.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/ucs2-length.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/validate.js",
+        "node_modules/.bun/@cfworker+json-schema@4.1.1/node_modules/@cfworker/json-schema/dist/esm/validator.js",
+        "node_modules/.bun/@scheman+core@2.0.0/node_modules/@scheman/core/dist/index.js",
+        "packages/adapter-scheman/src/adapter.ts",
+        "packages/adapter-scheman/src/analysis-limits.ts",
+        "packages/adapter-scheman/src/capability-wrappers.ts",
+        "packages/adapter-scheman/src/editor-document.ts",
+        "packages/adapter-scheman/src/editor-edge-budget.ts",
+        "packages/adapter-scheman/src/editor-invariants.ts",
+        "packages/adapter-scheman/src/editor-relations.ts",
+        "packages/adapter-scheman/src/local-reference.ts",
+        "packages/adapter-scheman/src/profile.ts",
+        "packages/adapter-scheman/src/semantic-mapping.ts",
+        "packages/host/src/binding-normalization.ts",
+        "packages/host/src/capability-normalization.ts",
+        "packages/host/src/diagnostics.ts",
+        "packages/host/src/editor-admission.ts",
+        "packages/host/src/editor-cycle.ts",
+        "packages/host/src/editor-evidence-builders.ts",
+        "packages/host/src/editor-graph.ts",
+        "packages/host/src/editor-input-validation.ts",
+        "packages/host/src/editor-node-builders.ts",
+        "packages/host/src/identity.ts",
+        "packages/host/src/manual-provider.ts"
+      ]
+    },
+    {
+      "file": "assets/index-DVZWFT5h.css",
+      "sha256": "ece7753164992d9517f7fc3cbe226fd5484c28ef6ecc12347c0c6c58cb455b01",
+      "closure": "entry-static",
+      "imports": [],
+      "capabilities": [],
+      "urlLiterals": [],
+      "contributors": []
+    },
+    {
+      "file": "assets/index-D_y5Df_N.js",
+      "sha256": "60fa4452824c400f5d56fe50523a8db2c6d2139b71a11f991011a0db299b8da2",
+      "closure": "entry-static",
+      "imports": [
+        {
+          "name": "dynamic:./environment-BBcbKOEi.js",
+          "count": 1
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "identifier:Blob",
+          "count": 1
+        },
+        {
+          "name": "identifier:caches",
+          "count": 1
+        },
+        {
+          "name": "identifier:document",
+          "count": 62
+        },
+        {
+          "name": "identifier:FileReader",
+          "count": 1
+        },
+        {
+          "name": "identifier:Function",
+          "count": 2
+        },
+        {
+          "name": "identifier:globalThis",
+          "count": 2
+        },
+        {
+          "name": "identifier:localStorage",
+          "count": 4
+        },
+        {
+          "name": "identifier:navigator",
+          "count": 13
+        },
+        {
+          "name": "identifier:setInterval",
+          "count": 1
+        },
+        {
+          "name": "identifier:setTimeout",
+          "count": 24
+        },
+        {
+          "name": "identifier:URL",
+          "count": 3
+        },
+        {
+          "name": "identifier:window",
+          "count": 26
+        },
+        {
+          "name": "member:createObjectURL",
+          "count": 1
+        },
+        {
+          "name": "member:revokeObjectURL",
+          "count": 1
+        },
+        {
+          "name": "node-probe:typeof process",
+          "count": 1
+        }
+      ],
+      "urlLiterals": [
+        {
+          "name": "base:/kalada/",
+          "count": 1
+        },
+        {
+          "name": "foreign:https://json-schema.org/draft/2020-12/schema",
+          "count": 1
+        },
+        {
+          "name": "root:/",
+          "count": 10
+        },
+        {
+          "name": "root://",
+          "count": 1
+        }
+      ],
+      "contributors": [
+        "apps/demo/index.html",
+        "apps/demo/src/examples/builtin.ts",
+        "apps/demo/src/generation/candidate.ts",
+        "apps/demo/src/generation/canonical.ts",
+        "apps/demo/src/generation/contract.ts",
+        "apps/demo/src/generation/prng.ts",
+        "apps/demo/src/inspectors/artifacts.ts",
+        "apps/demo/src/inspectors/environment.ts",
+        "apps/demo/src/inspectors/own.ts",
+        "apps/demo/src/inspectors/program.ts",
+        "apps/demo/src/inspectors/values.ts",
+        "apps/demo/src/live/runtime.ts",
+        "apps/demo/src/live/snapshots.ts",
+        "apps/demo/src/main.ts",
+        "apps/demo/src/schema/limits.ts",
+        "apps/demo/src/ui/app.ts",
+        "apps/demo/src/ui/dom.ts",
+        "apps/demo/src/ui/styles.css",
+        "apps/demo/src/workspace/imports.ts",
+        "apps/demo/src/workspace/model.ts",
+        "apps/demo/src/workspace/persistence.ts",
+        "apps/demo/src/workspace/transfer.ts",
+        "apps/demo/src/workspace/uris.ts",
+        "node_modules/.bun/@codemirror+autocomplete@6.20.3/node_modules/@codemirror/autocomplete/dist/index.js",
+        "node_modules/.bun/@codemirror+commands@6.11.1/node_modules/@codemirror/commands/dist/index.js",
+        "node_modules/.bun/@codemirror+lang-json@6.0.2/node_modules/@codemirror/lang-json/dist/index.js",
+        "node_modules/.bun/@codemirror+language@6.12.4/node_modules/@codemirror/language/dist/index.js",
+        "node_modules/.bun/@codemirror+lint@6.9.7/node_modules/@codemirror/lint/dist/index.js",
+        "node_modules/.bun/@codemirror+state@6.7.6/node_modules/@codemirror/state/dist/index.js",
+        "node_modules/.bun/@codemirror+view@6.43.13/node_modules/@codemirror/view/dist/index.js",
+        "node_modules/.bun/@lezer+common@1.5.2/node_modules/@lezer/common/dist/index.js",
+        "node_modules/.bun/@lezer+highlight@1.2.3/node_modules/@lezer/highlight/dist/index.js",
+        "node_modules/.bun/@lezer+json@1.0.3/node_modules/@lezer/json/dist/index.js",
+        "node_modules/.bun/@lezer+lr@1.4.10/node_modules/@lezer/lr/dist/index.js",
+        "node_modules/.bun/@marijn+find-cluster-break@1.0.4/node_modules/@marijn/find-cluster-break/src/index.js",
+        "node_modules/.bun/crelt@1.0.7/node_modules/crelt/index.js",
+        "node_modules/.bun/style-mod@4.1.4/node_modules/style-mod/src/style-mod.js",
+        "node_modules/.bun/w3c-keyname@2.2.8/node_modules/w3c-keyname/index.js",
+        "packages/codemirror/src/line-separator.ts",
+        "packages/codemirror/src/render.ts",
+        "packages/codemirror/src/session-helpers.ts",
+        "packages/codemirror/src/session.ts",
+        "packages/codemirror/src/tooltip-state.ts",
+        "packages/codemirror/src/translation.ts",
+        "packages/core/src/kalada-v1/callback-promise.ts",
+        "packages/core/src/kalada-v1/canonical-input.ts",
+        "packages/core/src/kalada-v1/canonicalize.ts",
+        "packages/core/src/kalada-v1/codec.ts",
+        "packages/core/src/kalada-v1/compile.ts",
+        "packages/core/src/kalada-v1/control-evaluation.ts",
+        "packages/core/src/kalada-v1/dependencies.ts",
+        "packages/core/src/kalada-v1/diagnostics.ts",
+        "packages/core/src/kalada-v1/evaluate.ts",
+        "packages/core/src/kalada-v1/evaluation-delivery.ts",
+        "packages/core/src/kalada-v1/evaluation-frames.ts",
+        "packages/core/src/kalada-v1/evaluation-machine.ts",
+        "packages/core/src/kalada-v1/evaluation-resolution.ts",
+        "packages/core/src/kalada-v1/evaluation-state.ts",
+        "packages/core/src/kalada-v1/factories.ts",
+        "packages/core/src/kalada-v1/field-access.ts",
+        "packages/core/src/kalada-v1/function-contracts.ts",
+        "packages/core/src/kalada-v1/json.ts",
+        "packages/core/src/kalada-v1/limits.ts",
+        "packages/core/src/kalada-v1/operator-contracts.ts",
+        "packages/core/src/kalada-v1/operator-evaluation.ts",
+        "packages/core/src/kalada-v1/runtime-values.ts",
+        "packages/core/src/kalada-v1/static-analysis.ts",
+        "packages/core/src/kalada-v1/static-control-types.ts",
+        "packages/core/src/kalada-v1/static-operator-types.ts",
+        "packages/core/src/kalada-v1/static-type-model.ts",
+        "packages/core/src/kalada-v1/static-types.ts",
+        "packages/core/src/kalada-v1/temporal-delivery.ts",
+        "packages/core/src/kalada-v1/temporal-evaluation.ts",
+        "packages/core/src/kalada-v1/temporal.ts",
+        "packages/core/src/kalada-v1/values.ts",
+        "packages/host/src/capability-snapshot.ts",
+        "packages/host/src/compile-expression.ts",
+        "packages/host/src/compile-options.ts",
+        "packages/host/src/compiled-artifact.ts",
+        "packages/host/src/evaluate-expression.ts",
+        "packages/host/src/execution-diagnostics.ts",
+        "packages/host/src/fingerprint.ts",
+        "packages/host/src/input-readers.ts",
+        "packages/host/src/link-expression.ts",
+        "packages/host/src/runtime-value.ts",
+        "packages/host/src/semantic-type.ts",
+        "packages/host/src/serializable.ts",
+        "packages/language-service/src/analysis.ts",
+        "packages/language-service/src/cursor-context.ts",
+        "packages/language-service/src/documents.ts",
+        "packages/language-service/src/errors.ts",
+        "packages/language-service/src/freeze.ts",
+        "packages/language-service/src/graph-fields.ts",
+        "packages/language-service/src/graph-query.ts",
+        "packages/language-service/src/graph-results.ts",
+        "packages/language-service/src/line-index.ts",
+        "packages/language-service/src/service.ts",
+        "packages/language-service/src/tooling-graph.ts",
+        "packages/language-service/src/tooling.ts",
+        "packages/syntax/src/diagnostics.ts",
+        "packages/syntax/src/dispatch.ts",
+        "packages/syntax/src/format.ts",
+        "packages/syntax/src/freeze.ts",
+        "packages/syntax/src/lexer.ts",
+        "packages/syntax/src/limits.ts",
+        "packages/syntax/src/lower.ts",
+        "packages/syntax/src/operators.ts",
+        "packages/syntax/src/parse.ts",
+        "packages/syntax/src/parser-budget.ts",
+        "packages/syntax/src/parser-types.ts",
+        "packages/syntax/src/parser.ts",
+        "packages/syntax/src/reference-environment.ts",
+        "packages/syntax/src/semantic-inference.ts",
+        "packages/syntax/src/semantic-query.ts",
+        "packages/syntax/src/source-map.ts",
+        "packages/syntax/src/static-types.ts",
+        "virtual:vite/preload-helper.js"
+      ]
+    },
+    {
+      "file": "index.html",
+      "sha256": "d9b3e92aa95c4cd660c0bb6b761a695a16f54541a372625806ede0d5a2f63060",
+      "closure": "shell",
+      "imports": [],
+      "capabilities": [],
+      "urlLiterals": [],
+      "contributors": []
+    }
+  ]
+}

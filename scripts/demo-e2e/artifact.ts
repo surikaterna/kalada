@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
+import { assertExpectedInventory, createArtifactInventory } from "./artifact-inventory.js";
 import { APP, DEMO_BASE, DIST } from "./config.js";
-import { assertBundleBoundaries, assertExactPins, assertJavaScriptSecurity } from "./security.js";
+import { assertBundleBoundaries, assertExactPins } from "./security.js";
 import type { ArtifactSummary, BundleEntry, BundleEvidence } from "./types.js";
 
 const EVIDENCE = "demo-metafile.json";
@@ -22,11 +23,11 @@ export function buildAndVerifyArtifact(): ArtifactSummary {
   return { ...summary, files: [...summary.runtimeFiles].sort() };
 }
 
-export function inspectArtifact(): ArtifactSummary {
+export function inspectArtifact(verifyExpected = true): ArtifactSummary {
   assertExactPins();
   const evidence = readEvidence();
   if (evidence.base !== DEMO_BASE) throw new Error(`Unexpected bundle base: ${evidence.base}`);
-  const entryStaticFiles = assertBundleBoundaries(evidence);
+  const closures = assertBundleBoundaries(evidence);
   const runtimeFiles = runtimeClosure(evidence.entries);
   assertEmittedUrls(runtimeFiles);
   for (const file of runtimeFiles) {
@@ -34,17 +35,22 @@ export function inspectArtifact(): ArtifactSummary {
       const source = readFileSync(resolve(DIST, file), "utf8");
       assertNoRootAssetUrl(file, source);
       assertNoSourceReferences(file, source);
-      if (file.endsWith(".js")) assertJavaScriptSecurity(file, source);
     }
   }
-  const lazyEnvironmentFiles = new Set(
-    evidence.entries
-      .filter((entry) =>
-        entry.modules.some((module) => module.endsWith("/apps/demo/src/schema/environment.ts")),
-      )
-      .map((entry) => entry.file),
+  const inventory = createArtifactInventory(
+    evidence,
+    runtimeFiles,
+    closures.staticFiles,
+    closures.dynamicFiles,
   );
-  return { files: [...runtimeFiles].sort(), runtimeFiles, lazyEnvironmentFiles, entryStaticFiles };
+  if (verifyExpected) assertExpectedInventory(inventory);
+  return {
+    files: [...runtimeFiles].sort(),
+    runtimeFiles,
+    lazyEnvironmentFiles: closures.dynamicFiles,
+    entryStaticFiles: closures.staticFiles,
+    inventory,
+  };
 }
 
 function readEvidence(): BundleEvidence {

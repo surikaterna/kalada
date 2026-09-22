@@ -1,4 +1,5 @@
 import type { Page } from "playwright";
+import type { InventoryCount } from "./capability-inventory.js";
 
 export interface BundleEntry {
   readonly file: string;
@@ -21,11 +22,34 @@ export interface BundleEvidence {
   readonly entries: readonly BundleEntry[];
 }
 
+export interface BundleClosures {
+  readonly staticFiles: ReadonlySet<string>;
+  readonly dynamicFiles: ReadonlySet<string>;
+}
+
 export interface ArtifactSummary {
   readonly files: readonly string[];
   readonly runtimeFiles: ReadonlySet<string>;
   readonly lazyEnvironmentFiles: ReadonlySet<string>;
   readonly entryStaticFiles: ReadonlySet<string>;
+  readonly inventory: ArtifactInventory;
+}
+
+export interface ArtifactInventoryFile {
+  readonly file: string;
+  readonly sha256: string;
+  readonly closure: "entry-static" | "lazy-environment" | "shell";
+  readonly imports: readonly InventoryCount[];
+  readonly capabilities: readonly InventoryCount[];
+  readonly urlLiterals: readonly InventoryCount[];
+  readonly contributors: readonly string[];
+}
+
+export interface ArtifactInventory {
+  readonly format: "kalada-demo-artifact-v1";
+  readonly scope: "bounded-observed-syntax-not-general-javascript-proof";
+  readonly base: "/kalada/";
+  readonly files: readonly ArtifactInventoryFile[];
 }
 
 export interface RequestRecord {
