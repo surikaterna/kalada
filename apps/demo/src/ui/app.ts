@@ -10,14 +10,17 @@ import {
   environmentSnapshot,
   linkSnapshot,
 } from "../inspectors/artifacts.js";
-import { safeJson } from "../inspectors/safe.js";
+import { valueJson } from "../inspectors/values.js";
 import { DemoRuntime, type RuntimeSnapshot, uriForName } from "../live/runtime.js";
+import { ImportCoordinator } from "../workspace/imports.js";
 import { WorkspaceModel } from "../workspace/model.js";
 import { clearWorkspace, restoreWorkspace, saveWorkspace } from "../workspace/persistence.js";
 import { exportWorkspace, importWorkspace } from "../workspace/transfer.js";
 
-export function createDemoApp(mount: HTMLElement): void {
-  new DemoApp(mount).start();
+export function createDemoApp(mount: HTMLElement): () => void {
+  const app = new DemoApp(mount);
+  app.start();
+  return () => app.dispose();
 }
 
 class DemoApp {
@@ -30,6 +33,7 @@ class DemoApp {
   private latest?: RuntimeSnapshot;
   private reveal = false;
   private persistence = false;
+  private readonly imports = new ImportCoordinator<ReturnType<typeof importWorkspace>>();
   private editor!: HTMLElement;
   private tabs!: HTMLElement;
   private status!: HTMLElement;
@@ -93,6 +97,7 @@ class DemoApp {
           text: document.text,
         },
         onDocumentChange: (snapshot) => {
+          this.imports.invalidate();
           this.runtime.documentChanged(snapshot);
           this.persist();
         },
@@ -117,16 +122,13 @@ class DemoApp {
         EditorView.contentAttributes.of({ "aria-label": `${name} editor` }),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
-          this.model.update(name, update.state.doc.toString());
-          if (name === "schema.json") this.runtime.schemaChanged();
-          else this.runtime.dataChanged();
-          this.persist();
+          this.commitJsonDocument(name, update.state.doc.toString());
         }),
       ],
     });
   }
 
-  private open(name: string): void {
+  private open(name: string, focusEditor = true): void {
     const state = this.states.get(name);
     if (!state) return;
     if (this.view) {
@@ -137,7 +139,7 @@ class DemoApp {
     this.view = new EditorView({ state, parent: this.editor });
     this.renderTabs();
     this.render(this.runtime.snapshot());
-    this.view.focus();
+    if (focusEditor) this.view.focus();
   }
 
   private renderTabs(): void {
@@ -151,6 +153,7 @@ class DemoApp {
         const control = button(name, () => this.open(name));
         control.setAttribute("role", "tab");
         control.setAttribute("aria-selected", String(name === this.model.snapshot().activeName));
+        control.tabIndex = name === this.model.snapshot().activeName ? 0 : -1;
         control.addEventListener("keydown", (event) => this.tabKey(event, names, name));
         return control;
       }),
@@ -158,12 +161,19 @@ class DemoApp {
   }
 
   private tabKey(event: KeyboardEvent, names: string[], name: string): void {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
     const offset = event.key === "ArrowRight" ? 1 : -1;
-    const index = (names.indexOf(name) + offset + names.length) % names.length;
+    const index =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? names.length - 1
+          : (names.indexOf(name) + offset + names.length) % names.length;
     const target = names[index];
-    if (target) this.open(target);
+    if (!target) return;
+    this.open(target, false);
+    this.tabs.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
   }
 
   private render(snapshot: RuntimeSnapshot): void {
@@ -175,13 +185,13 @@ class DemoApp {
     const output = panel(
       "Output / error",
       file?.output === undefined
-        ? safeJson(file?.diagnostics ?? [{ code: snapshot.code }])
-        : safeJson(file.output),
+        ? valueJson(diagnosticsSnapshot(file?.diagnostics ?? [{ code: snapshot.code }]))
+        : valueJson(file.output),
       true,
     );
     const tooling = panel(
       "Tooling",
-      safeJson({
+      valueJson({
         resultType: file?.resultType ?? "unavailable",
         dependencies: file?.dependencies ?? [],
         timing: file?.timing ?? {},
@@ -189,11 +199,11 @@ class DemoApp {
     );
     const diagnostics = panel(
       "Diagnostics",
-      safeJson(diagnosticsSnapshot(file?.diagnostics ?? [])),
+      valueJson(diagnosticsSnapshot(file?.diagnostics ?? [])),
     );
     const artifacts = panel(
       "Advanced inspectors",
-      safeJson({
+      valueJson({
         cst: active.endsWith(".kalada")
           ? cstSnapshot(this.model.text(active), this.reveal)
           : { unavailable: true },
@@ -212,12 +222,20 @@ class DemoApp {
     if (!session?.format()) this.announce("Formatting is unavailable for this document");
   }
   private generate(): void {
-    const result = this.runtime.generate(this.model.snapshot().seed);
+    const seed = this.model.snapshot().seed;
+    const result = this.runtime.generate(seed);
     if (!result.ok || !result.bytes) {
       this.announce(result.code);
       return;
     }
-    this.replaceJsonDocument("data.json", result.bytes);
+    if (
+      !this.runtime.applyGenerated(result, seed, (bytes) =>
+        this.replaceJsonDocument("data.json", bytes),
+      )
+    ) {
+      this.announce("generation-stale");
+      return;
+    }
     this.announce("Generated data validated and applied");
   }
   private replaceJsonDocument(name: "schema.json" | "data.json", text: string): void {
@@ -228,7 +246,17 @@ class DemoApp {
     if (!state) return;
     const transaction = state.update({ changes: { from: 0, to: state.doc.length, insert: text } });
     if (this.model.snapshot().activeName === name && this.view) this.view.dispatch(transaction);
-    else this.states.set(name, transaction.state);
+    else {
+      this.states.set(name, transaction.state);
+      this.commitJsonDocument(name, text);
+    }
+  }
+  private commitJsonDocument(name: "schema.json" | "data.json", text: string): void {
+    this.imports.invalidate();
+    this.model.update(name, text);
+    if (name === "schema.json") this.runtime.schemaChanged();
+    else this.runtime.dataChanged();
+    this.persist();
   }
 
   private reset(): void {
@@ -238,6 +266,10 @@ class DemoApp {
     this.announce("Workspace reset");
   }
   private restart(model: WorkspaceModel): void {
+    this.imports.invalidate();
+    this.reveal = false;
+    this.latest = undefined;
+    this.panels?.replaceChildren();
     this.view?.destroy();
     for (const session of this.sessions.values()) session.dispose();
     this.runtime.dispose();
@@ -275,8 +307,12 @@ class DemoApp {
       return;
     }
     try {
-      this.restart(new WorkspaceModel(importWorkspace(await file.text())));
-      this.announce("Workspace imported");
+      const outcome = await this.imports.run(
+        () => file.text(),
+        importWorkspace,
+        (workspace) => this.restart(new WorkspaceModel(workspace)),
+      );
+      if (outcome === "applied") this.announce("Workspace imported");
     } catch {
       this.announce("Import rejected: invalid workspace");
     }
@@ -322,6 +358,12 @@ class DemoApp {
     });
     label.append(input, document.createTextNode(" Reveal source/literals in inspectors"));
     return label;
+  }
+  dispose(): void {
+    this.imports.dispose();
+    this.view?.destroy();
+    for (const session of this.sessions.values()) session.dispose();
+    this.runtime.dispose();
   }
 }
 

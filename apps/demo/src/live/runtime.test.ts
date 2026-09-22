@@ -81,6 +81,62 @@ describe("live workspace orchestration", () => {
     expect(runtime.snapshot().files.get("greeting.kalada")?.output).toBe("Ada");
     runtime.dispose();
   });
+
+  it.each([
+    ["false", false],
+    ["null", null],
+    ["0", 0],
+    ['""', ""],
+  ])("evaluates an approved falsy root %s", async (dataText, expected) => {
+    const initial = new WorkspaceModel().snapshot();
+    const model = new WorkspaceModel({
+      ...initial,
+      schemaText: JSON.stringify({ const: expected }),
+      dataText,
+      documents: initial.documents.map((document) => ({ ...document, text: "data" })),
+    });
+    const runtime = new DemoRuntime(
+      model,
+      () => undefined,
+      () => undefined,
+    );
+    runtime.start();
+    await ready(runtime);
+    for (const file of runtime.snapshot().files.values()) {
+      expect(file.state).toBe("ready");
+      expect(file.output).toEqual(expected);
+    }
+    runtime.dispose();
+  });
+
+  it("applies only current generated data through the workspace pipeline", async () => {
+    const model = new WorkspaceModel();
+    const runtime = new DemoRuntime(
+      model,
+      () => undefined,
+      () => undefined,
+    );
+    runtime.start();
+    await ready(runtime);
+    const seed = model.snapshot().seed;
+    const stale = runtime.generate(seed);
+    model.update("data.json", model.snapshot().dataText);
+    runtime.dataChanged();
+    expect(runtime.applyGenerated(stale, seed, () => undefined)).toBe(false);
+    await ready(runtime);
+    const current = runtime.generate(seed);
+    const revision = model.snapshot().dataRevision;
+    expect(
+      runtime.applyGenerated(current, seed, (bytes) => {
+        model.update("data.json", bytes);
+        runtime.dataChanged();
+      }),
+    ).toBe(true);
+    expect(model.snapshot().dataRevision).toBe(revision + 1);
+    await ready(runtime);
+    expect(runtime.snapshot().data).toEqual(JSON.parse(model.snapshot().dataText));
+    runtime.dispose();
+  });
 });
 
 async function ready(runtime: DemoRuntime): Promise<void> {

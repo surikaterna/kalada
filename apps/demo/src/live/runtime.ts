@@ -16,6 +16,14 @@ import { parseBoundedJson } from "../schema/limits.js";
 import type { DataValidation } from "../schema/validator.js";
 import type { WorkspaceModel } from "../workspace/model.js";
 import { nameFromUri, uriForName } from "../workspace/uris.js";
+import {
+  emptyFile,
+  failedEnvironment,
+  failureFile,
+  freezeSnapshot,
+  resultFile,
+  waitingFile,
+} from "./snapshots.js";
 
 export { uriForName } from "../workspace/uris.js";
 
@@ -62,10 +70,12 @@ export class DemoRuntime {
   private code = "SCHEMA_LOADING";
   private environment?: DemoEnvironment;
   private data?: unknown;
+  private hasData = false;
   private dataValidation?: DataValidation;
   private readonly files = new Map<string, FileResult>();
   private readonly caches = new Map<string, Cache>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly generationKeys = new WeakMap<object, string>();
   private disposed = false;
 
   constructor(
@@ -91,6 +101,7 @@ export class DemoRuntime {
   dataChanged(): void {
     this.validationGeneration += 1;
     this.data = undefined;
+    this.hasData = false;
     this.dataValidation = undefined;
     this.state = "loading";
     this.code = "DATA_LOADING";
@@ -119,21 +130,31 @@ export class DemoRuntime {
     }
   }
   generate(seed: number): GenerationResult {
-    const key = `${this.workspaceEpoch}:${this.model.snapshot().schemaRevision}:${this.model.snapshot().dataRevision}:${this.environmentGeneration}:${this.settingsVersion}:${seed}:demo-input-candidate-v1`;
+    const key = this.generationKey(seed);
     if (!this.environment) return Object.freeze({ ok: false, code: "generation-unsupported" });
     const result = generateCandidate(
       this.environment.adapted.environment.editorGraph,
       seed,
       this.environment.validator.validate,
     );
-    if (
-      this.disposed ||
-      key !==
-        `${this.workspaceEpoch}:${this.model.snapshot().schemaRevision}:${this.model.snapshot().dataRevision}:${this.environmentGeneration}:${this.settingsVersion}:${seed}:demo-input-candidate-v1`
-    ) {
+    if (this.disposed || key !== this.generationKey(seed)) {
       return Object.freeze({ ok: false, code: "generation-stale" });
     }
+    if (result.ok) this.generationKeys.set(result, key);
     return result;
+  }
+  applyGenerated(result: GenerationResult, seed: number, apply: (bytes: string) => void): boolean {
+    if (
+      !result.ok ||
+      !result.bytes ||
+      this.disposed ||
+      this.generationKeys.get(result) !== this.generationKey(seed)
+    ) {
+      return false;
+    }
+    this.generationKeys.delete(result);
+    apply(result.bytes);
+    return true;
   }
   snapshot(): RuntimeSnapshot {
     return freezeSnapshot(
@@ -192,6 +213,7 @@ export class DemoRuntime {
         return;
       }
       this.data = data;
+      this.hasData = true;
       this.state = "ready";
       this.code = "WORKSPACE_READY";
       this.evaluateAll();
@@ -213,7 +235,7 @@ export class DemoRuntime {
       this.emit();
       return;
     }
-    if (!this.data || !this.dataValidation?.valid) {
+    if (!this.hasData || !this.dataValidation?.valid) {
       this.files.set(name, waitingFile(name, prepared.value, prepareTime));
       this.emit();
       return;
@@ -269,6 +291,7 @@ export class DemoRuntime {
   private invalidateEnvironment(code: string): void {
     this.environment = undefined;
     this.data = undefined;
+    this.hasData = false;
     this.dataValidation = undefined;
     this.state = "loading";
     this.code = code;
@@ -315,86 +338,11 @@ export class DemoRuntime {
   private fileKey(name: string): string {
     return `${this.dataKey()}:${name}:${this.model.revision(name)}`;
   }
+  private generationKey(seed: number): string {
+    const snapshot = this.model.snapshot();
+    return `${this.workspaceEpoch}:${snapshot.schemaRevision}:${snapshot.dataRevision}:${this.environmentGeneration}:${this.settingsVersion}:${seed}:demo-input-candidate-v1`;
+  }
   private emit(): void {
     this.publish(this.snapshot());
   }
-}
-
-function failedEnvironment() {
-  return {
-    ok: false as const,
-    diagnostics: [
-      {
-        code: "HOST_ENVIRONMENT_INVALID_PROVIDER" as const,
-        phase: "environment" as const,
-        message: "Schema environment is unavailable",
-      },
-    ],
-  };
-}
-function emptyFile(name: string, code = "SOURCE_LOADING"): FileResult {
-  return Object.freeze({
-    name,
-    state: "loading",
-    diagnostics: Object.freeze([{ code }]),
-    dependencies: Object.freeze([]),
-    timing: Object.freeze({ prepare: 0, evaluate: 0 }),
-  });
-}
-function failureFile(name: string, diagnostics: readonly unknown[], prepare: number): FileResult {
-  return Object.freeze({
-    name,
-    state: "invalid",
-    diagnostics,
-    dependencies: Object.freeze([]),
-    timing: Object.freeze({ prepare, evaluate: 0 }),
-  });
-}
-function waitingFile(name: string, prepared: PreparedExpression, prepare: number): FileResult {
-  return Object.freeze({
-    name,
-    state: "loading",
-    diagnostics: Object.freeze([]),
-    resultType: prepared.compiled.resultType,
-    dependencies: prepared.compiled.dependencies,
-    timing: Object.freeze({ prepare, evaluate: 0 }),
-    compiled: prepared.compiled,
-    prepared,
-  });
-}
-function resultFile(
-  name: string,
-  prepared: PreparedExpression,
-  outcome: ReturnType<PreparedExpression["evaluate"]>,
-  prepare: number,
-  evaluate: number,
-): FileResult {
-  return Object.freeze({
-    name,
-    state: outcome.ok ? "ready" : "invalid",
-    ...(outcome.ok ? { output: outcome.value } : {}),
-    diagnostics: outcome.ok ? Object.freeze([]) : outcome.diagnostics,
-    resultType: prepared.compiled.resultType,
-    dependencies: prepared.compiled.dependencies,
-    timing: Object.freeze({ prepare, evaluate }),
-    compiled: prepared.compiled,
-    prepared,
-  });
-}
-function freezeSnapshot(
-  state: RuntimeState,
-  code: string,
-  environment: DemoEnvironment | undefined,
-  data: unknown,
-  validation: DataValidation | undefined,
-  files: Map<string, FileResult>,
-): RuntimeSnapshot {
-  return Object.freeze({
-    state,
-    code,
-    ...(environment ? { environment } : {}),
-    ...(data !== undefined ? { data } : {}),
-    ...(validation ? { dataValidation: validation } : {}),
-    files: new Map(files),
-  });
 }

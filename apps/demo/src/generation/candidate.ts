@@ -1,8 +1,10 @@
 import type { EditorGraph, EditorNode } from "@kalada/host";
 import type { DataValidation } from "../schema/validator.js";
+import { canonicalNodeShape, canonicalShapeBytes } from "./canonical.js";
+import { GENERATION_BOUNDS } from "./contract.js";
 import { XorShift32 } from "./prng.js";
 
-const BOUNDS = Object.freeze({ depth: 8, states: 1024, collection: 32, attempts: 8 });
+const BOUNDS = GENERATION_BOUNDS;
 export interface GenerationResult {
   readonly ok: boolean;
   readonly code: string;
@@ -10,6 +12,7 @@ export interface GenerationResult {
   readonly bytes?: string;
 }
 interface Context {
+  readonly graph: EditorGraph;
   readonly nodes: Map<string, EditorNode>;
   readonly random: XorShift32;
   states: number;
@@ -28,7 +31,7 @@ export function generateCandidate(
   const random = new XorShift32(seed);
   for (let attempt = 0; attempt < BOUNDS.attempts; attempt += 1) {
     try {
-      const context: Context = { nodes, random, states: 0, active: new Set() };
+      const context: Context = { graph, nodes, random, states: 0, active: new Set() };
       const value = generateNode(root.nodeId, context, 0);
       const bytes = stableJson(value);
       if (validate(value).valid)
@@ -111,8 +114,9 @@ function array(node: Extract<EditorNode, { kind: "array" }>, context: Context, d
 }
 
 function tuple(node: Extract<EditorNode, { kind: "tuple" }>, context: Context, depth: number) {
-  const minimum = constraint(node, "minItems", node.items.length);
   const maximum = constraint(node, "maxItems", BOUNDS.collection);
+  const explicitMinimum = numericConstraint(node, "minItems");
+  const minimum = explicitMinimum ?? Math.min(node.items.length, maximum);
   if (minimum > maximum || minimum > BOUNDS.collection) unsupported();
   const result: unknown[] = [];
   for (let index = 0; index < minimum; index += 1) {
@@ -130,10 +134,12 @@ function intersection(
 ): unknown {
   const first = node.operands[0];
   if (!first) unsupported();
-  const values = node.operands.map((edge) => generateNode(edge.nodeId, context, depth));
-  const encoded = values.map(stableJson);
-  if (encoded.some((value) => value !== encoded[0])) unsupported();
-  return values[0];
+  const shape = canonicalShapeBytes(canonicalNodeShape(context.graph, first.nodeId));
+  const mismatch = node.operands
+    .slice(1)
+    .some((edge) => canonicalShapeBytes(canonicalNodeShape(context.graph, edge.nodeId)) !== shape);
+  if (mismatch) unsupported();
+  return generateNode(first.nodeId, context, depth);
 }
 
 function scalar(node: Extract<EditorNode, { kind: "scalar" }>, random: XorShift32): unknown {
@@ -151,12 +157,10 @@ function scalar(node: Extract<EditorNode, { kind: "scalar" }>, random: XorShift3
 }
 
 function number(node: EditorNode, random: XorShift32): number {
-  let lower = Math.ceil(constraint(node, "minimum", -10));
-  let upper = Math.floor(constraint(node, "maximum", 10));
-  const exclusiveLower = numericConstraint(node, "exclusiveMinimum");
-  const exclusiveUpper = numericConstraint(node, "exclusiveMaximum");
-  if (exclusiveLower !== undefined) lower = Math.floor(exclusiveLower) + 1;
-  if (exclusiveUpper !== undefined) upper = Math.ceil(exclusiveUpper) - 1;
+  const lowerBound = integerLowerBound(node);
+  const upperBound = integerUpperBound(node);
+  const lower = lowerBound ?? (upperBound === undefined ? -10 : upperBound - 20);
+  const upper = upperBound ?? (lowerBound === undefined ? 10 : lowerBound + 20);
   const width = upper - lower + 1;
   if (
     !Number.isSafeInteger(lower) ||
@@ -166,6 +170,26 @@ function number(node: EditorNode, random: XorShift32): number {
   )
     unsupported();
   return lower + (random.next() % width);
+}
+
+function integerLowerBound(node: EditorNode): number | undefined {
+  const inclusive = numericConstraint(node, "minimum");
+  const exclusive = numericConstraint(node, "exclusiveMinimum");
+  const values = [
+    ...(inclusive === undefined ? [] : [Math.ceil(inclusive)]),
+    ...(exclusive === undefined ? [] : [Math.floor(exclusive) + 1]),
+  ];
+  return values.length ? Math.max(...values) : undefined;
+}
+
+function integerUpperBound(node: EditorNode): number | undefined {
+  const inclusive = numericConstraint(node, "maximum");
+  const exclusive = numericConstraint(node, "exclusiveMaximum");
+  const values = [
+    ...(inclusive === undefined ? [] : [Math.floor(inclusive)]),
+    ...(exclusive === undefined ? [] : [Math.ceil(exclusive) - 1]),
+  ];
+  return values.length ? Math.min(...values) : undefined;
 }
 
 function constraint(node: EditorNode, key: string, fallback: number): number {

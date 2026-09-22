@@ -1,9 +1,11 @@
 import type { EditorEdge, EditorGraph, EditorNode } from "@kalada/host";
+import { GENERATION_BOUNDS } from "./contract.js";
 
 export interface CanonicalInputShape {
   readonly format: "demo-input-candidate-v1";
   readonly root: number;
   readonly nodes: readonly Readonly<Record<string, unknown>>[];
+  readonly bounds: typeof GENERATION_BOUNDS;
 }
 
 export function canonicalInputShape(
@@ -12,6 +14,10 @@ export function canonicalInputShape(
 ): CanonicalInputShape {
   const root = graph.roots.find((entry) => entry.bindingId === bindingId);
   if (!root) throw new Error("GENERATION_ROOT_MISSING");
+  return canonicalNodeShape(graph, root.nodeId);
+}
+
+export function canonicalNodeShape(graph: EditorGraph, rootId: string): CanonicalInputShape {
   const source = new Map(graph.nodes.map((node) => [node.id, node]));
   const indices = new Map<string, number>();
   const nodes: Record<string, unknown>[] = [];
@@ -26,7 +32,12 @@ export function canonicalInputShape(
     nodes[index] = encodeNode(node, visit);
     return index;
   };
-  return deepFreeze({ format: "demo-input-candidate-v1", root: visit(root.nodeId), nodes });
+  return deepFreeze({
+    format: "demo-input-candidate-v1",
+    bounds: { ...GENERATION_BOUNDS },
+    root: visit(rootId),
+    nodes,
+  });
 }
 
 export function canonicalShapeBytes(shape: CanonicalInputShape): string {
