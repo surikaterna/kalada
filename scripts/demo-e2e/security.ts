@@ -1,29 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import ts from "typescript";
 import { ROOT } from "./config.js";
+import { assertJavaScriptSecurity } from "./security-ast.js";
 import type { BundleEntry, BundleEvidence } from "./types.js";
 
-const FORBIDDEN_IDENTIFIERS = new Set([
-  "Buffer",
-  "EventSource",
-  "WebSocket",
-  "XMLHttpRequest",
-  "__dirname",
-  "__filename",
-  "fetch",
-  "process",
-  "require",
-]);
-const FORBIDDEN_PROPERTIES = new Set([
-  "Buffer",
-  "EventSource",
-  "WebSocket",
-  "XMLHttpRequest",
-  "fetch",
-  "process",
-  "sendBeacon",
-]);
 const VENDOR =
   /(?:node_modules\/(?:@cfworker\/json-schema|@scheman\/core)|packages\/adapter-scheman)\//u;
 
@@ -44,6 +24,8 @@ export function assertExactPins(): void {
     if (!lock.includes(pin)) throw new Error(`Lockfile pin is missing: ${pin}`);
   }
 }
+
+export { assertJavaScriptSecurity };
 
 export function assertBundleBoundaries(evidence: BundleEvidence): Set<string> {
   const byFile = new Map(evidence.entries.map((entry) => [entry.file, entry]));
@@ -102,49 +84,6 @@ function assertExpectedScheman(entries: readonly BundleEntry[]): void {
       throw new Error(`Forbidden browser runtime dependency: ${module}`);
     }
   }
-}
-
-export function assertJavaScriptSecurity(path: string, source: string): void {
-  const file = ts.createSourceFile(path, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
-  const failures = new Set<string>();
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isIdentifier(node) &&
-      FORBIDDEN_IDENTIFIERS.has(node.text) &&
-      isIdentifierReference(node)
-    ) {
-      failures.add(node.text);
-    }
-    if (ts.isPropertyAccessExpression(node) && FORBIDDEN_PROPERTIES.has(node.name.text)) {
-      failures.add(node.name.text);
-    }
-    if (isDynamicCode(node)) failures.add(node.expression.getText(file));
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
-  if (failures.size)
-    throw new Error(`Forbidden runtime primitive in ${path}: ${[...failures].join(", ")}`);
-}
-
-function isDynamicCode(node: ts.Node): node is ts.CallExpression | ts.NewExpression {
-  if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return false;
-  return ts.isIdentifier(node.expression) && ["eval", "Function"].includes(node.expression.text);
-}
-
-function isIdentifierReference(node: ts.Identifier): boolean {
-  const parent = node.parent;
-  if (ts.isTypeOfExpression(parent) && parent.expression === node) return false;
-  if (
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node) ||
-    (ts.isMethodDeclaration(parent) && parent.name === node) ||
-    (ts.isVariableDeclaration(parent) && parent.name === node) ||
-    (ts.isFunctionDeclaration(parent) && parent.name === node) ||
-    (ts.isParameter(parent) && parent.name === node)
-  ) {
-    return false;
-  }
-  return true;
 }
 
 function closure(

@@ -77,6 +77,7 @@ function report(
                   "vendor isolation",
                   "AST runtime primitive scan",
                   "base-correct emitted URLs",
+                  "no map files or source directives",
                   "runtime-only regular files",
                 ],
               },

@@ -62,6 +62,6 @@ export default defineConfig({
   },
   build: {
     modulePreload: { polyfill: false },
-    sourcemap: true,
+    sourcemap: false,
   },
 });

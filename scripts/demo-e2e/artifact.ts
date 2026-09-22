@@ -30,10 +30,11 @@ export function inspectArtifact(): ArtifactSummary {
   const runtimeFiles = runtimeClosure(evidence.entries);
   assertEmittedUrls(runtimeFiles);
   for (const file of runtimeFiles) {
-    if (file.endsWith(".js")) {
+    if (/\.(?:css|html|js)$/u.test(file)) {
       const source = readFileSync(resolve(DIST, file), "utf8");
       assertNoRootAssetUrl(file, source);
-      assertJavaScriptSecurity(file, source);
+      assertNoSourceReferences(file, source);
+      if (file.endsWith(".js")) assertJavaScriptSecurity(file, source);
     }
   }
   const lazyEnvironmentFiles = new Set(
@@ -125,11 +126,14 @@ function assertNoRootAssetUrl(file: string, source: string): void {
   }
 }
 
+export function assertNoSourceReferences(file: string, source: string): void {
+  if (/(?:sourceMappingURL|sourceURL)\s*=/iu.test(source)) {
+    throw new Error(`Source reference is forbidden in ${file}`);
+  }
+}
+
 function cleanEvidenceFiles(): void {
   rmSync(resolve(DIST, EVIDENCE), { force: true });
-  for (const file of listFiles(DIST)) {
-    if (file.endsWith(".map")) rmSync(resolve(DIST, file));
-  }
 }
 
 function assertFinalDist(expected: ReadonlySet<string>): void {
@@ -137,6 +141,7 @@ function assertFinalDist(expected: ReadonlySet<string>): void {
   if (files.some((file) => !RUNTIME_FILE.test(file))) {
     throw new Error(`Final dist contains a non-runtime file: ${files.join(", ")}`);
   }
+  if (files.some((file) => file.endsWith(".map"))) throw new Error("Final dist contains a map");
   if (JSON.stringify(files.sort()) !== JSON.stringify([...expected].sort())) {
     throw new Error("Final dist differs from the verified runtime closure");
   }
@@ -144,6 +149,9 @@ function assertFinalDist(expected: ReadonlySet<string>): void {
     const status = lstatSync(resolve(DIST, file));
     if (!status.isFile() || status.isSymbolicLink())
       throw new Error(`Unsafe artifact entry: ${file}`);
+    if (/\.(?:css|html|js)$/u.test(file)) {
+      assertNoSourceReferences(file, readFileSync(resolve(DIST, file), "utf8"));
+    }
   }
 }
 
