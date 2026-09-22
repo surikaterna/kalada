@@ -35,6 +35,15 @@
         "@kalada/syntax": "^0.0.0",
       },
     },
+    "packages/language-service": {
+      "name": "@kalada/language-service",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kalada/core": "^0.5.0",
+        "@kalada/host": "^0.0.0",
+        "@kalada/syntax": "^0.0.0",
+      },
+    },
     "packages/projection": {
       "name": "@kalada/projection",
       "version": "0.1.0",
@@ -168,6 +177,8 @@
     "@kalada/core": ["@kalada/core@workspace:packages/core"],
 
     "@kalada/host": ["@kalada/host@workspace:packages/host"],
+
+    "@kalada/language-service": ["@kalada/language-service@workspace:packages/language-service"],
 
     "@kalada/projection": ["@kalada/projection@workspace:packages/projection"],
 

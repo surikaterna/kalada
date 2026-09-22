@@ -7,6 +7,7 @@ const sourceRoots = [
   resolve(import.meta.dirname, "../packages/adapter-scheman/src"),
   resolve(import.meta.dirname, "../packages/core/src"),
   resolve(import.meta.dirname, "../packages/host/src"),
+  resolve(import.meta.dirname, "../packages/language-service/src"),
   resolve(import.meta.dirname, "../packages/projection/src"),
   resolve(import.meta.dirname, "../packages/syntax/src"),
   resolve(import.meta.dirname, "../scripts/changeset-policy"),

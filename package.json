@@ -18,6 +18,8 @@
     "changeset:check": "bun scripts/check-changesets.ts",
     "host:browser-smoke": "bun run build && bun scripts/host-package-smoke.ts --browser-only",
     "host:smoke": "bun run build && bun scripts/host-package-smoke.ts",
+    "language-service:browser-smoke": "bun run build && bun scripts/language-service-package-smoke.ts --browser-only",
+    "language-service:smoke": "bun run build && bun scripts/language-service-package-smoke.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "package:smoke": "bun run build && bun scripts/package-smoke.ts",

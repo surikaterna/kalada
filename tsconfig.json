@@ -13,6 +13,7 @@
       "@kalada/core": ["packages/core/src/index.ts"],
       "@kalada/adapter-scheman": ["packages/adapter-scheman/src/index.ts"],
       "@kalada/host": ["packages/host/src/index.ts"],
+      "@kalada/language-service": ["packages/language-service/src/index.ts"],
       "@kalada/syntax": ["packages/syntax/src/index.ts"]
     },
     "noEmit": true,
