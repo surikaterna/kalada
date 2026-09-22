@@ -5,7 +5,7 @@ import type {
   KaladaV1Options,
   KaladaV1Program,
 } from "@kalada/core";
-import type { KaladaCstDocument, KaladaSourceRange } from "./cst-types.js";
+import type { KaladaBinaryOperator, KaladaCstDocument, KaladaSourceRange } from "./cst-types.js";
 
 export interface KaladaSyntaxLimits {
   readonly maxSourceLength: number;
@@ -53,6 +53,30 @@ export interface KaladaParseResult {
 }
 
 export type KaladaSyntaxStaticType = "dynamic" | KaladaType;
+
+export type KaladaSemanticSupport = "supported" | "conditional" | "unsupported";
+
+export interface KaladaSemanticOperatorInfo {
+  readonly operator: KaladaBinaryOperator;
+  readonly support: KaladaSemanticSupport;
+}
+
+export interface KaladaSemanticNodeInfo {
+  readonly range: KaladaSourceRange;
+  readonly type: KaladaSyntaxStaticType;
+  readonly known: boolean;
+  readonly fieldAccess: Readonly<{
+    plain: KaladaSemanticSupport;
+    optional: KaladaSemanticSupport;
+  }>;
+  readonly operators: readonly KaladaSemanticOperatorInfo[];
+}
+
+export interface KaladaSemanticQueryResult {
+  readonly nodes: readonly KaladaSemanticNodeInfo[];
+  readonly diagnostics: readonly KaladaSyntaxDiagnostic[];
+  readonly incomplete: boolean;
+}
 
 export interface KaladaReferenceBinding<R extends JsonValue> {
   readonly reference: R;
