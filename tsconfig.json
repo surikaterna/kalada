@@ -11,6 +11,7 @@
     "baseUrl": ".",
     "paths": {
       "@kalada/core": ["packages/core/src/index.ts"],
+      "@kalada/codemirror": ["packages/codemirror/src/index.ts"],
       "@kalada/adapter-scheman": ["packages/adapter-scheman/src/index.ts"],
       "@kalada/host": ["packages/host/src/index.ts"],
       "@kalada/language-service": ["packages/language-service/src/index.ts"],

@@ -7,14 +7,7 @@ import {
 } from "@kalada/core";
 import type { KaladaBinaryCstNode, KaladaCstNode, KaladaSourceRange } from "./cst-types.js";
 import { diagnostic } from "./diagnostics.js";
-import {
-  DispatchFailure,
-  type DispatchResult,
-  dispatchBinary,
-  dispatchConditional,
-  dispatchField,
-  dispatchUnary,
-} from "./dispatch.js";
+import { DispatchFailure, type DispatchResult } from "./dispatch.js";
 import { deepFreeze, freezeRange } from "./freeze.js";
 import { syntaxLimitsFor } from "./parse.js";
 import type {
@@ -25,8 +18,9 @@ import type {
   KaladaSyntaxDiagnostic,
 } from "./public-types.js";
 import { type LowerConfiguration, readLowerConfiguration } from "./reference-environment.js";
+import { analyzeSemantics, type SemanticInference } from "./semantic-inference.js";
 import { addMap, finishMap, rangeForPath, widenNode } from "./source-map.js";
-import { literalType, projectStaticType, type StaticType } from "./static-types.js";
+import { projectStaticType, type StaticType } from "./static-types.js";
 
 interface Lowered<R extends JsonValue> {
   readonly expression: KaladaV1Expression<R>;
@@ -37,6 +31,7 @@ interface LowerState<R extends JsonValue> {
   readonly parsed: KaladaParseResult;
   readonly configuration: LowerConfiguration<R>;
   readonly entries: KaladaSourceMapEntry[];
+  readonly inferred: ReadonlyMap<KaladaCstNode, SemanticInference>;
 }
 
 const CORE_MESSAGES = Object.freeze({
@@ -70,7 +65,8 @@ export function lowerKaladaV1Expression<R extends JsonValue = string>(
     configuration = null;
   }
   if (configuration === null) return invalidOutcome(parsed.document.expression.range);
-  const state: LowerState<R> = { parsed, configuration, entries: [] };
+  const analysis = analyzeSemantics(parsed, configuration);
+  const state: LowerState<R> = { parsed, configuration, entries: [], inferred: analysis.inferred };
   try {
     const lowered = lowerNode(parsed.document.expression, ["expression"], state);
     const input = KaladaV1.program(lowered.expression);
@@ -113,7 +109,7 @@ function lowerLiteral<R extends JsonValue>(
 ): Lowered<R> {
   addMap(state.entries, path, "node", node.range);
   addMap(state.entries, [...path, "value"], "literal", node.range);
-  return { expression: KaladaV1.literal<R>(node.value), type: literalType(node.value) };
+  return { expression: KaladaV1.literal<R>(node.value), type: inferenceFor(node, state).type };
 }
 
 function lowerReference<R extends JsonValue>(
@@ -127,9 +123,10 @@ function lowerReference<R extends JsonValue>(
   }
   addMap(state.entries, path, "node", node.range);
   addMap(state.entries, [...path, "ref"], "reference", node.range);
+  const type = inferenceFor(node, state).type;
   return binding
-    ? { expression: KaladaV1.ref<R>(binding.reference), type: binding.type }
-    : { expression: KaladaV1.ref<R>(node.name as R), type: "dynamic" };
+    ? { expression: KaladaV1.ref<R>(binding.reference), type }
+    : { expression: KaladaV1.ref<R>(node.name as R), type };
 }
 
 function lowerGroup<R extends JsonValue>(
@@ -153,17 +150,14 @@ function lowerField<R extends JsonValue>(
   addMap(state.entries, path, "operator", operatorRange);
   const fieldRange = node.fieldToken === null ? operatorRange : sourceRange(state, node.fieldToken);
   addMap(state.entries, [...path, "field"], "field", fieldRange);
-  let type: StaticType;
-  try {
-    type = dispatchField(target.type, node.optional);
-  } catch (error) {
-    throw dispatchFailure(error, path, state, node.range);
-  }
+  const inferred = inferenceFor(node, state);
+  if (inferred.failure) throw dispatchFailure(inferred.failure, path, state, node.range);
+  if (!inferred.complete) throw new LowerFailure(invalidDiagnostic(node.range));
   const expression = node.optional
     ? KaladaV1.optionalFieldAccess(target.expression, node.field as string)
     : KaladaV1.fieldAccess(target.expression, node.field as string);
   addMap(state.entries, path, "node", node.range);
-  return { expression, type };
+  return { expression, type: inferred.type };
 }
 
 function lowerUnary<R extends JsonValue>(
@@ -174,12 +168,9 @@ function lowerUnary<R extends JsonValue>(
   const operand = lowerNode(node.operand, [...path, "operand"], state);
   const operatorPath = node.operator === "!" ? path : [...path, "operator"];
   addMap(state.entries, operatorPath, "operator", sourceRange(state, node.operatorToken));
-  let result: DispatchResult;
-  try {
-    result = dispatchUnary(node.operator, operand.type);
-  } catch (error) {
-    throw dispatchFailure(error, path, state, node.range, "operand");
-  }
+  const inferred = inferenceFor(node, state);
+  if (inferred.failure) throw dispatchFailure(inferred.failure, path, state, node.range, "operand");
+  const result = requireDispatch(inferred, node.range);
   const expression =
     node.operator === "!"
       ? KaladaV1.booleanNot(operand.expression)
@@ -198,12 +189,9 @@ function lowerBinary<R extends JsonValue>(
   const right = lowerNode(node.right, [...path, rightKey], state);
   const operatorPath = operatorHasField(node.operator) ? [...path, "operator"] : path;
   addMap(state.entries, operatorPath, "operator", sourceRange(state, node.operatorToken));
-  let dispatch: DispatchResult;
-  try {
-    dispatch = dispatchBinary(node.operator, left.type, right.type);
-  } catch (error) {
-    throw dispatchFailure(error, path, state, node.range);
-  }
+  const inferred = inferenceFor(node, state);
+  if (inferred.failure) throw dispatchFailure(inferred.failure, path, state, node.range);
+  const dispatch = requireDispatch(inferred, node.range);
   const expression = binaryExpression(
     node.operator,
     dispatch.family,
@@ -225,16 +213,13 @@ function lowerConditional<R extends JsonValue>(
   addMap(state.entries, path, "operator", sourceRange(state, node.questionToken));
   if (node.colonToken !== null)
     addMap(state.entries, path, "operator", sourceRange(state, node.colonToken));
-  let type: StaticType;
-  try {
-    type = dispatchConditional(condition.type, then.type, otherwise.type);
-  } catch (error) {
-    throw dispatchFailure(error, path, state, node.range);
-  }
+  const inferred = inferenceFor(node, state);
+  if (inferred.failure) throw dispatchFailure(inferred.failure, path, state, node.range);
+  if (!inferred.complete) throw new LowerFailure(invalidDiagnostic(node.range));
   addMap(state.entries, path, "node", node.range);
   return {
     expression: KaladaV1.conditional(condition.expression, then.expression, otherwise.expression),
-    type,
+    type: inferred.type,
   };
 }
 
@@ -366,4 +351,16 @@ function invalidOutcome<R extends JsonValue>(range?: KaladaSourceRange): KaladaL
 
 function sourceRange<R extends JsonValue>(state: LowerState<R>, token: number): KaladaSourceRange {
   return state.parsed.document.tokens[token]?.range ?? state.parsed.document.expression.range;
+}
+
+function inferenceFor<R extends JsonValue>(
+  node: KaladaCstNode,
+  state: LowerState<R>,
+): SemanticInference {
+  return state.inferred.get(node) ?? { type: "dynamic", complete: false };
+}
+
+function requireDispatch(inferred: SemanticInference, range: KaladaSourceRange): DispatchResult {
+  if (!inferred.complete || !inferred.dispatch) throw new LowerFailure(invalidDiagnostic(range));
+  return inferred.dispatch;
 }

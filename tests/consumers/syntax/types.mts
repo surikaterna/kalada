@@ -1,11 +1,17 @@
 import type {
   KaladaParseResult,
+  KaladaSemanticQueryResult,
   KaladaSourceMapEntry,
   KaladaSyntaxStaticType,
 } from "@kalada/syntax";
-import { lowerKaladaV1Expression, parseKaladaV1Expression } from "@kalada/syntax";
+import {
+  lowerKaladaV1Expression,
+  parseKaladaV1Expression,
+  queryKaladaV1Semantics,
+} from "@kalada/syntax";
 
 const parsed: KaladaParseResult = parseKaladaV1Expression("item");
+const semantics: KaladaSemanticQueryResult = queryKaladaV1Semantics(parsed);
 const lowered = lowerKaladaV1Expression<{ id: string }>(parsed, {
   references: { item: { reference: { id: "item" }, type: "dynamic" } },
   coreOptions: {
@@ -19,5 +25,5 @@ if (lowered.ok) {
   const entries: readonly KaladaSourceMapEntry[] = lowered.sourceMap;
   const resultType: KaladaSyntaxStaticType = lowered.resultType;
   void entries;
-  void resultType;
+  void [resultType, semantics];
 }

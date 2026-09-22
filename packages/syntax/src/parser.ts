@@ -6,10 +6,12 @@ import type {
 } from "./cst-types.js";
 import { DiagnosticSink } from "./diagnostics.js";
 import { freezeRange } from "./freeze.js";
+import { BINARY_OPERATOR_TIERS } from "./operators.js";
 import { ParserBudget, ParserLimit } from "./parser-budget.js";
-import { maxParsedDepth, type Parsed, RELATIONAL_OPERATORS } from "./parser-types.js";
+import { maxParsedDepth, type Parsed } from "./parser-types.js";
 import type { KaladaSyntaxDiagnostic, KaladaSyntaxLimits } from "./public-types.js";
 
+const OPERATORS = BINARY_OPERATOR_TIERS;
 export class Parser {
   private index = 0;
   readonly sink: DiagnosticSink;
@@ -47,7 +49,6 @@ export class Parser {
       throw error;
     }
   }
-
   private parseConditional(): Parsed {
     const condition = this.parseCoalesce();
     if (!this.at("question")) return condition;
@@ -69,7 +70,6 @@ export class Parser {
       maxParsedDepth(condition, branches.then, branches.otherwise) + 1,
     );
   }
-
   private parseConditionalBranches(conditionDepth: number): {
     readonly questionToken: number;
     readonly then: Parsed;
@@ -93,7 +93,7 @@ export class Parser {
 
   private parseCoalesce(): Parsed {
     let left = this.parseLogicalOr();
-    while (this.operator("??")) {
+    while (this.currentOperator(OPERATORS.coalesce)) {
       const operatorToken = this.consume();
       const right = this.parseLogicalOr();
       if (left.logical || right.logical) {
@@ -109,25 +109,25 @@ export class Parser {
   }
 
   private parseLogicalOr(): Parsed {
-    return this.parseBinaryTier(() => this.parseLogicalXor(), new Set(["||"]), true);
+    return this.parseBinaryTier(() => this.parseLogicalXor(), OPERATORS.logicalOr, true);
   }
 
   private parseLogicalXor(): Parsed {
-    return this.parseBinaryTier(() => this.parseLogicalAnd(), new Set(["xor"]), false);
+    return this.parseBinaryTier(() => this.parseLogicalAnd(), OPERATORS.logicalXor, false);
   }
 
   private parseLogicalAnd(): Parsed {
-    return this.parseBinaryTier(() => this.parseEquality(), new Set(["&&"]), true);
+    return this.parseBinaryTier(() => this.parseEquality(), OPERATORS.logicalAnd, true);
   }
 
   private parseEquality(): Parsed {
-    return this.parseBinaryTier(() => this.parseRelational(), new Set(["==", "!="]), false);
+    return this.parseBinaryTier(() => this.parseRelational(), OPERATORS.equality, false);
   }
 
   private parseRelational(): Parsed {
     let left = this.parseAdditive();
     let seen = false;
-    while (this.currentOperator(RELATIONAL_OPERATORS)) {
+    while (this.currentOperator(OPERATORS.relational)) {
       const operatorToken = this.consume();
       if (seen) {
         this.sink.add("parse", "KALADA_SYNTAX_RELATIONAL_CHAIN", this.token(operatorToken).range);
@@ -147,11 +147,11 @@ export class Parser {
   }
 
   private parseAdditive(): Parsed {
-    return this.parseBinaryTier(() => this.parseMultiplicative(), new Set(["+", "-"]), false);
+    return this.parseBinaryTier(() => this.parseMultiplicative(), OPERATORS.additive, false);
   }
 
   private parseMultiplicative(): Parsed {
-    return this.parseBinaryTier(() => this.parseUnary(), new Set(["*", "/", "%"]), false);
+    return this.parseBinaryTier(() => this.parseUnary(), OPERATORS.multiplicative, false);
   }
 
   private parseBinaryTier(
@@ -356,10 +356,6 @@ export class Parser {
       (current.kind === "operator" || current.kind === "in" || current.kind === "xor") &&
       operators.has(current.text)
     );
-  }
-
-  private operator(value: string): boolean {
-    return this.current().kind === "operator" && this.current().text === value;
   }
 
   private isBinary(value: KaladaToken): boolean {

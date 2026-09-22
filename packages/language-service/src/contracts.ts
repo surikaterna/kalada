@@ -1,12 +1,20 @@
 import type { JsonValue, KaladaV1Program } from "@kalada/core";
 import type {
   DescribeEnvironmentResult,
+  EditorNode,
+  EditorScalarName,
+  EditorUnknownCode,
   HostDiagnostic,
+  HostPath,
   NormalizedEnvironment,
   Utf16Position,
   Utf16Range,
 } from "@kalada/host";
-import type { KaladaParseResult, KaladaSourceMapEntry } from "@kalada/syntax";
+import type {
+  KaladaParseResult,
+  KaladaSourceMapEntry,
+  KaladaSyntaxStaticType,
+} from "@kalada/syntax";
 
 export interface DocumentIdentity {
   readonly uri: string;
@@ -67,7 +75,16 @@ export type AnalysisCheckpoint =
   | "complete";
 
 export type FormatCheckpoint = "captured" | "formatted" | "complete";
-export type LanguageServiceCheckpoint = AnalysisCheckpoint | FormatCheckpoint;
+export type ToolingCheckpoint =
+  | "captured"
+  | "environment"
+  | "before-parse"
+  | "after-parse"
+  | "context"
+  | "before-query"
+  | "after-query"
+  | "complete";
+export type LanguageServiceCheckpoint = AnalysisCheckpoint | FormatCheckpoint | ToolingCheckpoint;
 
 export interface CancellationToken {
   readonly isCancellationRequested: () => boolean;
@@ -78,7 +95,12 @@ export interface RequestOptions {
 }
 
 export type ResultStatus = "current" | "stale";
-export type LanguageServiceOperation = "analyze" | "diagnostics" | "format";
+export type LanguageServiceOperation =
+  | "analyze"
+  | "diagnostics"
+  | "format"
+  | "completion"
+  | "hover";
 
 export interface CancelledResult extends SnapshotIdentity {
   readonly kind: "cancelled";
@@ -116,9 +138,78 @@ export interface FormatResult extends SnapshotIdentity {
   readonly edit: TextEdit | null;
 }
 
+export type ToolingEvidenceCode =
+  | EditorUnknownCode
+  | "unsupported-source-path"
+  | "semantic-unknown"
+  | "query-limit"
+  | "opaque-wrapper";
+
+export interface ToolingEvidence {
+  readonly code: ToolingEvidenceCode;
+  readonly path: HostPath;
+}
+
+export type CandidateSupport = "common" | "conditional";
+export type CandidatePresence = "required" | "optional" | "unknown";
+
+export interface CompletionItem {
+  readonly label: string;
+  readonly kind: "binding" | "property" | "operator";
+  readonly edit: TextEdit;
+  readonly support: CandidateSupport;
+  readonly presence: CandidatePresence;
+  readonly branches: readonly string[];
+  readonly evidence: readonly ToolingEvidence[];
+}
+
+export interface CompletionResult extends SnapshotIdentity {
+  readonly kind: "completion";
+  readonly status: ResultStatus;
+  readonly diagnostics: readonly LanguageServiceDiagnostic[];
+  readonly items: readonly CompletionItem[];
+  readonly incomplete: boolean;
+  readonly evidence: readonly ToolingEvidence[];
+}
+
+export interface ShapeSummaryField {
+  readonly name: string;
+  readonly presence: CandidatePresence;
+  readonly accessible: boolean;
+}
+
+export interface ShapeSummary {
+  readonly kind: EditorNode["kind"];
+  readonly path: HostPath;
+  readonly presence: CandidatePresence;
+  readonly branches: readonly string[];
+  readonly fields: readonly ShapeSummaryField[];
+  readonly provenance: readonly Readonly<{ providerId: string; providerVersion?: string }>[];
+  readonly scalar?: EditorScalarName;
+}
+
+export interface HoverInfo {
+  readonly range: Utf16Range;
+  readonly input: readonly ShapeSummary[];
+  readonly output: Readonly<{ type: KaladaSyntaxStaticType; known: boolean }>;
+  readonly access: "supported" | "conditional" | "unsupported";
+  readonly evidence: readonly ToolingEvidence[];
+}
+
+export interface HoverResult extends SnapshotIdentity {
+  readonly kind: "hover";
+  readonly status: ResultStatus;
+  readonly diagnostics: readonly LanguageServiceDiagnostic[];
+  readonly hover: HoverInfo | null;
+  readonly incomplete: boolean;
+  readonly evidence: readonly ToolingEvidence[];
+}
+
 export type AnalysisOutcome = AnalysisResult | CancelledResult;
 export type DiagnosticsOutcome = DiagnosticsResult | CancelledResult;
 export type FormatOutcome = FormatResult | CancelledResult;
+export type CompletionOutcome = CompletionResult | CancelledResult;
+export type HoverOutcome = HoverResult | CancelledResult;
 
 export interface LanguageService {
   readonly openDocument: (input: DocumentOpen) => DocumentSnapshot;
@@ -131,6 +222,12 @@ export interface LanguageService {
   readonly analyze: (uri: string, options?: RequestOptions) => AnalysisOutcome;
   readonly diagnostics: (uri: string, options?: RequestOptions) => DiagnosticsOutcome;
   readonly format: (uri: string, options?: RequestOptions) => FormatOutcome;
+  readonly completion: (
+    uri: string,
+    position: Utf16Position,
+    options?: RequestOptions,
+  ) => CompletionOutcome;
+  readonly hover: (uri: string, position: Utf16Position, options?: RequestOptions) => HoverOutcome;
   readonly isCurrent: (identity: SnapshotIdentity) => boolean;
   readonly isWorkspaceCurrent: (snapshot: WorkspaceSnapshot) => boolean;
 }

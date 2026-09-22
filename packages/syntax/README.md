@@ -25,6 +25,10 @@ Successful lowering returns the canonical `program`, its `sourceMap`, and syntax
 `resultType`. The result projection is `"dynamic"` or a core `KaladaType`; internal uncertainty such
 as an option with an unknown payload is projected as `"dynamic"`.
 
+`queryKaladaV1Semantics(parsed, options?)` reports immutable subtree types, field-access support, and
+operator support from the same lowering dispatch internals. It retains useful complete-child facts in
+recovered incomplete source without adding grammar or evaluating values.
+
 The frozen initial grammar includes literals, ASCII references, grouping, field navigation,
 arithmetic, comparisons, membership, strict boolean operators, Option coalescing, and ternary
 conditionals. Calls, arrays/objects, constructors, match, functions, imports, and modules are

@@ -1,5 +1,6 @@
 import type { KaladaV1DiagnosticCode } from "@kalada/core";
 import type { KaladaBinaryOperator } from "./cst-types.js";
+import { BINARY_OPERATOR_TIERS, isAdditiveOperator } from "./operators.js";
 import {
   isCallable,
   isOption,
@@ -58,11 +59,12 @@ export function dispatchBinary(
   left: StaticType,
   right: StaticType,
 ): DispatchResult {
-  if (operator === "==" || operator === "!=") return equality(left, right);
-  if (["<", "<=", ">", ">="].includes(operator)) return ordering(left, right);
+  if (BINARY_OPERATOR_TIERS.equality.has(operator)) return equality(left, right);
+  if (BINARY_OPERATOR_TIERS.relational.has(operator) && operator !== "in")
+    return ordering(left, right);
   if (operator === "in") return membership(left, right);
-  if (operator === "+" || operator === "-") return additive(operator, left, right);
-  if (["*", "/", "%"].includes(operator)) return numeric(left, right);
+  if (isAdditiveOperator(operator)) return additive(operator, left, right);
+  if (BINARY_OPERATOR_TIERS.multiplicative.has(operator)) return numeric(left, right);
   if (operator === "&&" || operator === "||") return booleanLogical(left, right);
   if (operator === "xor") return booleanXor(left, right);
   return coalesce(left, right);

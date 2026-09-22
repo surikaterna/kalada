@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 24.8.0
       - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
@@ -40,6 +41,8 @@ jobs:
       - run: bun run syntax:smoke
       - run: bun run syntax:browser-smoke
       - run: bun run adapter-scheman:smoke
+      - run: bun run codemirror:smoke
+      - run: bun run codemirror:browser-smoke
       - name: Validate ordinary PR Changesets
         if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
         env:

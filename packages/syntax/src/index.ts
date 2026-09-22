@@ -26,6 +26,10 @@ export type {
   KaladaParseOptions,
   KaladaParseResult,
   KaladaReferenceBinding,
+  KaladaSemanticNodeInfo,
+  KaladaSemanticOperatorInfo,
+  KaladaSemanticQueryResult,
+  KaladaSemanticSupport,
   KaladaSourceMapEntry,
   KaladaSourceMapRole,
   KaladaSyntaxDiagnostic,
@@ -33,3 +37,4 @@ export type {
   KaladaSyntaxLimits,
   KaladaSyntaxStaticType,
 } from "./public-types.js";
+export { queryKaladaV1Semantics } from "./semantic-query.js";
