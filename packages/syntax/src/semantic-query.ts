@@ -90,16 +90,21 @@ function postorder(root: KaladaCstNode): KaladaCstNode[] {
     const entry = stack.pop();
     if (!entry) continue;
     if (entry.visited) output.push(entry.node);
-    else {
-      stack.push({ node: entry.node, visited: true });
-      const children = nodeChildren(entry.node);
-      for (let index = children.length - 1; index >= 0; index -= 1) {
-        const child = children[index];
-        if (child) stack.push({ node: child, visited: false });
-      }
-    }
+    else scheduleChildren(stack, entry.node);
   }
   return output;
+}
+
+function scheduleChildren(
+  stack: { node: KaladaCstNode; visited: boolean }[],
+  node: KaladaCstNode,
+): void {
+  stack.push({ node, visited: true });
+  const children = nodeChildren(node);
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children[index];
+    if (child) stack.push({ node: child, visited: false });
+  }
 }
 
 function nodeChildren(node: KaladaCstNode): readonly KaladaCstNode[] {
