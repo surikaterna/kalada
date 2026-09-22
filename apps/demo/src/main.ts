@@ -1,8 +1,6 @@
-import { admitSchema } from "./schema/admission.js";
-import { createWholeDataValidator } from "./schema/validator.js";
+import "./ui/styles.css";
+import { createDemoApp } from "./ui/app.js";
 
-const validator = createWholeDataValidator(admitSchema({ type: "string" }));
-const result = validator.validate("browser-ready");
-const app = document.querySelector<HTMLElement>("#app");
-if (!app) throw new Error("Demo mount is unavailable");
-app.textContent = result.valid ? "Validator proof ready" : "Validator proof failed";
+const mount = document.querySelector<HTMLElement>("#app");
+if (!mount) throw new Error("Demo mount is unavailable");
+createDemoApp(mount);
