@@ -21,6 +21,10 @@ const lowered = lowerKaladaV1Expression(parsed, {
 const formatted = formatKaladaV1Expression("price*quantity");
 ```
 
+Successful lowering returns the canonical `program`, its `sourceMap`, and syntax's authoritative
+`resultType`. The result projection is `"dynamic"` or a core `KaladaType`; internal uncertainty such
+as an option with an unknown payload is projected as `"dynamic"`.
+
 The frozen initial grammar includes literals, ASCII references, grouping, field navigation,
 arithmetic, comparisons, membership, strict boolean operators, Option coalescing, and ternary
 conditionals. Calls, arrays/objects, constructors, match, functions, imports, and modules are
