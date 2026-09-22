@@ -122,8 +122,7 @@ function runTypes(directory: string): void {
 async function runBrowser(directory: string): Promise<void> {
   run(["bun", "build", "browser.mjs", "--target=browser", "--outfile=browser.js"], directory);
   const bundle = await readFile(join(directory, "browser.js"), "utf8");
-  if (/["']node:|["']@scheman\//u.test(bundle))
-    throw new Error("Browser boundary drifted");
+  if (/["']node:|["']@scheman\//u.test(bundle)) throw new Error("Browser boundary drifted");
   const server = createServer(async (request, response) => {
     const name = request.url === "/browser.js" ? "browser.js" : "index.html";
     response.setHeader("content-type", extname(name) === ".js" ? "text/javascript" : "text/html");

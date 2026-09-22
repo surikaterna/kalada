@@ -22,6 +22,11 @@ function fixture(): ManualProviderInput {
     },
     { name: "next", required: false, shape: { kind: "reference", definition: "User" } },
     { name: "items", required: true, shape: { kind: "array", element: scalar("string") } },
+    {
+      name: "pair",
+      required: true,
+      shape: { kind: "tuple", items: [scalar("string"), scalar("number")] },
+    },
     { name: "a-b", required: true, shape: scalar("number") },
   ]);
   return {
@@ -70,6 +75,21 @@ function fixture(): ManualProviderInput {
         semanticType: { kind: "primitive-type", name: "number" },
         editorShape: {
           root: object([{ name: "visibleInput", required: true, shape: scalar("number") }]),
+        },
+      },
+      {
+        id: "viable-id",
+        name: "viable",
+        path: ["viable"],
+        semanticType: { kind: "primitive-type", name: "json" },
+        editorShape: {
+          root: {
+            kind: "union",
+            variants: [
+              object([{ name: "stable", required: true, shape: scalar("string") }]),
+              { kind: "never" },
+            ],
+          },
         },
       },
       {
@@ -158,6 +178,11 @@ describe("completion", () => {
     if (intersection.kind !== "completion") return;
     expect(intersection.items.find(({ label }) => label === "both")?.support).toBe("common");
     expect(intersection.items.find(({ label }) => label === "extra")?.support).toBe("conditional");
+    const viable = open("viable.").completion("memory:///main.kalada", {
+      line: 0,
+      character: 7,
+    });
+    expect(viable.kind === "completion" && viable.items[0]?.support).toBe("common");
   });
 
   it("does not emit unsupported source forms or structurally unsound accesses", () => {
@@ -185,6 +210,15 @@ describe("completion", () => {
     const astral = language.completion("memory:///main.kalada", { line: 1, character: 1 });
     expect(astral.kind === "completion" && astral.items).toEqual([]);
     expect(() => language.completion("memory:///main.kalada", { line: 0, character: 8 })).toThrow();
+    const deep = `user.${"next.".repeat(40)}`;
+    const limited = open(deep).completion("memory:///main.kalada", {
+      line: 0,
+      character: deep.length,
+    });
+    expect(limited.kind === "completion" && limited.incomplete).toBe(true);
+    expect(limited.kind === "completion" && limited.evidence).toContainEqual(
+      expect.objectContaining({ code: "query-limit" }),
+    );
   });
 
   it("offers only syntax-owned semantic operator candidates", () => {
@@ -221,10 +255,19 @@ describe("hover and request identity", () => {
     expect(mismatch.kind === "hover" && mismatch.hover?.access).toBe("unsupported");
     expect(mismatch.kind === "hover" && mismatch.hover?.input.length).toBeGreaterThan(0);
     const array = open("user.items").hover("memory:///main.kalada", { line: 0, character: 7 });
-    expect(array.kind === "hover" && array.hover?.input[0]?.kind).toBe("array");
+    expect(array.kind === "hover" && array.hover?.input.map(({ kind }) => kind)).toEqual([
+      "array",
+      "scalar",
+    ]);
     expect(array.kind === "hover" && array.hover?.evidence).toContainEqual(
       expect.objectContaining({ code: "unsupported-source-path" }),
     );
+    const tuple = open("user.pair").hover("memory:///main.kalada", { line: 0, character: 7 });
+    expect(tuple.kind === "hover" && tuple.hover?.input.map(({ kind }) => kind)).toEqual([
+      "tuple",
+      "scalar",
+      "scalar",
+    ]);
   });
 
   it("preserves identity, staleness, cancellation, and multi-document isolation", () => {

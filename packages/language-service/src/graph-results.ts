@@ -35,6 +35,12 @@ interface MutableCandidate {
   certain: boolean;
 }
 
+interface SummaryTarget {
+  readonly node: EditorNode;
+  readonly branch: string;
+  readonly presence: CandidatePresence;
+}
+
 export function finalizeGraphQuery(
   branches: readonly TerminalBranch[],
   nodeIndex: ReadonlyMap<string, EditorNode>,
@@ -144,24 +150,85 @@ function collectSummaries(
   let fields = 0;
   for (const branch of branches) {
     if (!branch.node || branch.node.kind === "never") continue;
-    const entries = fieldEntries(branch.node, nodeIndex).slice(0, Math.max(0, MAX_FIELDS - fields));
-    fields += entries.length;
-    const summary: ShapeSummary = {
-      kind: branch.node.kind,
-      path: branch.node.path,
-      presence: branch.presence,
-      branches: [branch.branch],
-      fields: entries.map(({ name, presence }) => ({
-        name,
-        presence,
-        accessible: sourceAddressable(name),
-      })),
-      provenance: sanitizeProvenance(provenance),
-    };
-    if (branch.node.kind === "scalar") Object.assign(summary, { scalar: branch.node.name });
-    summaries.push(summary);
+    const targets = summaryTargets(branch, nodeIndex);
+    for (const target of targets.slice(0, MAX_FIELDS - summaries.length)) {
+      const entries = fieldEntries(target.node, nodeIndex).slice(
+        0,
+        Math.max(0, MAX_FIELDS - fields),
+      );
+      fields += entries.length;
+      summaries.push(shapeSummary(target, entries, provenance));
+    }
   }
   return summaries;
+}
+
+function summaryTargets(
+  branch: TerminalBranch,
+  nodeIndex: ReadonlyMap<string, EditorNode>,
+): SummaryTarget[] {
+  if (!branch.node) return [];
+  const output: SummaryTarget[] = [];
+  const queue: SummaryTarget[] = [
+    { node: branch.node, branch: branch.branch, presence: branch.presence },
+  ];
+  const seen = new Set<string>();
+  while (queue.length > 0 && output.length < MAX_FIELDS) {
+    const target = queue.shift();
+    if (!target || seen.has(target.node.id)) continue;
+    seen.add(target.node.id);
+    output.push(target);
+    queue.push(...summaryChildren(target, nodeIndex));
+  }
+  return output;
+}
+
+function summaryChildren(
+  target: SummaryTarget,
+  nodeIndex: ReadonlyMap<string, EditorNode>,
+): SummaryTarget[] {
+  const edges = summaryEdges(target.node);
+  return edges.flatMap(({ edge, label }, index) => {
+    const node = nodeIndex.get(edge.nodeId);
+    return node
+      ? [{ node, branch: `${target.branch}/${label}:${index}`, presence: "unknown" as const }]
+      : [];
+  });
+}
+
+function summaryEdges(node: EditorNode): readonly { edge: EditorEdge; label: string }[] {
+  if (node.kind === "array") return [{ edge: node.element, label: "element" }];
+  if (node.kind === "tuple") {
+    const items = node.items.map((edge) => ({ edge, label: "item" }));
+    return node.rest ? [...items, { edge: node.rest, label: "rest" }] : items;
+  }
+  if (node.kind === "reference" && node.target) return [{ edge: node.target, label: "reference" }];
+  if (node.kind === "union") return node.variants.map((edge) => ({ edge, label: "variant" }));
+  if (node.kind === "intersection")
+    return node.operands.map((edge) => ({ edge, label: "operand" }));
+  if (node.kind === "wrapper") return [{ edge: node.inner, label: "wrapper" }];
+  return [];
+}
+
+function shapeSummary(
+  target: SummaryTarget,
+  entries: readonly { name: string; presence: CandidatePresence }[],
+  provenance: readonly ProvenanceEntry[],
+): ShapeSummary {
+  const summary: ShapeSummary = {
+    kind: target.node.kind,
+    path: target.node.path,
+    presence: target.presence,
+    branches: [target.branch],
+    fields: entries.map(({ name, presence }) => ({
+      name,
+      presence,
+      accessible: sourceAddressable(name),
+    })),
+    provenance: sanitizeProvenance(provenance),
+  };
+  if (target.node.kind === "scalar") Object.assign(summary, { scalar: target.node.name });
+  return summary;
 }
 
 function finishCandidate(candidate: MutableCandidate, viable: number): GraphCandidate {
