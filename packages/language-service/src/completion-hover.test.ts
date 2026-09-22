@@ -285,6 +285,46 @@ describe("completion", () => {
     expect(newline.kind === "completion" && newline.items.map(({ label }) => label)).toContain("+");
   });
 
+  it("derives postfix candidates from the completed left expression", () => {
+    const cases = [
+      { source: "1 + 2 ", present: ["+", "<"], absent: ["&&", "??"] },
+      { source: "1 < 2 ", present: ["==", "&&"], absent: ["+", "<", "??"] },
+      { source: "true && false ", present: ["==", "&&"], absent: ["+", "??"] },
+      { source: "opt ?? true ", present: ["=="], absent: ["+", "&&", "??"] },
+      { source: "user?.name ", present: ["==", "??"], absent: ["+", "&&"] },
+    ];
+    for (const { source, present, absent } of cases) {
+      const result = open(source).completion("memory:///main.kalada", {
+        line: 0,
+        character: source.length,
+      });
+      expect(result.kind).toBe("completion");
+      if (result.kind !== "completion") continue;
+      for (const label of present) {
+        expect(
+          result.items.find((item) => item.label === label),
+          `${source}: ${label}`,
+        ).toMatchObject({ support: "conditional" });
+      }
+      expect(
+        result.items.map(({ label }) => label).filter((label) => absent.includes(label)),
+      ).toEqual([]);
+    }
+    const dynamic = open("unknown ").completion("memory:///main.kalada", {
+      line: 0,
+      character: 8,
+    });
+    expect(dynamic.kind === "completion" && dynamic.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "+", support: "conditional" }),
+        expect.objectContaining({ label: "??", support: "conditional" }),
+      ]),
+    );
+    expect(open("opt ?? true ?? false").diagnostics("memory:///main.kalada")).toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "KALADA_OPTION_REQUIRED" })],
+    });
+  });
+
   it("keeps unknown record keys viable and emits deterministic cap evidence", () => {
     const fields = Array.from({ length: 257 }, (_, index) => ({
       name: `field${String(index).padStart(3, "0")}`,

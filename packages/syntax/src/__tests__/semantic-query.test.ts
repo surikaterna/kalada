@@ -63,8 +63,52 @@ describe("semantic query", () => {
     }
     const binary = queryKaladaV1Semantics(parseKaladaV1Expression("count + 1"), options);
     expect(binary.nodes.at(-1)?.operators.find(({ operator }) => operator === "+")?.support).toBe(
-      "supported",
+      "conditional",
     );
+  });
+
+  it("derives postfix support from each completed expression result", () => {
+    const options = {
+      references: {
+        enabled: { reference: "enabled", type: boolean },
+        count: { reference: "count", type: number },
+        maybe: {
+          reference: "maybe",
+          type: { kind: "option-type", value: boolean } as const,
+        },
+        data: { reference: "data", type: { kind: "primitive-type", name: "json" } as const },
+      },
+    };
+    const cases = [
+      [
+        "count + 1",
+        { "+": "conditional", "<": "conditional", "&&": "unsupported", "??": "unsupported" },
+      ],
+      [
+        "count < 1",
+        { "==": "conditional", "&&": "conditional", "+": "unsupported", "??": "unsupported" },
+      ],
+      [
+        "enabled && false",
+        { "==": "conditional", "||": "conditional", "+": "unsupported", "??": "unsupported" },
+      ],
+      [
+        "maybe ?? false",
+        { "==": "conditional", "&&": "conditional", "+": "unsupported", "??": "unsupported" },
+      ],
+      [
+        "data?.field",
+        { "==": "conditional", "??": "conditional", "+": "unsupported", "&&": "unsupported" },
+      ],
+    ] as const;
+    for (const [source, expected] of cases) {
+      const root = queryKaladaV1Semantics(parseKaladaV1Expression(source), options).nodes.at(-1);
+      for (const [operator, support] of Object.entries(expected)) {
+        expect(root?.operators.find((candidate) => candidate.operator === operator)?.support).toBe(
+          support,
+        );
+      }
+    }
   });
 
   it("retains child facts for recovered incomplete field access", () => {

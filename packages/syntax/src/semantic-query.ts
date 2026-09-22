@@ -26,7 +26,7 @@ export function queryKaladaV1Semantics<R extends JsonValue = string>(
   if (configuration === null) return invalidQuery(parsed.document.expression.range);
   const analysis = analyzeSemantics(parsed, configuration);
   const nodes = analysis.ordered.map((node) =>
-    describeNode(node, analysis.inferred.get(node) ?? unknownInference(), analysis.inferred),
+    describeNode(node, analysis.inferred.get(node) ?? unknownInference()),
   );
   return deepFreeze({
     nodes,
@@ -46,11 +46,7 @@ function safeConfiguration<R extends JsonValue>(
   }
 }
 
-function describeNode(
-  node: KaladaCstNode,
-  inference: SemanticInference,
-  inferred: ReadonlyMap<KaladaCstNode, SemanticInference>,
-): KaladaSemanticNodeInfo {
+function describeNode(node: KaladaCstNode, inference: SemanticInference): KaladaSemanticNodeInfo {
   const type = projectStaticType(inference.type);
   return {
     range: node.range,
@@ -62,7 +58,7 @@ function describeNode(
     },
     operators: BINARY_OPERATORS.map((operator) => ({
       operator,
-      support: operatorSupport(operator, node, inference, inferred),
+      support: operatorSupport(operator, inference),
     })),
   };
 }
@@ -79,18 +75,9 @@ function fieldSupport(inference: SemanticInference, optional: boolean): KaladaSe
 
 function operatorSupport(
   operator: KaladaBinaryOperator,
-  node: KaladaCstNode,
   left: SemanticInference,
-  inferred: ReadonlyMap<KaladaCstNode, SemanticInference>,
 ): KaladaSemanticSupport {
   if (!left.complete) return "conditional";
-  if (node.kind === "binary" && node.operator === operator) {
-    const actualLeft = inferred.get(node.left);
-    const actualRight = inferred.get(node.right);
-    if (actualLeft?.complete && actualRight?.complete) {
-      return dispatchSupport(operator, actualLeft.type, actualRight.type, true);
-    }
-  }
   return dispatchSupport(operator, left.type, "dynamic", false);
 }
 

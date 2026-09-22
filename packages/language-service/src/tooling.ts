@@ -233,7 +233,7 @@ function operatorItems(
       "operator",
       context.range,
       document,
-      postfixSupport(context.node, operator, support),
+      support === "supported" ? "common" : "conditional",
       "unknown",
       [],
       evidence,
@@ -245,15 +245,6 @@ function operatorItems(
     incomplete: !semantic?.known,
     cancelled: false,
   };
-}
-
-function postfixSupport(
-  node: KaladaCstNode,
-  operator: string,
-  support: KaladaSemanticSupport,
-): "common" | "conditional" {
-  if (node.kind === "binary" && node.operator === operator) return "conditional";
-  return support === "supported" ? "common" : "conditional";
 }
 
 function grammarAllowsOperator(source: string, offset: number, operator: string): boolean {
