@@ -22,26 +22,33 @@ export const HOST_CHILDREN = new Set(["globalThis", "navigator", "self", "window
 export const CALL_WRAPPERS = new Set(["apply", "bind", "call"]);
 export const AMBIENT_TIMERS = new Set(["setInterval", "setTimeout"]);
 export const SAFE_EMITTED_HOST_CALLS = new Set([
-  "addEventListener",
-  "dispatchEvent",
-  "getComputedStyle",
-  "isInputPending",
-  "matchMedia",
-  "onerror",
-  "scrollBy",
-  "slice",
-  "toString",
-  "updateCharacterBounds",
+  "globalThis.__ͼ.toString",
+  "navigator.scheduling.isInputPending",
+  "window.__ͼ.toString",
+  "window.dispatchEvent",
+  "window.EditContext().addEventListener",
+  "window.EditContext().text.slice",
+  "window.getComputedStyle",
+  "window.matchMedia",
+  "window.onerror",
+  "window.scrollBy",
+  "window.visualViewport.addEventListener",
+  "window.EditContext().updateCharacterBounds",
 ]);
-export const SAFE_EMITTED_HOST_CONSTRUCTORS = new Set(["EditContext"]);
+export const SAFE_EMITTED_HOST_CONSTRUCTORS = new Set(["window.EditContext"]);
 export const SAFE_EMITTED_HOST_VALUES = new Set([
-  "innerHeight",
-  "innerWidth",
-  "location",
-  "platform",
-  "scheduling",
-  "userAgent",
-  "visualViewport",
+  "navigator.platform",
+  "navigator.scheduling",
+  "navigator.userAgent",
+  "self.location",
+  "self.location.origin",
+  "self.location.pathname",
+  "window.innerHeight",
+  "window.innerWidth",
+  "window.location",
+  "window.visualViewport",
+  "window.visualViewport.height",
+  "window.visualViewport.offsetTop",
 ]);
 
 export type ModuleNode = ts.ImportDeclaration | ts.ExportDeclaration;

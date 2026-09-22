@@ -6,22 +6,28 @@ import {
   ScopedBindings,
 } from "./security-bindings.js";
 import {
+  boundCallableValue,
+  classMethodValue,
+  hostInvocationResult,
   hostMemberValue,
   inspectInvocation,
   isApprovedHostInvocation,
+  isSpecialConstructorOwner,
+  objectLiteralValue,
   objectMemberValue,
+  ownPropertyValue,
   reflectMemberValue,
   timerCallValue,
 } from "./security-capabilities.js";
 import {
   type AbstractValue,
   arrayValue,
-  descriptorValue,
   Flow,
   flowing,
   hasCapabilityFlow,
   hasFlow,
   hasHostFlow,
+  hostValue,
   isInertLiteralArray,
   isLogicalOperator,
   keyValue,
@@ -50,6 +56,7 @@ import {
   type ModuleNode,
   moduleSpecifier,
 } from "./security-policy.js";
+import { reflectionCallValue } from "./security-reflection.js";
 
 const MAX_ARRAY = 32;
 const MAX_BINDINGS = 20_000;
@@ -164,10 +171,10 @@ export class RuntimeAnalyzer {
     }
     if (ts.isBinaryExpression(node)) return this.binaryValue(node, locals, next);
     if (ts.isArrayLiteralExpression(node)) return this.array(node, locals, next);
+    const declaration = this.declarationExpression(node, locals, next);
+    if (declaration) return declaration;
     if (isMemberExpression(node)) return this.member(node, locals, next);
     if (isInvocation(node)) return this.call(node, locals, next);
-    const declaration = this.declarationExpression(node, locals);
-    if (declaration) return declaration;
     if (ts.isAwaitExpression(node)) return this.value(node.expression, locals, next);
     if (ts.isYieldExpression(node) && node.expression)
       return this.value(node.expression, locals, next);
@@ -177,9 +184,16 @@ export class RuntimeAnalyzer {
   private declarationExpression(
     node: ts.Expression,
     locals: ReadonlyMap<string, AbstractValue>,
+    depth: number,
   ): AbstractValue | undefined {
     if (isFunctionExpression(node)) return this.closureValue(node, locals);
-    return ts.isClassExpression(node) ? SAFE : undefined;
+    if (ts.isClassExpression(node)) return SAFE;
+    if (!ts.isObjectLiteralExpression(node)) return undefined;
+    return objectLiteralValue(
+      node,
+      (expression) => this.value(expression, locals, depth),
+      (fn) => this.closureValue(fn, locals),
+    );
   }
 
   private identifierValue(
@@ -188,7 +202,7 @@ export class RuntimeAnalyzer {
   ): AbstractValue {
     const known = locals.get(node.text) ?? this.bindings.get(node.text, node);
     if (known) return known;
-    if (GLOBAL_HOSTS.has(node.text)) return flowing(Flow.Host);
+    if (GLOBAL_HOSTS.has(node.text)) return hostValue(node.text);
     if (node.text === "Reflect") return flowing(Flow.Reflect);
     if (node.text === "Object") return flowing(Flow.Object);
     if (AMBIENT_TIMERS.has(node.text)) return flowing(Flow.Timer);
@@ -230,7 +244,9 @@ export class RuntimeAnalyzer {
       this.fail("unsupported capability array spread", element);
       return flowing(Flow.UnknownHost);
     });
-    return elements.some(hasCapabilityFlow) ? arrayValue(elements) : SAFE;
+    return elements.some((value) => hasCapabilityFlow(value) || value.callableSafe)
+      ? arrayValue(elements)
+      : SAFE;
   }
 
   private member(
@@ -238,6 +254,8 @@ export class RuntimeAnalyzer {
     locals: ReadonlyMap<string, AbstractValue>,
     depth: number,
   ): AbstractValue {
+    const method = classMethodValue(node, (fn) => this.closureValue(fn, locals));
+    if (method) return method;
     const owner = this.value(node.expression, locals, depth);
     const key = ts.isPropertyAccessExpression(node)
       ? keyValue(node.name.text)
@@ -249,15 +267,27 @@ export class RuntimeAnalyzer {
     const names = key.keys ?? [];
     const dynamic = !key.keyComplete;
     if (owner.elements) return this.arrayLookup(owner, names, dynamic, node);
+    const own = ownPropertyValue(owner, names, dynamic);
+    if (own) return own;
+    if (names.includes("constructor")) {
+      if (isSpecialConstructorOwner(owner)) {
+        this.fail("constructor capability access", node);
+        return flowing(Flow.Forbidden);
+      }
+      return flowing(Flow.ConstructorPotential);
+    }
     const fail = (reason: string, target: ts.Node) => this.fail(reason, target);
     if (hasFlow(owner, Flow.Reflect)) return reflectMemberValue(names, dynamic, node, fail);
     if (hasFlow(owner, Flow.Object)) return objectMemberValue(names, dynamic, node, fail);
     if (owner.descriptor && names.includes("value")) return owner.descriptor;
     if (hasHostFlow(owner)) {
-      return hostMemberValue(names, dynamic, node, (reason, target) => this.fail(reason, target));
+      return hostMemberValue(owner, names, dynamic, node, (reason, target) =>
+        this.fail(reason, target),
+      );
     }
-    if (names.some((name) => CALL_WRAPPERS.has(name)) && owner.flow !== 0) return owner;
-    if (names.includes("constructor")) return mergeValues(owner, flowing(Flow.Forbidden));
+    if (names.some((name) => CALL_WRAPPERS.has(name)) && (owner.flow !== 0 || owner.callableSafe)) {
+      return owner;
+    }
     return SAFE;
   }
 
@@ -267,12 +297,18 @@ export class RuntimeAnalyzer {
     dynamic: boolean,
     node: ts.Node,
   ): AbstractValue {
-    if (dynamic || names.length !== 1 || !/^\d+$/u.test(names[0] ?? "")) {
+    if (!dynamic && names.length === 1) {
+      const name = names[0] ?? "";
+      if (/^\d+$/u.test(name)) return owner.elements?.[Number(name)] ?? SAFE;
+      if (name === "constructor") return flowing(Flow.ConstructorPotential);
+      return SAFE;
+    }
+    if (dynamic || names.length !== 1) {
       if (owner.elements?.some(hasCapabilityFlow))
         this.fail("dynamic capability array index", node);
       return owner.elements?.some(hasCapabilityFlow) ? flowing(Flow.UnknownHost) : SAFE;
     }
-    return owner.elements?.[Number(names[0])] ?? SAFE;
+    return SAFE;
   }
 
   private call(
@@ -286,56 +322,29 @@ export class RuntimeAnalyzer {
     if (ts.isCallExpression(node) && isSymbolFactory(node.expression)) return opaqueKey();
     const target = ts.isTaggedTemplateExpression(node) ? node.tag : node.expression;
     const callee = this.value(target, locals, depth);
-    inspectInvocation(callee, node, (reason, target) => this.fail(reason, target));
-    if (hasFlow(callee, Flow.ReflectGet)) return this.reflectiveCall(node, locals, depth, false);
-    if (hasFlow(callee, Flow.DescriptorGet)) return this.reflectiveCall(node, locals, depth, true);
     const args = ts.isTaggedTemplateExpression(node) ? [] : (node.arguments ?? []);
     const argumentValues = args.map((argument) => this.value(argument, locals, depth));
-    if (hasFlow(callee, Flow.Timer)) {
+    inspectInvocation(callee, node, argumentValues, (reason, target) => this.fail(reason, target));
+    const reflection = reflectionCallValue(
+      callee,
+      node,
+      argumentValues,
+      (owner, key, target) => this.lookup(owner, key, target),
+      (reason, target) => this.fail(reason, target),
+    );
+    if (reflection) return reflection;
+    if (hasFlow(callee, Flow.Timer) || hasFlow(callee, Flow.BoundTimer)) {
       return timerCallValue(node, callee, argumentValues, (reason, target) =>
         this.fail(reason, target),
       );
     }
+    const boundCallable = boundCallableValue(callee, node);
+    if (boundCallable) return boundCallable;
     if (callee.functions?.length) return this.functions.summarize(callee, argumentValues, depth);
     const argumentsFlow = mergeAll(argumentValues);
-    if (isApprovedHostInvocation(callee, node)) return flowing(Flow.SafeHostDerived);
+    if (isApprovedHostInvocation(callee, node, argumentValues)) return hostInvocationResult(callee);
     if (hasHostFlow(callee)) return flowing(Flow.HostDerived);
     return hasCapabilityFlow(argumentsFlow) ? flowing(Flow.UnknownHost) : SAFE;
-  }
-
-  private reflectiveCall(
-    node: InvocationNode,
-    locals: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-    descriptor: boolean,
-  ): AbstractValue {
-    if (ts.isTaggedTemplateExpression(node)) {
-      return this.unsupportedUtility("tagged reflection utility", node);
-    }
-    return descriptor
-      ? this.descriptorGet(node, locals, depth)
-      : this.reflectGet(node, locals, depth);
-  }
-
-  private reflectGet(
-    node: ts.CallExpression | ts.NewExpression,
-    locals: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-  ): AbstractValue {
-    const owner = node.arguments?.[0] ? this.value(node.arguments[0], locals, depth) : SAFE;
-    const key = node.arguments?.[1] ? this.value(node.arguments[1], locals, depth) : SAFE;
-    if (key.keys?.includes("constructor")) return flowing(Flow.Forbidden);
-    if (!hasHostFlow(owner)) return SAFE;
-    return this.lookup(owner, key, node);
-  }
-
-  private descriptorGet(
-    node: ts.CallExpression | ts.NewExpression,
-    locals: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-  ): AbstractValue {
-    const value = this.reflectGet(node, locals, depth);
-    return descriptorValue(value);
   }
 
   private unsupported(
@@ -369,11 +378,6 @@ export class RuntimeAnalyzer {
     if (!specifier || !isBundledRelativeImport(specifier))
       this.fail("dynamic or non-relative import", node);
     return SAFE;
-  }
-
-  private unsupportedUtility(reason: string, node: ts.Node): AbstractValue {
-    this.fail(reason, node);
-    return flowing(Flow.UnknownHost);
   }
 
   private depthFailure(node: ts.Node): AbstractValue {

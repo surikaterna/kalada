@@ -23,9 +23,23 @@ const SAFE_FIXTURES = [
   '(function fetch(){fetch("local")})()',
   'const C=class fetch { static run(){fetch("local")} }; C.run()',
   "setTimeout(()=>{},0)",
-  "globalThis.getComputedStyle({})",
+  "window.getComputedStyle({})",
   "new window.EditContext()",
   'const docs="fetch eval require Function"; console.log(docs)',
+  "const cb=()=>{}; setTimeout.bind(globalThis,cb,0)()",
+  "const cb=()=>{}; const alias=cb; setInterval(alias,0)",
+  "const cb=()=>{}; setTimeout.call(globalThis,cb,0)",
+  "const cb=()=>{}; setTimeout.apply(globalThis,[cb,0])",
+  "const cb=(()=>{}).bind(null); setTimeout(cb,0)",
+  "const box={cb:()=>{}}; setTimeout(box.cb,0)",
+  "const callbacks=[()=>{}]; setTimeout(callbacks[0],0)",
+  "const {cb}={cb:()=>{}}; setTimeout(cb,0)",
+  "const [cb]=[()=>{}]; setTimeout(cb,0)",
+  "navigator.scheduling.isInputPending()",
+  'window.visualViewport?.addEventListener("resize",()=>{})',
+  'const context=new window.EditContext(); context.addEventListener("textupdate",()=>{})',
+  'const local={constructor:"data"}; local.constructor;',
+  "const cb=()=>{}; const timer=setTimeout.bind(globalThis,cb,0); timer()",
 ];
 
 const FORBIDDEN_FIXTURES = [
@@ -80,6 +94,36 @@ const FORBIDDEN_FIXTURES = [
   'globalThis.location.assign("https://example.invalid")',
   'navigator.serviceWorker.register("/worker.js")',
   'globalThis.setTimeout("alert(1)",0)',
+  'Object.constructor("return 1")()',
+  'Object["constructor"]("return 1")()',
+  'const O=Object; O.constructor("return 1")()',
+  'Reflect.get(Object,"constructor")("return 1")()',
+  'Object.getOwnPropertyDescriptor(Object,"constructor").value("return 1")()',
+  'Object.constructor.call(null,"return 1")()',
+  'Object.constructor.bind(null,"return 1")()()',
+  "Object.constructor;",
+  "Reflect.constructor;",
+  "Object.assign.constructor;",
+  'Object.assign.constructor("return 1")()',
+  "Reflect.get.constructor;",
+  "globalThis.constructor;",
+  "setTimeout.constructor;",
+  "(()=>{}).constructor;",
+  'const local={constructor:"data"}; local.constructor()',
+  'const local={constructor:"data"}; local.constructor.constructor("return 1")()',
+  'const key=getKey(); const local={safe:()=>{}}; local[key].constructor("return 1")()',
+  'setTimeout({value:"alert(1)"}.value,0)',
+  'setTimeout(["alert(1)"][0],0)',
+  'const {value:cb}={value:"alert(1)"}; setTimeout(cb,0)',
+  'const code="alert(1)"; const cb={value:code}.value; setInterval(cb,0)',
+  'const box={cb:()=>{},...{cb:"alert(1)"}}; setTimeout(box.cb,0)',
+  'const key="cb"; const box={cb:()=>{},[key]:"alert(1)"}; setTimeout(box.cb,0)',
+  "setTimeout(callbacks.current,0)",
+  "const cb=getCallback(); setTimeout(cb,0)",
+  "setTimeout(()=>globalThis,0)",
+  "setTimeout(globalThis.open,0)",
+  'navigator.serviceWorker.addEventListener("message",()=>{})',
+  "navigator.serviceWorker.isInputPending()",
 ];
 
 const AUDITOR_REPROS = [
@@ -141,6 +185,19 @@ const FINAL_FLOW_VARIANTS = [
   "globalThis.getComputedStyle`body`",
   "new globalThis.getComputedStyle({})",
   "window.EditContext()",
+  'const sw=navigator.serviceWorker; sw.addEventListener("message",()=>{})',
+  'navigator.serviceWorker.addEventListener?.("message",()=>{})',
+  'navigator.serviceWorker.addEventListener.call(navigator.serviceWorker,"message",()=>{})',
+  'navigator.serviceWorker.addEventListener.apply(navigator.serviceWorker,["message",()=>{}])',
+  'navigator.serviceWorker.addEventListener.bind(navigator.serviceWorker)("message",()=>{})',
+  'const add=navigator.serviceWorker.addEventListener; add("message",()=>{})',
+  "const scheduling=navigator.serviceWorker; scheduling.isInputPending()",
+  "navigator.window.getComputedStyle({})",
+  "navigator.serviceWorker.window.getComputedStyle({})",
+  "new navigator.serviceWorker.window.EditContext()",
+  "window.matchMedia()",
+  "window.getComputedStyle()",
+  "new window.EditContext(1,2)",
   'setTimeout("alert(1)",0)',
   'setTimeout?.("alert(1)",0)',
   '(0,setTimeout)("alert(1)",0)',
@@ -190,6 +247,13 @@ describe("demo artifact security scan", () => {
 
   it.each(FINAL_FLOW_VARIANTS)("rejects final adversarial flow variant %s", (source) => {
     expect(() => assertJavaScriptSecurity("final-flow-variant.js", source)).toThrow(
+      /Forbidden runtime primitive/u,
+    );
+  });
+
+  it("rejects a timer closure beyond the inspection bound", () => {
+    const source = `setTimeout(function(){/*${"x".repeat(1_001)}*/},0)`;
+    expect(() => assertJavaScriptSecurity("oversized-timer.js", source)).toThrow(
       /Forbidden runtime primitive/u,
     );
   });

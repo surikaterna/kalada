@@ -14,6 +14,9 @@ export enum Flow {
   SafeHostCall = 1 << 10,
   Timer = 1 << 11,
   SafeHostNew = 1 << 12,
+  BoundTimer = 1 << 13,
+  InertData = 1 << 14,
+  ConstructorPotential = 1 << 15,
 }
 
 export interface AbstractValue {
@@ -25,6 +28,10 @@ export interface AbstractValue {
   readonly elements?: readonly AbstractValue[];
   readonly functions?: readonly FunctionClosure[];
   readonly descriptor?: AbstractValue;
+  readonly callableSafe?: boolean;
+  readonly hostPaths?: readonly string[];
+  readonly properties?: ReadonlyMap<string, AbstractValue>;
+  readonly constructorSpecial?: boolean;
 }
 
 export interface FunctionClosure {
@@ -32,6 +39,7 @@ export interface FunctionClosure {
   readonly captures?: ReadonlyMap<string, AbstractValue>;
   readonly capabilitySource?: boolean;
   readonly bounded: boolean;
+  readonly callableSafe: boolean;
 }
 
 export const SAFE: AbstractValue = Object.freeze({ flow: 0 });
@@ -39,6 +47,10 @@ export const BOTTOM: AbstractValue = Object.freeze({ flow: 0, bottom: true });
 
 export function flowing(flow: Flow): AbstractValue {
   return { flow };
+}
+
+export function hostValue(path: string): AbstractValue {
+  return { flow: Flow.Host, hostPaths: [path] };
 }
 
 export function keyValue(key: string): AbstractValue {
@@ -53,14 +65,22 @@ export function arrayValue(elements: readonly AbstractValue[]): AbstractValue {
   return { flow: 0, elements };
 }
 
+export function objectValue(properties: ReadonlyMap<string, AbstractValue>): AbstractValue {
+  return { flow: 0, properties };
+}
+
 export function directFunctionValue(
   node: ts.FunctionLikeDeclaration,
   captures?: ReadonlyMap<string, AbstractValue>,
   capabilitySource = captureHasCapability(captures),
 ): AbstractValue {
-  return isBoundedFunction(node)
-    ? { flow: 0, functions: [{ node, captures, capabilitySource, bounded: true }] }
-    : { flow: 0, functions: [{ node, captures, capabilitySource, bounded: false }] };
+  const bounded = isBoundedFunction(node);
+  const callableSafe = !capabilitySource && isInspectableFunction(node);
+  return {
+    flow: 0,
+    functions: [{ node, captures, capabilitySource, bounded, callableSafe }],
+    ...(callableSafe ? { callableSafe: true } : {}),
+  };
 }
 
 export function descriptorValue(value: AbstractValue): AbstractValue {
@@ -118,14 +138,33 @@ export function mergeValues(left: AbstractValue, right: AbstractValue): Abstract
   if (right.bottom) return left;
   const keys = mergeStrings(left.keys, right.keys);
   const functions = mergeFunctions(left.functions, right.functions);
+  const hostPaths = mergeStrings(left.hostPaths, right.hostPaths);
+  const elements = mergeElements(left.elements, right.elements);
+  const descriptor = mergeDescriptor(left.descriptor, right.descriptor);
+  const properties = mergeProperties(left.properties, right.properties);
+  const flow = left.flow | right.flow;
+  const constructorSpecial = left.constructorSpecial || right.constructorSpecial;
+  const callableSafe =
+    functions.length > 0 &&
+    functions.every((closure) => closure.callableSafe) &&
+    flow === 0 &&
+    keys.length === 0 &&
+    !elements.elements &&
+    !descriptor.descriptor &&
+    !properties.properties &&
+    !constructorSpecial;
   return {
-    flow: left.flow | right.flow,
+    flow,
     ...(keys.length ? { keys } : {}),
     ...(left.opaqueKey || right.opaqueKey ? { opaqueKey: true } : {}),
     ...(left.keyComplete && right.keyComplete ? { keyComplete: true } : {}),
-    ...mergeElements(left.elements, right.elements),
+    ...elements,
     ...(functions.length ? { functions } : {}),
-    ...mergeDescriptor(left.descriptor, right.descriptor),
+    ...(callableSafe ? { callableSafe: true } : {}),
+    ...(hostPaths.length ? { hostPaths } : {}),
+    ...(constructorSpecial ? { constructorSpecial: true } : {}),
+    ...properties,
+    ...descriptor,
   };
 }
 
@@ -138,11 +177,14 @@ export function valueSignature(value: AbstractValue): string {
   const functions =
     value.functions
       ?.map(
-        ({ node, captures, capabilitySource, bounded }) =>
-          `${node.pos}:${capabilitySource ? 1 : 0}:${bounded ? 1 : 0}:${captureSignature(captures)}`,
+        ({ node, captures, capabilitySource, bounded, callableSafe }) =>
+          `${node.pos}:${capabilitySource ? 1 : 0}:${bounded ? 1 : 0}:${callableSafe ? 1 : 0}:${captureSignature(captures)}`,
       )
       .join(",") ?? "";
   const descriptor = value.descriptor ? valueSignature(value.descriptor) : "";
+  const properties = value.properties
+    ? [...value.properties].map(([name, child]) => `${name}:${valueSignature(child)}`).join(",")
+    : "";
   return [
     value.flow,
     value.bottom ? 1 : 0,
@@ -152,6 +194,10 @@ export function valueSignature(value: AbstractValue): string {
     elements,
     functions,
     descriptor,
+    value.callableSafe ? 1 : 0,
+    value.hostPaths?.join(",") ?? "",
+    properties,
+    value.constructorSpecial ? 1 : 0,
   ].join("|");
 }
 
@@ -253,7 +299,7 @@ function mergeFunctions(
   return [
     ...new Map(
       [...(left ?? []), ...(right ?? [])].map((closure) => [
-        `${closure.node.pos}:${closure.capabilitySource ? 1 : 0}:${closure.bounded ? 1 : 0}:${captureSignature(closure.captures)}`,
+        `${closure.node.pos}:${closure.capabilitySource ? 1 : 0}:${closure.bounded ? 1 : 0}:${closure.callableSafe ? 1 : 0}:${captureSignature(closure.captures)}`,
         closure,
       ]),
     ).values(),
@@ -283,11 +329,27 @@ function mergeDescriptor(
   return { descriptor: mergeValues(left, right) };
 }
 
+function mergeProperties(
+  left: ReadonlyMap<string, AbstractValue> | undefined,
+  right: ReadonlyMap<string, AbstractValue> | undefined,
+): Pick<AbstractValue, "properties"> {
+  if (!left || !right) return {};
+  const properties = new Map(left);
+  for (const [name, value] of right) {
+    properties.set(name, mergeValues(properties.get(name) ?? BOTTOM, value));
+  }
+  return { properties };
+}
+
 function isBoundedFunction(node: ts.FunctionLikeDeclaration): boolean {
-  if (node.end - node.pos > 1_000 || !node.body) return false;
+  if (!isInspectableFunction(node)) return false;
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return true;
   if (!ts.isBlock(node.body) || node.body.statements.length > 12) return false;
   return node.body.statements.every(isSummaryStatement);
+}
+
+function isInspectableFunction(node: ts.FunctionLikeDeclaration): boolean {
+  return node.end - node.pos <= 1_000 && node.body !== undefined;
 }
 
 function isSummaryStatement(statement: ts.Statement): boolean {
