@@ -3,7 +3,7 @@ import { normalizeManualEnvironment } from "@kalada/host";
 import { describe, expect, it } from "vitest";
 import { createLanguageService } from "./index.js";
 
-const scalar = (name: "string" | "number"): EditorShape => ({ kind: "scalar", name });
+const scalar = (name: "string" | "number" | "boolean"): EditorShape => ({ kind: "scalar", name });
 
 function object(
   properties: { name: string; required: boolean; shape: EditorShape }[],
@@ -76,6 +76,16 @@ function fixture(): ManualProviderInput {
         editorShape: {
           root: object([{ name: "visibleInput", required: true, shape: scalar("number") }]),
         },
+      },
+      {
+        id: "opt-id",
+        name: "opt",
+        path: ["opt"],
+        semanticType: {
+          kind: "option-type",
+          value: { kind: "primitive-type", name: "boolean" },
+        },
+        editorShape: { root: scalar("boolean") },
       },
       {
         id: "viable-id",
@@ -168,6 +178,7 @@ describe("completion", () => {
     expect(union.items.find(({ label }) => label === "common")).toMatchObject({
       support: "conditional",
       presence: "optional",
+      evidence: [expect.objectContaining({ code: "unsupported-shape" })],
     });
     expect(union.items.find(({ label }) => label === "left")?.support).toBe("conditional");
     expect(union.incomplete).toBe(true);
@@ -231,6 +242,175 @@ describe("completion", () => {
     });
     expect(result.items.map(({ label }) => label)).not.toContain("&&");
   });
+
+  it("respects grammar and recovery boundaries for field and operator contexts", () => {
+    for (const source of ["user.\n", "user.\r", "user.\r\n"]) {
+      const result = open(source).completion("memory:///main.kalada", { line: 1, character: 0 });
+      expect(result.kind === "completion" && result.items).toEqual([]);
+    }
+    const mixed = open("opt ?? true ").completion("memory:///main.kalada", {
+      line: 0,
+      character: 12,
+    });
+    expect(mixed.kind === "completion" && mixed.items.map(({ label }) => label)).not.toContain(
+      "&&",
+    );
+    const relational = open("1 < 2 ").completion("memory:///main.kalada", {
+      line: 0,
+      character: 6,
+    });
+    expect(
+      relational.kind === "completion" && relational.items.map(({ label }) => label),
+    ).not.toContain("<");
+    const postfix = open("1 + 2 ").completion("memory:///main.kalada", {
+      line: 0,
+      character: 6,
+    });
+    expect(
+      postfix.kind === "completion" && postfix.items.find(({ label }) => label === "+"),
+    ).toMatchObject({
+      support: "conditional",
+    });
+    for (const source of ["1 + ", '"user."', "user. // comment"]) {
+      const result = open(source).completion("memory:///main.kalada", {
+        line: 0,
+        character: source.length,
+      });
+      expect(result.kind === "completion" && result.items).toEqual([]);
+    }
+    const newline = open("known\n").completion("memory:///main.kalada", {
+      line: 1,
+      character: 0,
+    });
+    expect(newline.kind === "completion" && newline.items.map(({ label }) => label)).toContain("+");
+  });
+
+  it("keeps unknown record keys viable and emits deterministic cap evidence", () => {
+    const fields = Array.from({ length: 257 }, (_, index) => ({
+      name: `field${String(index).padStart(3, "0")}`,
+      required: true,
+      shape: scalar("string"),
+    }));
+    const input = fixture();
+    const description = normalizeManualEnvironment({
+      ...input,
+      bindings: [
+        ...input.bindings,
+        {
+          id: "record-id",
+          name: "recordValue",
+          path: ["recordValue"],
+          semanticType: { kind: "primitive-type", name: "json" },
+          editorShape: {
+            root: {
+              kind: "record",
+              key: {
+                kind: "union",
+                variants: [
+                  { kind: "literal", value: "known" },
+                  { kind: "unknown", reason: "open key domain" },
+                ],
+              },
+              value: scalar("string"),
+              exhaustive: "unknown",
+            },
+          },
+        },
+        {
+          id: "large-id",
+          name: "large",
+          path: ["large"],
+          semanticType: { kind: "primitive-type", name: "json" },
+          editorShape: { root: object(fields) },
+        },
+      ],
+    });
+    const language = createLanguageService({ generation: 1, description });
+    language.openDocument({ uri: "memory:///record.kalada", version: 1, text: "recordValue." });
+    const record = language.completion("memory:///record.kalada", { line: 0, character: 12 });
+    expect(record.kind).toBe("completion");
+    if (record.kind !== "completion") return;
+    expect(record.items.find(({ label }) => label === "known")).toMatchObject({
+      support: "conditional",
+      presence: "unknown",
+      evidence: [expect.objectContaining({ code: "unsupported-shape" })],
+    });
+    expect(record.incomplete).toBe(true);
+    expect(record.evidence).toContainEqual(expect.objectContaining({ code: "unsupported-shape" }));
+    language.closeDocument("memory:///record.kalada");
+    language.openDocument({ uri: "memory:///large.kalada", version: 1, text: "large." });
+    const large = language.completion("memory:///large.kalada", { line: 0, character: 6 });
+    expect(large.kind === "completion" && large.items).toHaveLength(256);
+    expect(large.kind === "completion" && large.incomplete).toBe(true);
+    expect(large.kind === "completion" && large.evidence).toContainEqual(
+      expect.objectContaining({ code: "query-limit" }),
+    );
+  });
+
+  it("reports bounded limit evidence for aliases, unions, and record keys", () => {
+    const names = Array.from({ length: 257 }, (_, index) => `key${String(index).padStart(3, "0")}`);
+    const definitions = Array.from({ length: 40 }, (_, index) => ({
+      name: `Alias${index}`,
+      shape:
+        index === 39
+          ? object([{ name: "end", required: true, shape: scalar("string") }])
+          : ({ kind: "reference", definition: `Alias${index + 1}` } as const),
+    }));
+    const description = normalizeManualEnvironment({
+      mode: "sync",
+      bindings: [
+        {
+          id: "aliases-id",
+          name: "aliases",
+          path: ["aliases"],
+          semanticType: { kind: "primitive-type", name: "json" },
+          editorShape: { root: { kind: "reference", definition: "Alias0" }, definitions },
+        },
+        {
+          id: "union-cap-id",
+          name: "unionCap",
+          path: ["unionCap"],
+          semanticType: { kind: "primitive-type", name: "json" },
+          editorShape: {
+            root: {
+              kind: "union",
+              variants: names.map((name) =>
+                object([{ name, required: true, shape: scalar("string") }]),
+              ),
+            },
+          },
+        },
+        {
+          id: "record-cap-id",
+          name: "recordCap",
+          path: ["recordCap"],
+          semanticType: { kind: "primitive-type", name: "json" },
+          editorShape: {
+            root: {
+              kind: "record",
+              key: { kind: "enum", values: names },
+              value: scalar("string"),
+              exhaustive: true,
+            },
+          },
+        },
+      ],
+    });
+    for (const name of ["aliases", "unionCap", "recordCap"]) {
+      const language = createLanguageService({ generation: 1, description });
+      const source = `${name}.`;
+      language.openDocument({ uri: `memory:///${name}.kalada`, version: 1, text: source });
+      const result = language.completion(`memory:///${name}.kalada`, {
+        line: 0,
+        character: source.length,
+      });
+      expect(result.kind === "completion" && result.incomplete).toBe(true);
+      expect(result.kind === "completion" && result.evidence).toContainEqual(
+        expect.objectContaining({ code: "query-limit" }),
+      );
+      expect(result.kind === "completion" && result.items.length).toBeLessThanOrEqual(256);
+    }
+  });
 });
 
 describe("hover and request identity", () => {
@@ -268,6 +448,40 @@ describe("hover and request identity", () => {
       "scalar",
       "scalar",
     ]);
+  });
+
+  it("targets bindings and fields exactly at token and UTF-16 boundaries", () => {
+    const binding = open("user.name").hover("memory:///main.kalada", { line: 0, character: 1 });
+    expect(binding.kind === "hover" && binding.hover).toMatchObject({
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 4 } },
+      input: [expect.objectContaining({ kind: "object" })],
+      output: { type: { kind: "primitive-type", name: "json" }, known: true },
+      access: "supported",
+    });
+    const field = open("user.name").hover("memory:///main.kalada", { line: 0, character: 5 });
+    expect(field.kind === "hover" && field.hover).toMatchObject({
+      range: { start: { line: 0, character: 5 }, end: { line: 0, character: 9 } },
+      input: [expect.objectContaining({ kind: "scalar" })],
+      access: "supported",
+    });
+    expect(
+      open("user.name").hover("memory:///main.kalada", { line: 0, character: 4 }),
+    ).toMatchObject({
+      hover: null,
+    });
+    expect(
+      open("user?.name").hover("memory:///main.kalada", { line: 0, character: 5 }),
+    ).toMatchObject({
+      hover: null,
+    });
+    const astral = open('"😀" + user.name').hover("memory:///main.kalada", {
+      line: 0,
+      character: 8,
+    });
+    expect(astral.kind === "hover" && astral.hover?.range).toEqual({
+      start: { line: 0, character: 7 },
+      end: { line: 0, character: 11 },
+    });
   });
 
   it("preserves identity, staleness, cancellation, and multi-document isolation", () => {

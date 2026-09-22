@@ -53,7 +53,11 @@ export function completionContext(parsed: KaladaParseResult, offset: number): Co
   const node =
     narrowestNode(parsed.document.expression, offset) ??
     (parsed.document.expression.range.end <= offset ? parsed.document.expression : null);
-  if (node && operatorPosition(parsed.document.source, node, offset)) {
+  if (
+    parsed.diagnostics.length === 0 &&
+    node &&
+    operatorPosition(parsed.document.source, node, offset)
+  ) {
     return { kind: "operator", range: { start: offset, end: offset }, node };
   }
   return { kind: "none" };
@@ -61,12 +65,13 @@ export function completionContext(parsed: KaladaParseResult, offset: number): Co
 
 export function hoverContext(parsed: KaladaParseResult, offset: number): HoverContext | null {
   const token = tokenAt(parsed, offset);
-  if (!token || ["string", "whitespace", "unsupported", "invalid", "eof"].includes(token.kind)) {
+  if (!token || !hoverableToken(token)) {
     return null;
   }
   const node = narrowestNode(parsed.document.expression, token.range.start);
   if (!node) return null;
-  const field = fieldForToken(parsed.document.expression, token);
+  const tokenIndex = parsed.document.tokens.indexOf(token);
+  const field = fieldForToken(parsed.document.expression, tokenIndex);
   if (field) {
     return {
       token,
@@ -129,7 +134,7 @@ function fieldMatches(
   }
   const operator = parsed.document.tokens[field.operatorToken];
   if (!operator || offset < operator.range.end) return false;
-  return /^\s*$/u.test(parsed.document.source.slice(operator.range.end, offset));
+  return /^[^\S\r\n]*$/u.test(parsed.document.source.slice(operator.range.end, offset));
 }
 
 function fieldRange(
@@ -166,18 +171,26 @@ function tokenAt(parsed: KaladaParseResult, offset: number): KaladaToken | null 
   const tokens = parsed.document.tokens.filter(
     ({ kind }) => kind !== "whitespace" && kind !== "eof",
   );
-  return tokens.find(({ range }) => range.start <= offset && offset <= range.end) ?? null;
+  const starting = tokens.find(({ range }) => range.start === offset && range.end > offset);
+  if (starting) return starting;
+  const containing = tokens.find(({ range }) => range.start < offset && offset < range.end);
+  if (containing) return containing;
+  return tokens.findLast(({ range }) => range.end === offset && range.start < range.end) ?? null;
 }
 
-function fieldForToken(root: KaladaCstNode, token: KaladaToken): KaladaFieldAccessCstNode | null {
+function fieldForToken(root: KaladaCstNode, tokenIndex: number): KaladaFieldAccessCstNode | null {
   const fields = allNodes(root).filter(
     (node): node is KaladaFieldAccessCstNode => node.kind === "field-access",
   );
   return (
     fields
-      .filter(({ range }) => range.start <= token.range.start && range.end >= token.range.end)
+      .filter(({ fieldToken }) => fieldToken === tokenIndex)
       .sort((left, right) => rangeWidth(left.range) - rangeWidth(right.range))[0] ?? null
   );
+}
+
+function hoverableToken(token: KaladaToken): boolean {
+  return ["identifier", "number", "true", "false", "null", "in", "xor"].includes(token.kind);
 }
 
 function allNodes(root: KaladaCstNode): KaladaCstNode[] {

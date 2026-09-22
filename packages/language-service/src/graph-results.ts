@@ -7,9 +7,7 @@ import type {
   ToolingEvidence,
 } from "./contracts.js";
 import { freezeData } from "./freeze.js";
-
-const MAX_ITEMS = 256;
-const MAX_FIELDS = 256;
+import { fieldEntries, MAX_GRAPH_ITEMS } from "./graph-fields.js";
 
 export interface TerminalBranch {
   readonly branch: string;
@@ -41,6 +39,12 @@ interface SummaryTarget {
   readonly presence: CandidatePresence;
 }
 
+interface Collection<T> {
+  readonly values: readonly T[];
+  readonly evidence: readonly ToolingEvidence[];
+  readonly incomplete: boolean;
+}
+
 export function finalizeGraphQuery(
   branches: readonly TerminalBranch[],
   nodeIndex: ReadonlyMap<string, EditorNode>,
@@ -48,147 +52,124 @@ export function finalizeGraphQuery(
   baseEvidence: readonly ToolingEvidence[],
   incomplete: boolean,
 ) {
-  const candidates = collectCandidates(branches, nodeIndex);
+  const candidates = collectCandidates(branches, nodeIndex, baseEvidence);
+  const summaries = collectSummaries(branches, provenance, nodeIndex);
+  const evidence = deduplicateEvidence([
+    ...baseEvidence,
+    ...branches.flatMap(sourcePathEvidence),
+    ...candidates.evidence,
+    ...summaries.evidence,
+  ]);
   return freezeData({
-    candidates,
-    summaries: collectSummaries(branches, provenance, nodeIndex),
-    evidence: deduplicateEvidence([...baseEvidence, ...branches.flatMap(sourcePathEvidence)]),
-    incomplete: incomplete || candidates.length >= MAX_ITEMS,
+    candidates: candidates.values,
+    summaries: summaries.values,
+    evidence,
+    incomplete: incomplete || candidates.incomplete || summaries.incomplete,
     cancelled: false,
   });
-}
-
-function sourcePathEvidence(branch: TerminalBranch): ToolingEvidence[] {
-  const node = branch.node;
-  if (!node) return [];
-  if (node.kind === "array" || node.kind === "tuple") {
-    return [{ code: "unsupported-source-path", path: node.path }];
-  }
-  if (node.kind !== "object") return [];
-  return node.properties
-    .filter(({ name }) => !sourceAddressable(name))
-    .map(({ name }) => ({ code: "unsupported-source-path", path: [...node.path, name] }));
 }
 
 function collectCandidates(
   branches: readonly TerminalBranch[],
   nodeIndex: ReadonlyMap<string, EditorNode>,
-): readonly GraphCandidate[] {
+  baseEvidence: readonly ToolingEvidence[],
+): Collection<GraphCandidate> {
   const viable = branches.filter(({ node }) => node?.kind !== "never");
   const found = new Map<string, MutableCandidate>();
-  for (const branch of viable) collectBranchCandidates(branch, found, nodeIndex);
-  return [...found.values()]
-    .map((candidate) => finishCandidate(candidate, viable.length))
-    .sort(compareCandidate)
-    .slice(0, MAX_ITEMS);
-}
-
-function collectBranchCandidates(
-  branch: TerminalBranch,
-  found: Map<string, MutableCandidate>,
-  nodeIndex: ReadonlyMap<string, EditorNode>,
-): void {
-  for (const entry of fieldEntries(branch.node, nodeIndex)) {
-    if (!sourceAddressable(entry.name)) continue;
-    const candidate = found.get(entry.name) ?? mutableCandidate(entry.name);
-    candidate.branches.add(branch.branch);
-    candidate.presences.push(entry.presence);
-    candidate.certain &&= branch.certain;
-    candidate.evidence.push(...branch.evidence);
-    found.set(entry.name, candidate);
+  const evidence: ToolingEvidence[] = [];
+  let incomplete = false;
+  for (const branch of viable) {
+    const fields = fieldEntries(branch.node, nodeIndex);
+    evidence.push(...fields.evidence);
+    incomplete ||= fields.limited || !fields.certain;
+    for (const entry of fields.entries) {
+      if (!sourceAddressable(entry.name)) continue;
+      const existing = found.get(entry.name);
+      if (!existing && found.size >= MAX_GRAPH_ITEMS) {
+        evidence.push(limitEvidence(branch.node?.path ?? []));
+        incomplete = true;
+        continue;
+      }
+      const candidate = existing ?? mutableCandidate(entry.name);
+      candidate.branches.add(branch.branch);
+      candidate.presences.push(entry.presence);
+      candidate.certain &&= branch.certain && fields.certain;
+      candidate.evidence.push(...branch.evidence, ...fields.evidence);
+      found.set(entry.name, candidate);
+    }
   }
-}
-
-function fieldEntries(
-  node: EditorNode | undefined,
-  nodeIndex: ReadonlyMap<string, EditorNode>,
-): readonly { name: string; presence: CandidatePresence }[] {
-  if (node?.kind === "object") {
-    return node.properties.map((property) => ({
-      name: property.name,
-      presence: presenceOf(property),
-    }));
-  }
-  if (node?.kind !== "record") return [];
-  return finiteStringKeys(node.key, nodeIndex).map((name) => ({ name, presence: "unknown" }));
-}
-
-function finiteStringKeys(edge: EditorEdge, nodeIndex: ReadonlyMap<string, EditorNode>): string[] {
-  const output = new Set<string>();
-  const queue = [edge.nodeId];
-  const seen = new Set<string>();
-  while (queue.length > 0 && seen.size < MAX_FIELDS) {
-    const id = queue.shift();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const node = nodeIndex.get(id);
-    collectFiniteValues(node, output);
-    queue.push(...finiteNext(node));
-  }
-  return [...output].sort(compareText);
-}
-
-function collectFiniteValues(node: EditorNode | undefined, output: Set<string>): void {
-  if (node?.kind === "literal" && typeof node.value === "string") output.add(node.value);
-  if (node?.kind !== "enum") return;
-  for (const value of node.values) if (typeof value === "string") output.add(value);
-}
-
-function finiteNext(node: EditorNode | undefined): string[] {
-  if (node?.kind === "reference" && node.target) return [node.target.nodeId];
-  if (node?.kind === "union") return node.variants.map(({ nodeId }) => nodeId);
-  if (node?.kind === "wrapper") return [node.inner.nodeId];
-  return [];
+  const values = [...found.values()]
+    .map((candidate) => finishCandidate(candidate, viable.length, baseEvidence))
+    .sort(compareCandidate);
+  return { values, evidence, incomplete };
 }
 
 function collectSummaries(
   branches: readonly TerminalBranch[],
   provenance: readonly ProvenanceEntry[],
   nodeIndex: ReadonlyMap<string, EditorNode>,
-): readonly ShapeSummary[] {
+): Collection<ShapeSummary> {
   const summaries: ShapeSummary[] = [];
+  const evidence: ToolingEvidence[] = [];
   let fields = 0;
+  let incomplete = false;
   for (const branch of branches) {
     if (!branch.node || branch.node.kind === "never") continue;
     const targets = summaryTargets(branch, nodeIndex);
-    for (const target of targets.slice(0, MAX_FIELDS - summaries.length)) {
-      const entries = fieldEntries(target.node, nodeIndex).slice(
-        0,
-        Math.max(0, MAX_FIELDS - fields),
-      );
+    evidence.push(...targets.evidence);
+    incomplete ||= targets.incomplete;
+    for (const target of targets.values) {
+      if (summaries.length >= MAX_GRAPH_ITEMS) {
+        evidence.push(limitEvidence(target.node.path));
+        incomplete = true;
+        break;
+      }
+      const collected = fieldEntries(target.node, nodeIndex);
+      evidence.push(...collected.evidence);
+      incomplete ||= collected.limited || !collected.certain;
+      const available = Math.max(0, MAX_GRAPH_ITEMS - fields);
+      const entries = collected.entries.slice(0, available);
+      if (entries.length < collected.entries.length) {
+        evidence.push(limitEvidence(target.node.path));
+        incomplete = true;
+      }
       fields += entries.length;
       summaries.push(shapeSummary(target, entries, provenance));
     }
   }
-  return summaries;
+  return { values: summaries, evidence, incomplete };
 }
 
 function summaryTargets(
   branch: TerminalBranch,
   nodeIndex: ReadonlyMap<string, EditorNode>,
-): SummaryTarget[] {
-  if (!branch.node) return [];
+): Collection<SummaryTarget> {
+  if (!branch.node) return { values: [], evidence: [], incomplete: false };
   const output: SummaryTarget[] = [];
   const queue: SummaryTarget[] = [
     { node: branch.node, branch: branch.branch, presence: branch.presence },
   ];
   const seen = new Set<string>();
-  while (queue.length > 0 && output.length < MAX_FIELDS) {
+  while (queue.length > 0 && output.length < MAX_GRAPH_ITEMS) {
     const target = queue.shift();
     if (!target || seen.has(target.node.id)) continue;
     seen.add(target.node.id);
     output.push(target);
     queue.push(...summaryChildren(target, nodeIndex));
   }
-  return output;
+  const next = queue[0];
+  return {
+    values: output,
+    evidence: next ? [limitEvidence(next.node.path)] : [],
+    incomplete: next !== undefined,
+  };
 }
 
 function summaryChildren(
   target: SummaryTarget,
   nodeIndex: ReadonlyMap<string, EditorNode>,
 ): SummaryTarget[] {
-  const edges = summaryEdges(target.node);
-  return edges.flatMap(({ edge, label }, index) => {
+  return summaryEdges(target.node).flatMap(({ edge, label }, index) => {
     const node = nodeIndex.get(edge.nodeId);
     return node
       ? [{ node, branch: `${target.branch}/${label}:${index}`, presence: "unknown" as const }]
@@ -231,23 +212,37 @@ function shapeSummary(
   return summary;
 }
 
-function finishCandidate(candidate: MutableCandidate, viable: number): GraphCandidate {
+function finishCandidate(
+  candidate: MutableCandidate,
+  viable: number,
+  baseEvidence: readonly ToolingEvidence[],
+): GraphCandidate {
   const branches = [...candidate.branches].sort(compareText);
+  const support = candidate.certain && branches.length === viable ? "common" : "conditional";
+  const uncertainty = support === "conditional" ? baseEvidence : [];
   return {
     label: candidate.label,
-    support: candidate.certain && branches.length === viable ? "common" : "conditional",
+    support,
     presence: combinePresence(candidate.presences),
     branches,
-    evidence: deduplicateEvidence(candidate.evidence),
+    evidence: deduplicateEvidence([...candidate.evidence, ...uncertainty]),
   };
+}
+
+function sourcePathEvidence(branch: TerminalBranch): ToolingEvidence[] {
+  const node = branch.node;
+  if (!node) return [];
+  if (node.kind === "array" || node.kind === "tuple") {
+    return [{ code: "unsupported-source-path", path: node.path }];
+  }
+  if (node.kind !== "object") return [];
+  return node.properties
+    .filter(({ name }) => !sourceAddressable(name))
+    .map(({ name }) => ({ code: "unsupported-source-path", path: [...node.path, name] }));
 }
 
 function mutableCandidate(label: string): MutableCandidate {
   return { label, branches: new Set(), presences: [], evidence: [], certain: true };
-}
-
-function presenceOf(input: { required: boolean; presence?: CandidatePresence }): CandidatePresence {
-  return input.presence ?? (input.required ? "required" : "optional");
 }
 
 function combinePresence(values: readonly CandidatePresence[]): CandidatePresence {
@@ -286,6 +281,10 @@ function deduplicateEvidence(entries: readonly ToolingEvidence[]): ToolingEviden
 
 function evidenceKey(entry: ToolingEvidence): string {
   return `${entry.code}:${JSON.stringify(entry.path)}`;
+}
+
+function limitEvidence(path: EditorEdge["path"]): ToolingEvidence {
+  return { code: "query-limit", path };
 }
 
 function compareCandidate(left: GraphCandidate, right: GraphCandidate): number {

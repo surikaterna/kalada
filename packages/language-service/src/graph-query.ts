@@ -89,10 +89,16 @@ function resolveBranches(root: EditorEdge, context: ResolveContext) {
     if (visits % 64 === 0 && context.cancellation?.isCancellationRequested()) {
       return { branches: [], evidence: [], incomplete: true, cancelled: true };
     }
+    if (visits >= MAX_VISITS) {
+      const limited = queue[0];
+      if (limited) branches.push(unknownBranch(limited, "query-limit", []));
+      incomplete = true;
+      break;
+    }
     const state = queue.shift();
     if (!state) continue;
     visits += 1;
-    if (visits > MAX_VISITS || state.depth > MAX_DEPTH) {
+    if (state.depth > MAX_DEPTH) {
       branches.push(unknownBranch(state, "query-limit", []));
       incomplete = true;
       continue;
@@ -104,12 +110,26 @@ function resolveBranches(root: EditorEdge, context: ResolveContext) {
       continue;
     }
     const inspected = inspectNode(state, node, context);
-    queue.push(...inspected.next);
+    incomplete ||= enqueueStates(queue, branches, inspected.next, visits);
     branches.push(...inspected.terminals);
     evidence.push(...inspected.evidence);
     incomplete ||= inspected.incomplete;
   }
   return { branches, evidence, incomplete, cancelled: false };
+}
+
+function enqueueStates(
+  queue: QueryState[],
+  branches: TerminalBranch[],
+  next: readonly QueryState[],
+  visits: number,
+): boolean {
+  const available = Math.max(0, MAX_VISITS - visits - queue.length);
+  queue.push(...next.slice(0, available));
+  const omitted = next[available];
+  if (!omitted) return false;
+  branches.push(unknownBranch(omitted, "query-limit", []));
+  return true;
 }
 
 function inspectNode(state: QueryState, node: EditorNode, context: ResolveContext) {

@@ -218,7 +218,12 @@ function operatorItems(
   document: DocumentSnapshot,
 ) {
   const semantic = semanticFor(context.node, prepared.semantics.nodes);
-  const operators = semantic?.operators.filter(({ support }) => support !== "unsupported") ?? [];
+  const operators =
+    semantic?.operators.filter(
+      ({ operator, support }) =>
+        support !== "unsupported" &&
+        grammarAllowsOperator(document.text, context.range.start, operator),
+    ) ?? [];
   const evidence: ToolingEvidence[] = semantic?.known
     ? []
     : [{ code: "semantic-unknown", path: [] }];
@@ -228,7 +233,7 @@ function operatorItems(
       "operator",
       context.range,
       document,
-      support === "supported" ? "common" : "conditional",
+      postfixSupport(context.node, operator, support),
       "unknown",
       [],
       evidence,
@@ -240,6 +245,20 @@ function operatorItems(
     incomplete: !semantic?.known,
     cancelled: false,
   };
+}
+
+function postfixSupport(
+  node: KaladaCstNode,
+  operator: string,
+  support: KaladaSemanticSupport,
+): "common" | "conditional" {
+  if (node.kind === "binary" && node.operator === operator) return "conditional";
+  return support === "supported" ? "common" : "conditional";
+}
+
+function grammarAllowsOperator(source: string, offset: number, operator: string): boolean {
+  const candidate = `${source.slice(0, offset)}${operator} __kalada_completion_rhs`;
+  return parseKaladaV1Expression(candidate).diagnostics.length === 0;
 }
 
 function buildHover(
