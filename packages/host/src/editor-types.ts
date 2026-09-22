@@ -1,5 +1,26 @@
 export type HostPath = readonly (string | number)[];
 
+export type EditorData =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly EditorData[]
+  | { readonly [key: string]: EditorData };
+
+export interface EditorRelationShape {
+  readonly name: string;
+  readonly key?: string;
+  readonly shape: EditorShape;
+}
+
+export interface EditorShapeEvidence {
+  readonly sourceId?: string;
+  readonly annotations?: EditorData;
+  readonly constraints?: EditorData;
+  readonly relations?: readonly EditorRelationShape[];
+}
+
 export type EditorUnknownCode =
   | "invalid-shape"
   | "unsupported-shape"
@@ -17,51 +38,110 @@ export type EditorScalarName =
   | "null"
   | "boolean"
   | "number"
+  | "integer"
   | "string"
+  | "undefined"
+  | "void"
+  | "bigint"
+  | "symbol"
+  | "date"
+  | "NaN"
   | "json"
   | "instant"
   | "duration";
 
-export interface EditorScalarShape {
+export interface EditorScalarShape extends EditorShapeEvidence {
   readonly kind: "scalar";
   readonly name: EditorScalarName;
 }
 
-export interface EditorUnknownShape {
+export interface EditorUnknownShape extends EditorShapeEvidence {
   readonly kind: "unknown";
   readonly reason?: string;
+  readonly evidenceCode?: EditorUnknownCode;
 }
 
 export interface EditorObjectPropertyShape {
   readonly name: string;
   readonly required: boolean;
+  readonly presence?: "required" | "optional" | "unknown";
   readonly shape: EditorShape;
 }
 
-export interface EditorObjectShape {
+export interface EditorObjectShape extends EditorShapeEvidence {
   readonly kind: "object";
   readonly properties: readonly EditorObjectPropertyShape[];
+  readonly requiredNames?: readonly string[];
+  readonly additionalProperties?: EditorShape;
+  readonly unknownKeys?: "strip" | "reject" | "passthrough" | "schema" | "unknown";
 }
 
-export interface EditorArrayShape {
+export interface EditorArrayShape extends EditorShapeEvidence {
   readonly kind: "array";
   readonly element: EditorShape;
 }
 
-export interface EditorTupleShape {
+export interface EditorTupleShape extends EditorShapeEvidence {
   readonly kind: "tuple";
   readonly items: readonly EditorShape[];
   readonly rest?: EditorShape;
 }
 
-export interface EditorUnionShape {
+export interface EditorUnionShape extends EditorShapeEvidence {
   readonly kind: "union";
   readonly variants: readonly EditorShape[];
+  readonly semantics?: string;
+  readonly discriminator?: EditorData;
 }
 
-export interface EditorReferenceShape {
+export interface EditorReferenceShape extends EditorShapeEvidence {
   readonly kind: "reference";
   readonly definition: string;
+  readonly reference?: string;
+  readonly unresolved?: string;
+}
+
+export interface EditorLiteralShape extends EditorShapeEvidence {
+  readonly kind: "literal";
+  readonly value: EditorData;
+}
+
+export interface EditorEnumShape extends EditorShapeEvidence {
+  readonly kind: "enum";
+  readonly values: readonly EditorData[];
+}
+
+export interface EditorNeverShape extends EditorShapeEvidence {
+  readonly kind: "never";
+}
+
+export interface EditorUnconstrainedShape extends EditorShapeEvidence {
+  readonly kind: "unconstrained";
+  readonly domain: "json" | "js";
+}
+
+export interface EditorOpaqueShape extends EditorShapeEvidence {
+  readonly kind: "opaque";
+  readonly reason: string;
+}
+
+export interface EditorRecordShape extends EditorShapeEvidence {
+  readonly kind: "record";
+  readonly key: EditorShape;
+  readonly value: EditorShape;
+  readonly exhaustive: boolean | "unknown";
+}
+
+export interface EditorIntersectionShape extends EditorShapeEvidence {
+  readonly kind: "intersection";
+  readonly operands: readonly EditorShape[];
+}
+
+export interface EditorWrapperShape extends EditorShapeEvidence {
+  readonly kind: "wrapper";
+  readonly wrapper: string;
+  readonly inner: EditorShape;
+  readonly value?: EditorData;
 }
 
 export type EditorShape =
@@ -71,7 +151,15 @@ export type EditorShape =
   | EditorArrayShape
   | EditorTupleShape
   | EditorUnionShape
-  | EditorReferenceShape;
+  | EditorReferenceShape
+  | EditorLiteralShape
+  | EditorEnumShape
+  | EditorNeverShape
+  | EditorUnconstrainedShape
+  | EditorOpaqueShape
+  | EditorRecordShape
+  | EditorIntersectionShape
+  | EditorWrapperShape;
 
 export interface ManualEditorDefinition {
   readonly name: string;
@@ -81,6 +169,7 @@ export interface ManualEditorDefinition {
 export interface ManualEditorShapeDocument {
   readonly root: EditorShape;
   readonly definitions?: readonly ManualEditorDefinition[];
+  readonly evidence?: readonly EditorUnknownCode[];
 }
 
 export interface EditorGraphLimits {
@@ -104,13 +193,23 @@ export interface EditorEdge {
 export interface EditorPropertyEdge extends EditorEdge {
   readonly name: string;
   readonly required: boolean;
+  readonly presence?: "required" | "optional" | "unknown";
+}
+
+export interface EditorRelationEdge extends EditorEdge {
+  readonly name: string;
+  readonly key?: string;
 }
 
 export interface EditorNodeBase {
   readonly id: string;
   readonly path: HostPath;
-  readonly availability: "available" | "unknown";
+  readonly availability: "available" | "unavailable" | "unknown";
   readonly evidence: readonly EditorUnknownEvidence[];
+  readonly sourceId?: string;
+  readonly annotations?: EditorData;
+  readonly constraints?: EditorData;
+  readonly relations?: readonly EditorRelationEdge[];
 }
 
 export interface EditorScalarNode extends EditorNodeBase {
@@ -126,6 +225,9 @@ export interface EditorUnknownNode extends EditorNodeBase {
 export interface EditorObjectNode extends EditorNodeBase {
   readonly kind: "object";
   readonly properties: readonly EditorPropertyEdge[];
+  readonly requiredNames?: readonly string[];
+  readonly unknownKeys?: "strip" | "reject" | "passthrough" | "schema" | "unknown";
+  readonly additionalProperties?: EditorEdge;
 }
 
 export interface EditorArrayNode extends EditorNodeBase {
@@ -142,6 +244,8 @@ export interface EditorTupleNode extends EditorNodeBase {
 export interface EditorUnionNode extends EditorNodeBase {
   readonly kind: "union";
   readonly variants: readonly EditorEdge[];
+  readonly semantics?: string;
+  readonly discriminator?: EditorData;
 }
 
 export interface EditorReferenceNode extends EditorNodeBase {
@@ -149,6 +253,51 @@ export interface EditorReferenceNode extends EditorNodeBase {
   readonly definition: string;
   readonly status: "resolved" | "unresolved";
   readonly target?: EditorEdge;
+  readonly reference?: string;
+  readonly unresolved?: string;
+}
+
+export interface EditorLiteralNode extends EditorNodeBase {
+  readonly kind: "literal";
+  readonly value: EditorData;
+}
+
+export interface EditorEnumNode extends EditorNodeBase {
+  readonly kind: "enum";
+  readonly values: readonly EditorData[];
+}
+
+export interface EditorNeverNode extends EditorNodeBase {
+  readonly kind: "never";
+}
+
+export interface EditorUnconstrainedNode extends EditorNodeBase {
+  readonly kind: "unconstrained";
+  readonly domain: "json" | "js";
+}
+
+export interface EditorOpaqueNode extends EditorNodeBase {
+  readonly kind: "opaque";
+  readonly reason: string;
+}
+
+export interface EditorRecordNode extends EditorNodeBase {
+  readonly kind: "record";
+  readonly key: EditorEdge;
+  readonly value: EditorEdge;
+  readonly exhaustive: boolean | "unknown";
+}
+
+export interface EditorIntersectionNode extends EditorNodeBase {
+  readonly kind: "intersection";
+  readonly operands: readonly EditorEdge[];
+}
+
+export interface EditorWrapperNode extends EditorNodeBase {
+  readonly kind: "wrapper";
+  readonly wrapper: string;
+  readonly inner: EditorEdge;
+  readonly value?: EditorData;
 }
 
 export type EditorNode =
@@ -158,7 +307,15 @@ export type EditorNode =
   | EditorArrayNode
   | EditorTupleNode
   | EditorUnionNode
-  | EditorReferenceNode;
+  | EditorReferenceNode
+  | EditorLiteralNode
+  | EditorEnumNode
+  | EditorNeverNode
+  | EditorUnconstrainedNode
+  | EditorOpaqueNode
+  | EditorRecordNode
+  | EditorIntersectionNode
+  | EditorWrapperNode;
 
 export interface EditorGraphRoot extends EditorEdge {
   readonly bindingId: string;
@@ -179,6 +336,7 @@ export interface EditorGraph {
   readonly nodes: readonly EditorNode[];
   readonly definitions: readonly EditorGraphDefinition[];
   readonly evidence: readonly EditorUnknownEvidence[];
+  readonly admission?: import("./editor-admission.js").EditorGraphEdgeUsage;
 }
 
 export interface EditorTraversalOptions {
@@ -190,7 +348,20 @@ export interface EditorTraversalStep {
   readonly nodeId: string;
   readonly path: HostPath;
   readonly depth: number;
-  readonly via: "root" | "property" | "element" | "item" | "rest" | "variant" | "reference";
+  readonly via:
+    | "root"
+    | "property"
+    | "additional-property"
+    | "element"
+    | "item"
+    | "rest"
+    | "variant"
+    | "operand"
+    | "record-key"
+    | "record-value"
+    | "wrapper"
+    | "relation"
+    | "reference";
   readonly cycle: boolean;
-  readonly availability: "available" | "unknown";
+  readonly availability: "available" | "unavailable" | "unknown";
 }

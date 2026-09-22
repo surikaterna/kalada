@@ -12,6 +12,7 @@
     "packages/*"
   ],
   "scripts": {
+    "adapter-scheman:smoke": "bun run build && bun scripts/adapter-scheman-package-smoke.ts",
     "build": "bun run --filter '*' build",
     "changeset": "changeset",
     "changeset:check": "bun scripts/check-changesets.ts",

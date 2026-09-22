@@ -4,6 +4,7 @@ import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const sourceRoots = [
+  resolve(import.meta.dirname, "../packages/adapter-scheman/src"),
   resolve(import.meta.dirname, "../packages/core/src"),
   resolve(import.meta.dirname, "../packages/host/src"),
   resolve(import.meta.dirname, "../packages/projection/src"),

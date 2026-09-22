@@ -19,7 +19,7 @@ describe("package boundaries", () => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort(),
-    ).toEqual(["core", "host", "projection", "syntax"]);
+    ).toEqual(["adapter-scheman", "core", "host", "projection", "syntax"]);
   });
 
   it("keeps core free of runtime dependencies", async () => {
