@@ -1,5 +1,7 @@
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { assertJavaScriptSecurity } from "./security.js";
+import { RuntimeAnalyzer } from "./security-analysis.js";
 
 const SAFE_FIXTURES = [
   'import("./environment-Ab_12.js")',
@@ -51,6 +53,31 @@ const FORBIDDEN_FIXTURES = [
   'new window["XML" + "HttpRequest"]()',
 ];
 
+const AUDITOR_REPROS = [
+  `(true?globalThis:window)["Function"]("return 1")()`,
+  `(globalThis||window)["eval"]("1")`,
+  `[globalThis][0]["Function"]("return 1")()`,
+  `(()=>globalThis)()["Function"]("return 1")()`,
+  `const h=true?globalThis:window; h["Function"]("return 1")()`,
+  `const R=Reflect; R.get(globalThis,"Function")("return 1")()`,
+  `({Function:C}=globalThis); C("return 1")()`,
+];
+
+const FLOW_VARIANTS = [
+  'const a=globalThis; const b=a; const c=b; c["Fun"+"ction"]("return 1")()',
+  "let h; h=[window][0]; h[`Fun$" + '{"ction"}`]("return 1")()',
+  'const h=(()=>{return self})(); h?.["eval"]?.("1")',
+  'const R=(0,Reflect); R.get(globalThis,"Function")("return 1")()',
+  "const R=true?Reflect:Reflect; const get=R[`g$" + '{"et"}`]; get(window,"eval")("1")',
+  'const O=Object; O.getOwnPropertyDescriptor(globalThis,"Function").value("return 1")()',
+  'const get=Object.getOwnPropertyDescriptor; get(window,"eval").value("1")',
+  'const get=Reflect.get.bind(Reflect); get(globalThis,"Function")("return 1")()',
+  'Reflect.get.apply(Reflect,[globalThis,"eval"])("1")',
+  'const h=globalThis; new h["Fun".concat("ction")]("return 1")',
+  'let C; ({["Fun"+"ction"]:C}=globalThis); C("return 1")()',
+  'const host=((value)=>value)(globalThis); host["Function"]("return 1")()',
+];
+
 describe("demo artifact security scan", () => {
   it("allows inert strings and property declarations", () => {
     expect(() =>
@@ -69,5 +96,24 @@ describe("demo artifact security scan", () => {
     expect(() => assertJavaScriptSecurity("unsafe.js", source)).toThrow(
       /Forbidden runtime primitive/u,
     );
+  });
+
+  it.each(AUDITOR_REPROS)("rejects exact auditor host-flow repro %s", (source) => {
+    expect(() => assertJavaScriptSecurity("auditor-repro.js", source)).toThrow(
+      /Forbidden runtime primitive/u,
+    );
+  });
+
+  it.each(FLOW_VARIANTS)("rejects adversarial host-flow variant %s", (source) => {
+    expect(() => assertJavaScriptSecurity("flow-variant.js", source)).toThrow(
+      /Forbidden runtime primitive/u,
+    );
+  });
+
+  it("fails closed when the bounded analysis work cap is exhausted", () => {
+    const file = ts.createSourceFile("capped.js", "const safe = 1;", ts.ScriptTarget.ESNext, true);
+    const analyzer = new RuntimeAnalyzer(file, 1);
+    analyzer.scan();
+    expect([...analyzer.failures]).toContain("analysis work cap exhausted");
   });
 });
