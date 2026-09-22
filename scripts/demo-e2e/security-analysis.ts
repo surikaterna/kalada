@@ -9,13 +9,12 @@ import {
   type AbstractValue,
   arrayValue,
   descriptorValue,
-  directFunctionValue,
   Flow,
   flowing,
-  functionValue,
   hasCapabilityFlow,
   hasFlow,
   hasHostFlow,
+  isInertLiteralArray,
   isLogicalOperator,
   keyValue,
   mergeAll,
@@ -25,33 +24,32 @@ import {
   staticString,
   unwrapExpression,
 } from "./security-flow.js";
+import { closeFunction, FunctionSummarizer } from "./security-functions.js";
 import {
   CALL_WRAPPERS,
   FORBIDDEN_GLOBALS,
   FORBIDDEN_PROPERTIES,
-  functionReturnExpressions,
   GLOBAL_HOSTS,
   HOST_CHILDREN,
   isAssignment,
   isBundledRelativeImport,
   isCallWrapper,
   isFunctionExpression,
-  isIdentifierReference,
   isInvocation,
   isMemberExpression,
   isModuleNode,
-  isSafeFunctionReference,
   isSecurityExpression,
   isSymbolFactory,
   type ModuleNode,
   moduleSpecifier,
+  SAFE_EMITTED_HOST_KEYS,
 } from "./security-policy.js";
 
 const MAX_ARRAY = 32;
 const MAX_BINDINGS = 20_000;
 const MAX_DEPTH = 80;
-const MAX_WORK = 2_000_000;
-
+const MAX_PASSES = 16;
+const MAX_WORK = 8_000_000;
 export class RuntimeAnalyzer {
   readonly failures = new Set<string>();
   private readonly bindings = new ScopedBindings(MAX_BINDINGS, (node) =>
@@ -61,9 +59,16 @@ export class RuntimeAnalyzer {
   private exhausted = false;
   private readonly bindingContext: BindingContext = {
     assign: (name, value, target) => this.bindings.assign(name, value, target),
+    defaultValue: (expression) => this.value(expression),
     fail: (reason, node) => this.fail(reason, node),
     lookup: (owner, key, node) => this.lookup(owner, key, node),
   };
+  private readonly functions = new FunctionSummarizer(
+    (expression, locals, depth) => this.value(expression, locals, depth),
+    (node, locals) => this.closureValue(node, locals),
+    (owner, key, node) => this.lookup(owner, key, node),
+    (reason, node) => this.fail(reason, node),
+  );
 
   constructor(
     private readonly file: ts.SourceFile,
@@ -77,24 +82,32 @@ export class RuntimeAnalyzer {
   }
 
   private propagate(): void {
-    const collect = (node: ts.Node): void => {
-      this.collectAlias(node);
-      ts.forEachChild(node, collect);
-    };
-    collect(this.file);
+    for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+      let changed = false;
+      const collect = (node: ts.Node): void => {
+        changed = this.collectAlias(node) || changed;
+        ts.forEachChild(node, collect);
+      };
+      collect(this.file);
+      if (!changed || this.exhausted) return;
+    }
+    this.fail("binding fixed-point cap exhausted", this.file);
   }
 
   private collectAlias(node: ts.Node): boolean {
     if (!this.spend()) return false;
-    if (ts.isVariableDeclaration(node) && node.initializer) {
-      const value = isFunctionExpression(node.initializer)
-        ? functionValue(node.initializer)
-        : this.value(node.initializer);
+    if (ts.isVariableDeclaration(node)) {
+      const value =
+        node.initializer && isFunctionExpression(node.initializer)
+          ? this.closureValue(node.initializer)
+          : node.initializer
+            ? this.value(node.initializer)
+            : SAFE;
       return bindName(node.name, value, this.bindingContext);
     }
     if (ts.isParameter(node)) return bindName(node.name, SAFE, this.bindingContext);
     if (ts.isFunctionDeclaration(node) && node.name) {
-      return this.bindings.assign(node.name.text, functionValue(node), node.name);
+      return this.bindings.declare(node.name.text, this.closureValue(node), node);
     }
     if (isAssignment(node)) {
       return bindAssignment(node.left, this.value(node.right), this.bindingContext);
@@ -104,7 +117,6 @@ export class RuntimeAnalyzer {
 
   private visit = (node: ts.Node): void => {
     if (!this.spend()) return;
-    if (ts.isIdentifier(node)) this.inspectIdentifier(node);
     if (isSecurityExpression(node)) this.value(node);
     if (isModuleNode(node)) this.inspectModule(node);
     ts.forEachChild(node, this.visit);
@@ -133,8 +145,10 @@ export class RuntimeAnalyzer {
     if (ts.isArrayLiteralExpression(node)) return this.array(node, locals, next);
     if (isMemberExpression(node)) return this.member(node, locals, next);
     if (isInvocation(node)) return this.call(node, locals, next);
-    if (isFunctionExpression(node)) return directFunctionValue(node);
+    if (isFunctionExpression(node)) return this.closureValue(node, locals);
     if (ts.isAwaitExpression(node)) return this.value(node.expression, locals, next);
+    if (ts.isYieldExpression(node) && node.expression)
+      return this.value(node.expression, locals, next);
     return this.unsupported(node, locals, next);
   }
 
@@ -175,7 +189,9 @@ export class RuntimeAnalyzer {
     locals: ReadonlyMap<string, AbstractValue>,
     depth: number,
   ): AbstractValue {
-    if (node.elements.length > MAX_ARRAY) return this.depthFailure(node);
+    if (node.elements.length > MAX_ARRAY) {
+      return isInertLiteralArray(node) ? SAFE : this.depthFailure(node);
+    }
     const elements = node.elements.map((element) => {
       if (!ts.isSpreadElement(element)) return this.value(element, locals, depth);
       const spread = this.value(element.expression, locals, depth);
@@ -240,6 +256,9 @@ export class RuntimeAnalyzer {
       return flowing(Flow.Forbidden);
     }
     if (names.length && names.every((name) => HOST_CHILDREN.has(name))) return flowing(Flow.Host);
+    if (names.length && names.every((name) => SAFE_EMITTED_HOST_KEYS.has(name))) {
+      return flowing(Flow.SafeHostDerived);
+    }
     return flowing(Flow.HostDerived);
   }
 
@@ -270,6 +289,19 @@ export class RuntimeAnalyzer {
     }
     if (ts.isCallExpression(node) && isSymbolFactory(node.expression)) return opaqueKey();
     const callee = this.value(node.expression, locals, depth);
+    this.inspectCallee(callee, node);
+    if (hasFlow(callee, Flow.ReflectGet)) return this.reflectGet(node, locals, depth);
+    if (hasFlow(callee, Flow.DescriptorGet)) return this.descriptorGet(node, locals, depth);
+    const args = node.arguments ?? [];
+    const argumentValues = args.map((argument) => this.value(argument, locals, depth));
+    if (callee.functions?.length) return this.functions.summarize(callee, argumentValues, depth);
+    const argumentsFlow = mergeAll(argumentValues);
+    if (callee.flow === Flow.SafeHostDerived) return flowing(Flow.SafeHostDerived);
+    if (hasHostFlow(callee)) return flowing(Flow.HostDerived);
+    return hasCapabilityFlow(argumentsFlow) ? flowing(Flow.UnknownHost) : SAFE;
+  }
+
+  private inspectCallee(callee: AbstractValue, node: ts.CallExpression | ts.NewExpression): void {
     if (hasFlow(callee, Flow.Forbidden)) this.fail("forbidden dynamic invocation", node);
     if (hasFlow(callee, Flow.UnknownHost) || hasFlow(callee, Flow.Host)) {
       this.fail("unprovable global-host invocation", node);
@@ -282,10 +314,6 @@ export class RuntimeAnalyzer {
     ) {
       this.fail("reflection utility call/apply/bind wrapper", node);
     }
-    if (hasFlow(callee, Flow.ReflectGet)) return this.reflectGet(node, locals, depth);
-    if (hasFlow(callee, Flow.DescriptorGet)) return this.descriptorGet(node, locals, depth);
-    if (callee.functions?.length) return this.functionReturn(callee, node.arguments, locals, depth);
-    return SAFE;
   }
 
   private reflectGet(
@@ -293,8 +321,8 @@ export class RuntimeAnalyzer {
     locals: ReadonlyMap<string, AbstractValue>,
     depth: number,
   ): AbstractValue {
-    const owner = node.arguments[0] ? this.value(node.arguments[0], locals, depth) : SAFE;
-    const key = node.arguments[1] ? this.value(node.arguments[1], locals, depth) : SAFE;
+    const owner = node.arguments?.[0] ? this.value(node.arguments[0], locals, depth) : SAFE;
+    const key = node.arguments?.[1] ? this.value(node.arguments[1], locals, depth) : SAFE;
     if (key.keys?.includes("constructor")) return flowing(Flow.Forbidden);
     if (!hasHostFlow(owner)) return SAFE;
     return this.lookup(owner, key, node);
@@ -307,27 +335,6 @@ export class RuntimeAnalyzer {
   ): AbstractValue {
     const value = this.reflectGet(node, locals, depth);
     return descriptorValue(value);
-  }
-
-  private functionReturn(
-    callee: AbstractValue,
-    args: readonly ts.Expression[],
-    outer: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-  ): AbstractValue {
-    const returns: AbstractValue[] = [];
-    for (const fn of callee.functions ?? []) {
-      const locals = new Map(outer);
-      fn.parameters.forEach((parameter, index) => {
-        if (ts.isIdentifier(parameter.name) && args[index]) {
-          locals.set(parameter.name.text, this.value(args[index], outer, depth));
-        }
-      });
-      for (const expression of functionReturnExpressions(fn)) {
-        returns.push(this.value(expression, locals, depth));
-      }
-    }
-    return mergeAll(returns);
   }
 
   private unsupported(
@@ -343,11 +350,11 @@ export class RuntimeAnalyzer {
     return hasCapabilityFlow(merged) ? flowing(Flow.UnknownHost) : SAFE;
   }
 
-  private inspectIdentifier(node: ts.Identifier): void {
-    if (!FORBIDDEN_GLOBALS.has(node.text) || !isIdentifierReference(node)) return;
-    if (node.text === "process" && ts.isTypeOfExpression(node.parent)) return;
-    if (node.text === "Function" && isSafeFunctionReference(node)) return;
-    this.fail(`forbidden global ${node.text}`, node);
+  private closureValue(
+    node: ts.FunctionLikeDeclaration,
+    locals: ReadonlyMap<string, AbstractValue> = new Map(),
+  ): AbstractValue {
+    return closeFunction(node, locals, (name, target) => this.bindings.get(name, target));
   }
 
   private inspectModule(node: ModuleNode): void {

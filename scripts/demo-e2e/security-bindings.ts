@@ -17,6 +17,7 @@ import { isDeclarationBinding, lexicalScope, parentScope } from "./security-poli
 
 export interface BindingContext {
   readonly assign: (name: string, value: AbstractValue, target: ts.Node) => boolean;
+  readonly defaultValue?: (expression: ts.Expression) => AbstractValue;
   readonly fail: (reason: string, node: ts.Node) => void;
   readonly lookup: (owner: AbstractValue, key: AbstractValue, node: ts.Node) => AbstractValue;
 }
@@ -42,6 +43,14 @@ export class ScopedBindings {
 
   assign(name: string, value: AbstractValue, target: ts.Node): boolean {
     const scope = this.assignmentScope(name, target);
+    return this.merge(scope, name, value, target);
+  }
+
+  declare(name: string, value: AbstractValue, target: ts.Node): boolean {
+    return this.merge(lexicalScope(target), name, value, target);
+  }
+
+  private merge(scope: ts.Node, name: string, value: AbstractValue, target: ts.Node): boolean {
     const bindings = this.scopeBindings(scope);
     const current = bindings.get(name) ?? BOTTOM;
     const merged = mergeValues(current, value);
@@ -88,9 +97,10 @@ export function bindName(
       continue;
     }
     const key = bindingKey(element);
-    const selected = key
-      ? context.lookup(value, keyValue(key), element)
-      : flowing(Flow.UnknownHost);
+    let selected = key ? context.lookup(value, keyValue(key), element) : flowing(Flow.UnknownHost);
+    if (element.initializer && context.defaultValue) {
+      selected = mergeValues(selected, context.defaultValue(element.initializer));
+    }
     changed = bindName(element.name, selected, context) || changed;
   }
   return changed;

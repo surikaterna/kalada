@@ -6,9 +6,11 @@ import { RuntimeAnalyzer } from "./security-analysis.js";
 const SAFE_FIXTURES = [
   'import("./environment-Ab_12.js")',
   'import value from "./index-Ab_12.js"',
-  'const local={fetch:"inert",constructor:"data"}; local.label="sourceURL";',
+  'const local={label:"inert",constructor:"data"}; local.label="sourceURL";',
   "const processState = 'browser'; typeof process;",
-  "value instanceof Function; Function.prototype; store.require('document');",
+  "value instanceof Function; Function.prototype;",
+  "const Function=class Local {}; new Function(); // eval and fetch are harmless comments",
+  'class Store { require(uri){ return this.documents.get(uri) } read(){ return this.require("document") } }',
 ];
 
 const FORBIDDEN_FIXTURES = [
@@ -78,12 +80,35 @@ const FLOW_VARIANTS = [
   'const host=((value)=>value)(globalThis); host["Function"]("return 1")()',
 ];
 
+const FINAL_AUDITOR_REPROS = [
+  `const id=x=>x; id(globalThis)["Function"]("return 1")()`,
+  `function id(x){return x}; id(globalThis)["Function"]("return 1")()`,
+  `const h=globalThis; const get=()=>h; get()["Function"]("return 1")()`,
+  `const wrap=x=>()=>x; wrap(globalThis)()["Function"]("return 1")()`,
+  `const h=alias; const alias=globalThis; h["Function"]("return 1")()`,
+  `let a,b; a=b; b=globalThis; a["Function"]("return 1")()`,
+  `function outer(){const h=globalThis; return ()=>h} outer()()["Function"]("return 1")()`,
+];
+
+const FINAL_FLOW_VARIANTS = [
+  'let a,b,c; a=b; b=c; c=a; c=globalThis; a[key]("x")',
+  'function pick({host=globalThis}={}){return host}; pick()[key]("x")',
+  'const pass=(first=globalThis,...rest)=>first; pass()[key]("x")',
+  'hoisted(globalThis)[key]("x"); function hoisted(value){return value}',
+  'const get=()=>captured; const captured=globalThis; get()[key]("x")',
+  'async function identity(value){return value}; identity(globalThis)[key]("x")',
+  'function* identity(value){return yield value}; identity(globalThis)[key]("x")',
+  'const key="\\u0046unction"; globalThis[key]("return 1")()',
+  'function recursive(value){return recursive(value)}; recursive(globalThis)[key]("x")',
+  "const key=getKey(); globalThis.location[key]",
+];
+
 describe("demo artifact security scan", () => {
   it("allows inert strings and property declarations", () => {
     expect(() =>
       assertJavaScriptSecurity(
         "safe.js",
-        'const evidence={fetch:"not a call",process:"not a global"}; evidence.label="node:fs"; typeof process;',
+        'const evidence={label:"not a call",runtime:"not a global"}; evidence.label="browser-only"; typeof process;',
       ),
     ).not.toThrow();
   });
@@ -108,6 +133,26 @@ describe("demo artifact security scan", () => {
     expect(() => assertJavaScriptSecurity("flow-variant.js", source)).toThrow(
       /Forbidden runtime primitive/u,
     );
+  });
+
+  it.each(FINAL_AUDITOR_REPROS)("rejects exact final auditor repro %s", (source) => {
+    expect(() => assertJavaScriptSecurity("final-auditor-repro.js", source)).toThrow(
+      /Forbidden runtime primitive/u,
+    );
+  });
+
+  it.each(FINAL_FLOW_VARIANTS)("rejects final adversarial flow variant %s", (source) => {
+    expect(() => assertJavaScriptSecurity("final-flow-variant.js", source)).toThrow(
+      /Forbidden runtime primitive/u,
+    );
+  });
+
+  it.each([
+    "const Function=class Local {}; new Function();",
+    "function eval(value){return value}; eval(1)",
+    "const fetch=(value)=>value; fetch('local')",
+  ])("allows lexically shadowed harmless global name %s", (source) => {
+    expect(() => assertJavaScriptSecurity("shadowed.js", source)).not.toThrow();
   });
 
   it("fails closed when the bounded analysis work cap is exhausted", () => {

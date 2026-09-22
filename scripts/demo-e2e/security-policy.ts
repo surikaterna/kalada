@@ -20,6 +20,20 @@ export const FORBIDDEN_PROPERTIES = new Set([...FORBIDDEN_GLOBALS, "constructor"
 export const GLOBAL_HOSTS = new Set(["global", "globalThis", "navigator", "self", "window"]);
 export const HOST_CHILDREN = new Set(["globalThis", "navigator", "self", "window"]);
 export const CALL_WRAPPERS = new Set(["apply", "bind", "call"]);
+export const SAFE_EMITTED_HOST_KEYS = new Set([
+  "EditContext",
+  "dispatchEvent",
+  "getComputedStyle",
+  "innerHeight",
+  "innerWidth",
+  "location",
+  "matchMedia",
+  "onerror",
+  "platform",
+  "scheduling",
+  "userAgent",
+  "visualViewport",
+]);
 
 export type ModuleNode = ts.ImportDeclaration | ts.ExportDeclaration;
 
@@ -117,19 +131,6 @@ export function isBundledRelativeImport(value: string): boolean {
 
 export function moduleSpecifier(node: ModuleNode): string | undefined {
   return staticString(node.moduleSpecifier);
-}
-
-export function functionReturnExpressions(fn: ts.FunctionLikeDeclaration): ts.Expression[] {
-  if (ts.isArrowFunction(fn) && !ts.isBlock(fn.body)) return [fn.body];
-  if (!fn.body || !ts.isBlock(fn.body)) return [];
-  const returns: ts.Expression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (node !== fn.body && ts.isFunctionLike(node)) return;
-    if (ts.isReturnStatement(node) && node.expression) returns.push(node.expression);
-    ts.forEachChild(node, visit);
-  };
-  visit(fn.body);
-  return returns;
 }
 
 export function lexicalScope(node: ts.Node): ts.Node {

@@ -10,6 +10,7 @@ export enum Flow {
   ReflectGet = 1 << 6,
   DescriptorGet = 1 << 7,
   ReflectConstruct = 1 << 8,
+  SafeHostDerived = 1 << 9,
 }
 
 export interface AbstractValue {
@@ -19,8 +20,15 @@ export interface AbstractValue {
   readonly opaqueKey?: boolean;
   readonly keyComplete?: boolean;
   readonly elements?: readonly AbstractValue[];
-  readonly functions?: readonly ts.FunctionLikeDeclaration[];
+  readonly functions?: readonly FunctionClosure[];
   readonly descriptor?: AbstractValue;
+}
+
+export interface FunctionClosure {
+  readonly node: ts.FunctionLikeDeclaration;
+  readonly captures?: ReadonlyMap<string, AbstractValue>;
+  readonly capabilitySource?: boolean;
+  readonly bounded: boolean;
 }
 
 export const SAFE: AbstractValue = Object.freeze({ flow: 0 });
@@ -42,14 +50,14 @@ export function arrayValue(elements: readonly AbstractValue[]): AbstractValue {
   return { flow: 0, elements };
 }
 
-export function functionValue(node: ts.FunctionLikeDeclaration): AbstractValue {
-  return isBoundedFunction(node) && containsCapabilitySource(node)
-    ? directFunctionValue(node)
-    : SAFE;
-}
-
-export function directFunctionValue(node: ts.FunctionLikeDeclaration): AbstractValue {
-  return isBoundedFunction(node) ? { flow: 0, functions: [node] } : SAFE;
+export function directFunctionValue(
+  node: ts.FunctionLikeDeclaration,
+  captures?: ReadonlyMap<string, AbstractValue>,
+  capabilitySource = captureHasCapability(captures),
+): AbstractValue {
+  return isBoundedFunction(node)
+    ? { flow: 0, functions: [{ node, captures, capabilitySource, bounded: true }] }
+    : { flow: 0, functions: [{ node, captures, capabilitySource, bounded: false }] };
 }
 
 export function descriptorValue(value: AbstractValue): AbstractValue {
@@ -61,11 +69,35 @@ export function hasFlow(value: AbstractValue, flow: Flow): boolean {
 }
 
 export function hasHostFlow(value: AbstractValue): boolean {
-  return (value.flow & (Flow.Host | Flow.HostDerived | Flow.UnknownHost)) !== 0;
+  return (
+    (value.flow & (Flow.Host | Flow.HostDerived | Flow.UnknownHost | Flow.SafeHostDerived)) !== 0
+  );
 }
 
 export function hasCapabilityFlow(value: AbstractValue): boolean {
-  return value.flow !== 0 || value.descriptor !== undefined;
+  return (value.flow & ~Flow.SafeHostDerived) !== 0 || value.descriptor !== undefined;
+}
+
+export function hasCallableCapability(value: AbstractValue): boolean {
+  return value.functions?.some((closure) => closure.capabilitySource) === true;
+}
+
+export function capabilityCaptures(
+  values: ReadonlyMap<string, AbstractValue>,
+): ReadonlyMap<string, AbstractValue> | undefined {
+  const captures = new Map(
+    [...values].filter(([, value]) => hasCapabilityFlow(value) || hasCallableCapability(value)),
+  );
+  return captures.size ? captures : undefined;
+}
+
+export function mergeCaptureMaps(
+  left: ReadonlyMap<string, AbstractValue> | undefined,
+  right: ReadonlyMap<string, AbstractValue>,
+): ReadonlyMap<string, AbstractValue> | undefined {
+  const captures = new Map(left ?? []);
+  for (const [name, value] of right) captures.set(name, value);
+  return captures.size ? captures : undefined;
 }
 
 export function mergeValues(left: AbstractValue, right: AbstractValue): AbstractValue {
@@ -90,7 +122,13 @@ export function mergeAll(values: readonly AbstractValue[]): AbstractValue {
 
 export function valueSignature(value: AbstractValue): string {
   const elements = value.elements?.map(valueSignature).join(";") ?? "";
-  const functions = value.functions?.map((node) => node.pos).join(",") ?? "";
+  const functions =
+    value.functions
+      ?.map(
+        ({ node, captures, capabilitySource, bounded }) =>
+          `${node.pos}:${capabilitySource ? 1 : 0}:${bounded ? 1 : 0}:${captureSignature(captures)}`,
+      )
+      .join(",") ?? "";
   const descriptor = value.descriptor ? valueSignature(value.descriptor) : "";
   return [
     value.flow,
@@ -161,6 +199,17 @@ export function isLogicalOperator(kind: ts.SyntaxKind): boolean {
   ].includes(kind);
 }
 
+export function isInertLiteralArray(node: ts.ArrayLiteralExpression): boolean {
+  return node.elements.every(
+    (element) =>
+      ts.isNumericLiteral(element) ||
+      ts.isStringLiteral(element) ||
+      element.kind === ts.SyntaxKind.TrueKeyword ||
+      element.kind === ts.SyntaxKind.FalseKeyword ||
+      element.kind === ts.SyntaxKind.NullKeyword,
+  );
+}
+
 function isStringAddition(
   value: ts.Expression,
 ): value is ts.BinaryExpression & { operatorToken: { kind: ts.SyntaxKind.PlusToken } } {
@@ -185,10 +234,17 @@ function mergeStrings(
 }
 
 function mergeFunctions(
-  left: readonly ts.FunctionLikeDeclaration[] | undefined,
-  right: readonly ts.FunctionLikeDeclaration[] | undefined,
-): ts.FunctionLikeDeclaration[] {
-  return [...new Map([...(left ?? []), ...(right ?? [])].map((node) => [node.pos, node])).values()];
+  left: readonly FunctionClosure[] | undefined,
+  right: readonly FunctionClosure[] | undefined,
+): FunctionClosure[] {
+  return [
+    ...new Map(
+      [...(left ?? []), ...(right ?? [])].map((closure) => [
+        `${closure.node.pos}:${closure.capabilitySource ? 1 : 0}:${closure.bounded ? 1 : 0}:${captureSignature(closure.captures)}`,
+        closure,
+      ]),
+    ).values(),
+  ];
 }
 
 function mergeElements(
@@ -215,27 +271,30 @@ function mergeDescriptor(
 }
 
 function isBoundedFunction(node: ts.FunctionLikeDeclaration): boolean {
-  if (node.end - node.pos > 500 || !node.body) return false;
+  if (node.end - node.pos > 1_000 || !node.body) return false;
   if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return true;
-  if (!ts.isBlock(node.body) || node.body.statements.length > 4) return false;
-  return node.body.statements.every((statement) => ts.isReturnStatement(statement));
+  if (!ts.isBlock(node.body) || node.body.statements.length > 12) return false;
+  return node.body.statements.every(isSummaryStatement);
 }
 
-function containsCapabilitySource(node: ts.FunctionLikeDeclaration): boolean {
-  let found = false;
-  const visit = (child: ts.Node): void => {
-    if (child !== node && ts.isFunctionLike(child)) return;
-    if (
-      ts.isIdentifier(child) &&
-      ["Object", "Reflect", "global", "globalThis", "navigator", "self", "window"].includes(
-        child.text,
-      )
-    ) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(child, visit);
-  };
-  visit(node);
-  return found;
+function isSummaryStatement(statement: ts.Statement): boolean {
+  return (
+    ts.isReturnStatement(statement) ||
+    ts.isVariableStatement(statement) ||
+    ts.isExpressionStatement(statement) ||
+    ts.isFunctionDeclaration(statement) ||
+    ts.isEmptyStatement(statement)
+  );
+}
+
+function captureSignature(captures: ReadonlyMap<string, AbstractValue> | undefined): string {
+  if (!captures) return "";
+  return [...captures]
+    .map(([name, value]) => `${name}=${value.flow}`)
+    .sort()
+    .join(",");
+}
+
+function captureHasCapability(captures: ReadonlyMap<string, AbstractValue> | undefined): boolean {
+  return captures ? [...captures.values()].some(hasCapabilityFlow) : false;
 }
