@@ -145,7 +145,89 @@ describe("live workspace orchestration", () => {
     expect(runtime.snapshot().data).toEqual(JSON.parse(model.snapshot().dataText));
     runtime.dispose();
   });
+
+  it("publishes only current source-version markers", async () => {
+    const { model, runtime, observed } = markerRuntime();
+    const uri = uriForName("count.kalada");
+    runtime.service.openDocument({ uri, version: 1, text: model.text("count.kalada") });
+    runtime.start();
+    await ready(runtime);
+    updateSource(runtime, uri, 2, model.text("count.kalada").length, '"version-stale-marker"');
+    updateSource(runtime, uri, 3, '"version-stale-marker"'.length, '"version-current-marker"');
+    await waitFor(() => observed.includes("version-current-marker"));
+    expect(observed).not.toContain("version-stale-marker");
+    runtime.dispose();
+  });
+
+  it("publishes only current data-generation markers", async () => {
+    const { model, runtime, observed } = markerRuntime();
+    runtime.start();
+    await ready(runtime);
+    model.update("data.json", '"data-stale-marker"');
+    runtime.dataChanged();
+    model.update("data.json", '"data-current-marker"');
+    runtime.dataChanged();
+    await waitFor(() => observed.includes("data-current-marker"));
+    expect(observed).not.toContain("data-stale-marker");
+    runtime.dispose();
+  });
+
+  it("publishes only current environment-generation markers", async () => {
+    const { model, runtime, observed } = markerRuntime();
+    runtime.start();
+    await ready(runtime);
+    model.update("data.json", '"environment-stale-marker"');
+    model.update("schema.json", '{"const":"environment-stale-marker"}');
+    runtime.schemaChanged();
+    model.update("data.json", '"environment-current-marker"');
+    model.update("schema.json", '{"const":"environment-current-marker"}');
+    runtime.schemaChanged();
+    await waitFor(() => observed.includes("environment-current-marker"));
+    expect(observed).not.toContain("environment-stale-marker");
+    runtime.dispose();
+  });
 });
+
+function markerRuntime(): {
+  model: WorkspaceModel;
+  runtime: DemoRuntime;
+  observed: unknown[];
+} {
+  const initial = new WorkspaceModel().snapshot();
+  const model = new WorkspaceModel({
+    ...initial,
+    schemaText: '{"type":"string"}',
+    dataText: '"initial-marker"',
+    documents: initial.documents.map((document) => ({ ...document, text: "data" })),
+  });
+  const observed: unknown[] = [];
+  const runtime = new DemoRuntime(
+    model,
+    (snapshot) => {
+      const output = snapshot.files.get("count.kalada")?.output;
+      if (output !== undefined) observed.push(output);
+    },
+    () => undefined,
+  );
+  return { model, runtime, observed };
+}
+
+function updateSource(
+  runtime: DemoRuntime,
+  uri: string,
+  version: number,
+  end: number,
+  text: string,
+): void {
+  const snapshot = runtime.service.updateDocument({
+    uri,
+    version,
+    edits: [
+      { range: { start: { line: 0, character: 0 }, end: { line: 0, character: end } }, text },
+    ],
+  });
+  runtime.documentChanged(snapshot);
+}
 
 async function ready(runtime: DemoRuntime): Promise<void> {
   await waitFor(() => runtime.snapshot().state === "ready");
