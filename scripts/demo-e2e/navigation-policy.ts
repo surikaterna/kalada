@@ -163,6 +163,8 @@ function isLexicalScope(node: ts.Node): boolean {
   return (
     ts.isSourceFile(node) ||
     ts.isBlock(node) ||
+    ts.isCaseBlock(node) ||
+    ts.isClassExpression(node) ||
     ts.isFunctionLike(node) ||
     ts.isCatchClause(node) ||
     ts.isForStatement(node) ||

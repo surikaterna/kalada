@@ -40,6 +40,10 @@ const FORBIDDEN_CANARIES = [
   "++location",
   "({next:window.location}=source)",
   "[document.location]=source",
+  'switch(0){case 0:let window={location:"local"};}window.location="/outside"',
+  'switch(0){case 0:let location="local";}location="/outside"',
+  'switch(0){case 0:class window{}}window.location="/outside"',
+  'const C=class window{};window.location="/outside"',
 ];
 
 const SAFE_NAVIGATION_CONTROLS = [
@@ -51,6 +55,10 @@ const SAFE_NAVIGATION_CONTROLS = [
   'const globalThis={location:"local"}; globalThis.location="/outside"',
   'const model={location:"local"}; model.location="https://example.invalid"',
   'const model={location:"https://example.invalid"}; model.location',
+  'switch(0){case 0:let window={location:"local"};window.location="/outside"}',
+  'switch(0){case 0:let location="local";location="/outside"}',
+  'class window{static f(){window.location="/outside"}}',
+  'const C=class window{static f(){window.location="/outside"}}',
 ];
 
 describe("bounded emitted JavaScript inventory", () => {
