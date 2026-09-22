@@ -1,4 +1,16 @@
-import ts from "typescript";
+import type ts from "typescript";
+import { isBoundedFunction, isInspectableFunction } from "./security-function-shape.js";
+import { valueSignature } from "./security-signature.js";
+
+export { valueSignature } from "./security-signature.js";
+
+export {
+  isInertLiteralArray,
+  memberName,
+  memberOwner,
+  staticString,
+  unwrapExpression,
+} from "./security-syntax.js";
 
 export enum Flow {
   Host = 1 << 0,
@@ -32,6 +44,18 @@ export interface AbstractValue {
   readonly hostPaths?: readonly string[];
   readonly properties?: ReadonlyMap<string, AbstractValue>;
   readonly constructorSpecial?: boolean;
+  readonly tupleExact?: boolean;
+  readonly wrapper?: CallWrapper;
+  readonly mutator?: "assign" | "defineProperty" | "reflectDefineProperty" | "reflectSet";
+  readonly regex?: boolean;
+  readonly uninitialized?: boolean;
+}
+
+export interface CallWrapper {
+  readonly mode: "apply" | "bind" | "bound" | "call" | "reflectApply";
+  readonly target: AbstractValue;
+  readonly receiver?: AbstractValue;
+  readonly args?: readonly AbstractValue[];
 }
 
 export interface FunctionClosure {
@@ -61,8 +85,8 @@ export function opaqueKey(): AbstractValue {
   return { flow: 0, opaqueKey: true, keyComplete: true };
 }
 
-export function arrayValue(elements: readonly AbstractValue[]): AbstractValue {
-  return { flow: 0, elements };
+export function arrayValue(elements: readonly AbstractValue[], tupleExact = true): AbstractValue {
+  return { flow: 0, elements, ...(tupleExact ? { tupleExact: true } : {}) };
 }
 
 export function objectValue(properties: ReadonlyMap<string, AbstractValue>): AbstractValue {
@@ -107,7 +131,9 @@ export function hasHostFlow(value: AbstractValue): boolean {
 export function hasCapabilityFlow(value: AbstractValue): boolean {
   return (
     (value.flow & ~(Flow.SafeHostDerived | Flow.SafeHostCall | Flow.SafeHostNew)) !== 0 ||
-    value.descriptor !== undefined
+    value.descriptor !== undefined ||
+    value.wrapper !== undefined ||
+    value.mutator !== undefined
   );
 }
 
@@ -136,35 +162,77 @@ export function mergeCaptureMaps(
 export function mergeValues(left: AbstractValue, right: AbstractValue): AbstractValue {
   if (left.bottom) return right;
   if (right.bottom) return left;
+  if (left.uninitialized) return right;
+  if (right.uninitialized) return left;
   const keys = mergeStrings(left.keys, right.keys);
   const functions = mergeFunctions(left.functions, right.functions);
   const hostPaths = mergeStrings(left.hostPaths, right.hostPaths);
   const elements = mergeElements(left.elements, right.elements);
   const descriptor = mergeDescriptor(left.descriptor, right.descriptor);
   const properties = mergeProperties(left.properties, right.properties);
-  const flow = left.flow | right.flow;
+  const wrapper = mergeWrapper(left, right);
+  const mutator = mergeMutator(left, right);
+  const flow = mergedFlow(left, right);
   const constructorSpecial = left.constructorSpecial || right.constructorSpecial;
-  const callableSafe =
-    functions.length > 0 &&
-    functions.every((closure) => closure.callableSafe) &&
-    flow === 0 &&
-    keys.length === 0 &&
-    !elements.elements &&
-    !descriptor.descriptor &&
-    !properties.properties &&
-    !constructorSpecial;
-  return {
+  const callableSafe = mergedCallableSafe({
+    constructorSpecial,
+    descriptor,
+    elements,
     flow,
-    ...(keys.length ? { keys } : {}),
-    ...(left.opaqueKey || right.opaqueKey ? { opaqueKey: true } : {}),
-    ...(left.keyComplete && right.keyComplete ? { keyComplete: true } : {}),
-    ...elements,
-    ...(functions.length ? { functions } : {}),
-    ...(callableSafe ? { callableSafe: true } : {}),
-    ...(hostPaths.length ? { hostPaths } : {}),
-    ...(constructorSpecial ? { constructorSpecial: true } : {}),
-    ...properties,
-    ...descriptor,
+    functions,
+    keys,
+    mutator,
+    properties,
+    sourceCallableSafe: left.callableSafe === true && right.callableSafe === true,
+    wrapper,
+  });
+  const tupleExact =
+    left.tupleExact === true &&
+    right.tupleExact === true &&
+    left.elements?.length === right.elements?.length;
+  return buildMergedValue({
+    callableSafe,
+    constructorSpecial,
+    descriptor,
+    elements,
+    flow,
+    functions,
+    hostPaths,
+    keys,
+    left,
+    mutator,
+    properties,
+    right,
+    tupleExact,
+    wrapper,
+  });
+}
+
+function buildMergedValue(
+  parts: MergeParts & {
+    readonly callableSafe: boolean;
+    readonly hostPaths: readonly string[];
+    readonly left: AbstractValue;
+    readonly right: AbstractValue;
+    readonly tupleExact: boolean;
+  },
+): AbstractValue {
+  return {
+    flow: parts.flow,
+    ...(parts.keys.length ? { keys: parts.keys } : {}),
+    ...(parts.left.opaqueKey || parts.right.opaqueKey ? { opaqueKey: true } : {}),
+    ...(parts.left.keyComplete && parts.right.keyComplete ? { keyComplete: true } : {}),
+    ...parts.elements,
+    ...(parts.functions.length ? { functions: parts.functions } : {}),
+    ...(parts.callableSafe ? { callableSafe: true } : {}),
+    ...(parts.hostPaths.length ? { hostPaths: parts.hostPaths } : {}),
+    ...(parts.constructorSpecial ? { constructorSpecial: true } : {}),
+    ...(parts.tupleExact ? { tupleExact: true } : {}),
+    ...(parts.wrapper ? { wrapper: parts.wrapper } : {}),
+    ...(parts.mutator ? { mutator: parts.mutator } : {}),
+    ...(parts.left.regex && parts.right.regex ? { regex: true } : {}),
+    ...parts.properties,
+    ...parts.descriptor,
   };
 }
 
@@ -172,117 +240,51 @@ export function mergeAll(values: readonly AbstractValue[]): AbstractValue {
   return values.reduce(mergeValues, BOTTOM);
 }
 
-export function valueSignature(value: AbstractValue): string {
-  const elements = value.elements?.map(valueSignature).join(";") ?? "";
-  const functions =
-    value.functions
-      ?.map(
-        ({ node, captures, capabilitySource, bounded, callableSafe }) =>
-          `${node.pos}:${capabilitySource ? 1 : 0}:${bounded ? 1 : 0}:${callableSafe ? 1 : 0}:${captureSignature(captures)}`,
-      )
-      .join(",") ?? "";
-  const descriptor = value.descriptor ? valueSignature(value.descriptor) : "";
-  const properties = value.properties
-    ? [...value.properties].map(([name, child]) => `${name}:${valueSignature(child)}`).join(",")
-    : "";
-  return [
-    value.flow,
-    value.bottom ? 1 : 0,
-    value.keys?.join(",") ?? "",
-    value.opaqueKey ? 1 : 0,
-    value.keyComplete ? 1 : 0,
-    elements,
-    functions,
-    descriptor,
-    value.callableSafe ? 1 : 0,
-    value.hostPaths?.join(",") ?? "",
-    properties,
-    value.constructorSpecial ? 1 : 0,
-  ].join("|");
+interface MergeParts {
+  readonly constructorSpecial?: boolean;
+  readonly descriptor: Pick<AbstractValue, "descriptor">;
+  readonly elements: Pick<AbstractValue, "elements">;
+  readonly flow: number;
+  readonly functions: readonly FunctionClosure[];
+  readonly keys: readonly string[];
+  readonly mutator?: AbstractValue["mutator"];
+  readonly properties: Pick<AbstractValue, "properties">;
+  readonly sourceCallableSafe: boolean;
+  readonly wrapper?: CallWrapper;
 }
 
-export function staticString(value: ts.Expression | undefined): string | undefined {
-  if (!value) return undefined;
-  const expression = unwrapExpression(value);
-  if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
-    return expression.text;
-  }
-  if (ts.isNumericLiteral(expression)) return expression.text;
-  if (ts.isTemplateExpression(expression)) return staticTemplate(expression);
-  if (isStringAddition(expression)) {
-    const left = staticString(expression.left);
-    const right = staticString(expression.right);
-    return left === undefined || right === undefined ? undefined : left + right;
-  }
-  if (ts.isCallExpression(expression) && memberName(expression.expression) === "concat") {
-    const owner = memberOwner(expression.expression);
-    const parts = [owner && staticString(owner), ...expression.arguments.map(staticString)];
-    return parts.some((part) => part === undefined) ? undefined : parts.join("");
-  }
-  return undefined;
-}
-
-export function unwrapExpression(value: ts.Expression): ts.Expression {
-  let expression = value;
-  while (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isNonNullExpression(expression) ||
-    ts.isSatisfiesExpression(expression) ||
-    ts.isPartiallyEmittedExpression(expression)
-  ) {
-    expression = expression.expression;
-  }
-  return expression;
-}
-
-export function memberName(value: ts.Expression): string | undefined {
-  const expression = unwrapExpression(value);
-  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
-  if (ts.isElementAccessExpression(expression)) return staticString(expression.argumentExpression);
-  return undefined;
-}
-
-export function memberOwner(value: ts.Expression): ts.Expression | undefined {
-  const expression = unwrapExpression(value);
-  return ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)
-    ? expression.expression
-    : undefined;
-}
-
-export function isLogicalOperator(kind: ts.SyntaxKind): boolean {
-  return [
-    ts.SyntaxKind.AmpersandAmpersandToken,
-    ts.SyntaxKind.BarBarToken,
-    ts.SyntaxKind.QuestionQuestionToken,
-  ].includes(kind);
-}
-
-export function isInertLiteralArray(node: ts.ArrayLiteralExpression): boolean {
-  return node.elements.every(
-    (element) =>
-      ts.isNumericLiteral(element) ||
-      ts.isStringLiteral(element) ||
-      element.kind === ts.SyntaxKind.TrueKeyword ||
-      element.kind === ts.SyntaxKind.FalseKeyword ||
-      element.kind === ts.SyntaxKind.NullKeyword,
+function mergedFlow(left: AbstractValue, right: AbstractValue): number {
+  const wrapperFallbackSafe =
+    (left.wrapper !== undefined && isPlainSafe(right)) ||
+    (right.wrapper !== undefined && isPlainSafe(left));
+  const incompatibleWrapper =
+    Boolean(left.wrapper) !== Boolean(right.wrapper) &&
+    !wrapperFallbackSafe &&
+    !(left.callableSafe === true && right.callableSafe === true);
+  const incompatibleMutator =
+    Boolean(left.mutator) !== Boolean(right.mutator) &&
+    !((left.mutator && isPlainSafe(right)) || (right.mutator && isPlainSafe(left)));
+  return (
+    left.flow | right.flow | (incompatibleWrapper || incompatibleMutator ? Flow.UnknownHost : 0)
   );
 }
 
-function isStringAddition(
-  value: ts.Expression,
-): value is ts.BinaryExpression & { operatorToken: { kind: ts.SyntaxKind.PlusToken } } {
-  return ts.isBinaryExpression(value) && value.operatorToken.kind === ts.SyntaxKind.PlusToken;
-}
-
-function staticTemplate(value: ts.TemplateExpression): string | undefined {
-  let result = value.head.text;
-  for (const span of value.templateSpans) {
-    const expression = staticString(span.expression);
-    if (expression === undefined) return undefined;
-    result += expression + span.literal.text;
-  }
-  return result;
+function mergedCallableSafe(parts: MergeParts): boolean {
+  const knownCallable =
+    (parts.functions.length > 0 && parts.functions.every((closure) => closure.callableSafe)) ||
+    (parts.wrapper?.mode === "bound" &&
+      (parts.sourceCallableSafe || parts.wrapper.target.callableSafe === true));
+  return (
+    knownCallable &&
+    parts.flow === 0 &&
+    parts.keys.length === 0 &&
+    !parts.elements.elements &&
+    !parts.descriptor.descriptor &&
+    !parts.properties.properties &&
+    !parts.constructorSpecial &&
+    (!parts.wrapper || parts.wrapper.mode === "bound") &&
+    !parts.mutator
+  );
 }
 
 function mergeStrings(
@@ -310,8 +312,7 @@ function mergeElements(
   left: readonly AbstractValue[] | undefined,
   right: readonly AbstractValue[] | undefined,
 ): Pick<AbstractValue, "elements"> {
-  if (!left) return right ? { elements: right } : {};
-  if (!right) return { elements: left };
+  if (!left || !right) return {};
   const length = Math.max(left.length, right.length);
   return {
     elements: Array.from({ length }, (_, index) =>
@@ -329,6 +330,38 @@ function mergeDescriptor(
   return { descriptor: mergeValues(left, right) };
 }
 
+function mergeWrapper(
+  leftValue: AbstractValue,
+  rightValue: AbstractValue,
+): CallWrapper | undefined {
+  const left = leftValue.wrapper;
+  const right = rightValue.wrapper;
+  if (left && isPlainSafe(rightValue)) return left;
+  if (right && isPlainSafe(leftValue)) return right;
+  if (!left || !right || left.mode !== right.mode) return undefined;
+  if ((left.args?.length ?? 0) !== (right.args?.length ?? 0)) return undefined;
+  return {
+    mode: left.mode,
+    target: mergeValues(left.target, right.target),
+    ...(left.receiver && right.receiver
+      ? { receiver: mergeValues(left.receiver, right.receiver) }
+      : {}),
+    ...(left.args && right.args
+      ? { args: left.args.map((value, index) => mergeValues(value, right.args?.[index] ?? SAFE)) }
+      : {}),
+  };
+}
+
+function mergeMutator(left: AbstractValue, right: AbstractValue): AbstractValue["mutator"] {
+  if (left.mutator === right.mutator) return left.mutator;
+  if (left.mutator && isPlainSafe(right)) return left.mutator;
+  return right.mutator && isPlainSafe(left) ? right.mutator : undefined;
+}
+
+function isPlainSafe(value: AbstractValue): boolean {
+  return valueSignature(value) === valueSignature(SAFE);
+}
+
 function mergeProperties(
   left: ReadonlyMap<string, AbstractValue> | undefined,
   right: ReadonlyMap<string, AbstractValue> | undefined,
@@ -339,27 +372,6 @@ function mergeProperties(
     properties.set(name, mergeValues(properties.get(name) ?? BOTTOM, value));
   }
   return { properties };
-}
-
-function isBoundedFunction(node: ts.FunctionLikeDeclaration): boolean {
-  if (!isInspectableFunction(node)) return false;
-  if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return true;
-  if (!ts.isBlock(node.body) || node.body.statements.length > 12) return false;
-  return node.body.statements.every(isSummaryStatement);
-}
-
-function isInspectableFunction(node: ts.FunctionLikeDeclaration): boolean {
-  return node.end - node.pos <= 1_000 && node.body !== undefined;
-}
-
-function isSummaryStatement(statement: ts.Statement): boolean {
-  return (
-    ts.isReturnStatement(statement) ||
-    ts.isVariableStatement(statement) ||
-    ts.isExpressionStatement(statement) ||
-    ts.isFunctionDeclaration(statement) ||
-    ts.isEmptyStatement(statement)
-  );
 }
 
 function captureSignature(captures: ReadonlyMap<string, AbstractValue> | undefined): string {

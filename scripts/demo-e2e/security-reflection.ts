@@ -1,4 +1,4 @@
-import ts from "typescript";
+import type ts from "typescript";
 import { isSpecialConstructorOwner } from "./security-capabilities.js";
 import {
   type AbstractValue,
@@ -9,25 +9,24 @@ import {
   hasHostFlow,
   SAFE,
 } from "./security-flow.js";
-import type { InvocationNode } from "./security-policy.js";
+import type { InvocationShape } from "./security-invocation.js";
 
 type Lookup = (owner: AbstractValue, key: AbstractValue, node: ts.Node) => AbstractValue;
 type Fail = (reason: string, node: ts.Node) => void;
 
 export function reflectionCallValue(
   callee: AbstractValue,
-  node: InvocationNode,
-  args: readonly AbstractValue[],
+  shape: InvocationShape,
   lookup: Lookup,
   fail: Fail,
 ): AbstractValue | undefined {
   const descriptor = hasFlow(callee, Flow.DescriptorGet);
   if (!descriptor && !hasFlow(callee, Flow.ReflectGet)) return undefined;
-  if (ts.isTaggedTemplateExpression(node)) {
-    fail("tagged reflection utility", node);
+  if (shape.mode !== "call" || !shape.argumentsExact) {
+    fail("unsupported reflection invocation", shape.node);
     return flowing(Flow.UnknownHost);
   }
-  const value = reflectGet(args[0] ?? SAFE, args[1] ?? SAFE, node, lookup, fail);
+  const value = reflectGet(shape.args[0] ?? SAFE, shape.args[1] ?? SAFE, shape.node, lookup, fail);
   return descriptor ? descriptorValue(value) : value;
 }
 

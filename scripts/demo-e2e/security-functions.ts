@@ -219,11 +219,15 @@ function participatesInCapabilityFlow(
 ): boolean {
   return (
     closure.capabilitySource === true ||
-    args.some((value) => hasCapabilityFlow(value) || hasCallableCapability(value)) ||
+    args.some(requiresSummary) ||
     (closure.captures
       ? [...closure.captures.values()].some(
           (value) => hasCapabilityFlow(value) || hasCallableCapability(value),
         )
       : false)
   );
+}
+
+function requiresSummary(value: AbstractValue): boolean {
+  return hasCapabilityFlow(value) || hasCallableCapability(value) || value.regex === true;
 }

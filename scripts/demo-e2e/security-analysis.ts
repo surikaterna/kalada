@@ -6,7 +6,6 @@ import {
   ScopedBindings,
 } from "./security-bindings.js";
 import {
-  boundCallableValue,
   classMethodValue,
   hostInvocationResult,
   hostMemberValue,
@@ -17,19 +16,22 @@ import {
   objectMemberValue,
   ownPropertyValue,
   reflectMemberValue,
+  regexMemberValue,
   timerCallValue,
 } from "./security-capabilities.js";
 import {
+  arrayExpressionValue,
+  binaryExpressionValue,
+  forwardedExpression,
+} from "./security-expressions.js";
+import {
   type AbstractValue,
-  arrayValue,
   Flow,
   flowing,
   hasCapabilityFlow,
   hasFlow,
   hasHostFlow,
   hostValue,
-  isInertLiteralArray,
-  isLogicalOperator,
   keyValue,
   mergeAll,
   mergeValues,
@@ -39,6 +41,17 @@ import {
   unwrapExpression,
 } from "./security-flow.js";
 import { closeFunction, FunctionSummarizer } from "./security-functions.js";
+import {
+  evaluateArguments,
+  isWrappable,
+  resolveInvocation,
+  wrapperValue,
+} from "./security-invocation.js";
+import {
+  inspectMutationNode,
+  inspectMutationTarget,
+  inspectUtilityMutation,
+} from "./security-mutations.js";
 import {
   AMBIENT_TIMERS,
   CALL_WRAPPERS,
@@ -58,14 +71,9 @@ import {
 } from "./security-policy.js";
 import { reflectionCallValue } from "./security-reflection.js";
 
-const MAX_ARRAY = 32;
-const MAX_BINDINGS = 20_000;
-const MAX_DEPTH = 80;
-const MAX_PASSES = 16;
-const MAX_WORK = 8_000_000;
 export class RuntimeAnalyzer {
   readonly failures = new Set<string>();
-  private readonly bindings = new ScopedBindings(MAX_BINDINGS, (node) =>
+  private readonly bindings = new ScopedBindings(20_000, (node) =>
     this.fail("binding cap exhausted", node),
   );
   private work = 0;
@@ -85,7 +93,7 @@ export class RuntimeAnalyzer {
 
   constructor(
     private readonly file: ts.SourceFile,
-    private readonly maxWork = MAX_WORK,
+    private readonly maxWork = 8_000_000,
   ) {}
 
   scan(): void {
@@ -95,7 +103,7 @@ export class RuntimeAnalyzer {
   }
 
   private propagate(): void {
-    for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    for (let pass = 0; pass < 16; pass += 1) {
       let changed = false;
       const collect = (node: ts.Node): void => {
         changed = this.collectAlias(node) || changed;
@@ -117,13 +125,25 @@ export class RuntimeAnalyzer {
           ? this.closureValue(node.initializer)
           : node.initializer
             ? this.value(node.initializer)
-            : SAFE;
+            : { flow: 0, uninitialized: true };
       return bindName(node.name, value, this.bindingContext);
     }
     if (ts.isParameter(node)) return bindName(node.name, SAFE, this.bindingContext);
     if (isAssignment(node)) {
-      return bindAssignment(node.left, this.value(node.right), this.bindingContext);
+      const value = this.value(node.right);
+      inspectMutationTarget(
+        node.left,
+        value,
+        (target) => this.value(target),
+        (reason, target) => this.fail(reason, target),
+      );
+      return bindAssignment(node.left, value, this.bindingContext);
     }
+    inspectMutationNode(
+      node,
+      (target) => this.value(target),
+      (reason, target) => this.fail(reason, target),
+    );
     return false;
   }
 
@@ -156,10 +176,11 @@ export class RuntimeAnalyzer {
     depth = 0,
   ): AbstractValue {
     if (!this.spend()) return flowing(Flow.UnknownHost);
-    if (depth >= MAX_DEPTH) return this.depthFailure(input);
+    if (depth >= 80) return this.depthFailure(input);
     const node = unwrapExpression(input);
     const next = depth + 1;
     if (ts.isIdentifier(node)) return this.identifierValue(node, locals);
+    if (ts.isRegularExpressionLiteral(node)) return { flow: 0, regex: true };
     const literal = staticString(node);
     if (literal !== undefined) return keyValue(literal);
     if (ts.isTypeOfExpression(node) || ts.isVoidExpression(node)) return SAFE;
@@ -169,15 +190,24 @@ export class RuntimeAnalyzer {
         this.value(node.whenFalse, locals, next),
       );
     }
-    if (ts.isBinaryExpression(node)) return this.binaryValue(node, locals, next);
-    if (ts.isArrayLiteralExpression(node)) return this.array(node, locals, next);
+    if (ts.isBinaryExpression(node)) {
+      return binaryExpressionValue(node, (expression) => this.value(expression, locals, next));
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      return arrayExpressionValue(
+        node,
+        32,
+        (expression) => this.value(expression, locals, next),
+        (target) => this.depthFailure(target),
+      );
+    }
     const declaration = this.declarationExpression(node, locals, next);
     if (declaration) return declaration;
     if (isMemberExpression(node)) return this.member(node, locals, next);
     if (isInvocation(node)) return this.call(node, locals, next);
-    if (ts.isAwaitExpression(node)) return this.value(node.expression, locals, next);
-    if (ts.isYieldExpression(node) && node.expression)
-      return this.value(node.expression, locals, next);
+    const forwarded = forwardedExpression(node);
+    if (forwarded) return this.value(forwarded, locals, next);
+    if (ts.isDeleteExpression(node)) return SAFE;
     return this.unsupported(node, locals, next);
   }
 
@@ -209,46 +239,6 @@ export class RuntimeAnalyzer {
     return FORBIDDEN_GLOBALS.has(node.text) ? flowing(Flow.Forbidden) : SAFE;
   }
 
-  private binaryValue(
-    node: ts.BinaryExpression,
-    locals: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-  ): AbstractValue {
-    if (node.operatorToken.kind === ts.SyntaxKind.CommaToken) {
-      this.value(node.left, locals, depth);
-      return this.value(node.right, locals, depth);
-    }
-    if (isLogicalOperator(node.operatorToken.kind)) {
-      return mergeValues(
-        this.value(node.left, locals, depth),
-        this.value(node.right, locals, depth),
-      );
-    }
-    if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken)
-      return this.value(node.right, locals, depth);
-    return SAFE;
-  }
-
-  private array(
-    node: ts.ArrayLiteralExpression,
-    locals: ReadonlyMap<string, AbstractValue>,
-    depth: number,
-  ): AbstractValue {
-    if (node.elements.length > MAX_ARRAY) {
-      return isInertLiteralArray(node) ? SAFE : this.depthFailure(node);
-    }
-    const elements = node.elements.map((element) => {
-      if (!ts.isSpreadElement(element)) return this.value(element, locals, depth);
-      const spread = this.value(element.expression, locals, depth);
-      if (!hasCapabilityFlow(spread)) return SAFE;
-      this.fail("unsupported capability array spread", element);
-      return flowing(Flow.UnknownHost);
-    });
-    return elements.some((value) => hasCapabilityFlow(value) || value.callableSafe)
-      ? arrayValue(elements)
-      : SAFE;
-  }
-
   private member(
     node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
     locals: ReadonlyMap<string, AbstractValue>,
@@ -269,12 +259,17 @@ export class RuntimeAnalyzer {
     if (owner.elements) return this.arrayLookup(owner, names, dynamic, node);
     const own = ownPropertyValue(owner, names, dynamic);
     if (own) return own;
+    const regexMember = regexMemberValue(owner, names);
+    if (regexMember) return regexMember;
     if (names.includes("constructor")) {
       if (isSpecialConstructorOwner(owner)) {
         this.fail("constructor capability access", node);
         return flowing(Flow.Forbidden);
       }
       return flowing(Flow.ConstructorPotential);
+    }
+    if (names.length === 1 && CALL_WRAPPERS.has(names[0] ?? "") && isWrappable(owner)) {
+      return wrapperValue(owner, names[0] as "apply" | "bind" | "call");
     }
     const fail = (reason: string, target: ts.Node) => this.fail(reason, target);
     if (hasFlow(owner, Flow.Reflect)) return reflectMemberValue(names, dynamic, node, fail);
@@ -284,9 +279,6 @@ export class RuntimeAnalyzer {
       return hostMemberValue(owner, names, dynamic, node, (reason, target) =>
         this.fail(reason, target),
       );
-    }
-    if (names.some((name) => CALL_WRAPPERS.has(name)) && (owner.flow !== 0 || owner.callableSafe)) {
-      return owner;
     }
     return SAFE;
   }
@@ -321,28 +313,36 @@ export class RuntimeAnalyzer {
     }
     if (ts.isCallExpression(node) && isSymbolFactory(node.expression)) return opaqueKey();
     const target = ts.isTaggedTemplateExpression(node) ? node.tag : node.expression;
-    const callee = this.value(target, locals, depth);
-    const args = ts.isTaggedTemplateExpression(node) ? [] : (node.arguments ?? []);
-    const argumentValues = args.map((argument) => this.value(argument, locals, depth));
-    inspectInvocation(callee, node, argumentValues, (reason, target) => this.fail(reason, target));
+    const unresolved = this.value(target, locals, depth);
+    const evaluated = evaluateArguments(node, (argument) => this.value(argument, locals, depth));
+    const resolution = resolveInvocation(
+      unresolved,
+      node,
+      evaluated.args,
+      evaluated.argumentNodes,
+      evaluated.argumentsExact,
+      (reason, target) => this.fail(reason, target),
+    );
+    if ("result" in resolution) return resolution.result;
+    const { callee, ...shape } = resolution.invocation;
+    inspectInvocation(callee, shape, (reason, target) => this.fail(reason, target));
+    const mutation = inspectUtilityMutation(callee, shape, (reason, target) =>
+      this.fail(reason, target),
+    );
+    if (mutation) return mutation;
     const reflection = reflectionCallValue(
       callee,
-      node,
-      argumentValues,
+      shape,
       (owner, key, target) => this.lookup(owner, key, target),
       (reason, target) => this.fail(reason, target),
     );
     if (reflection) return reflection;
     if (hasFlow(callee, Flow.Timer) || hasFlow(callee, Flow.BoundTimer)) {
-      return timerCallValue(node, callee, argumentValues, (reason, target) =>
-        this.fail(reason, target),
-      );
+      return timerCallValue(shape, callee, (reason, target) => this.fail(reason, target));
     }
-    const boundCallable = boundCallableValue(callee, node);
-    if (boundCallable) return boundCallable;
-    if (callee.functions?.length) return this.functions.summarize(callee, argumentValues, depth);
-    const argumentsFlow = mergeAll(argumentValues);
-    if (isApprovedHostInvocation(callee, node, argumentValues)) return hostInvocationResult(callee);
+    if (callee.functions?.length) return this.functions.summarize(callee, shape.args, depth);
+    const argumentsFlow = mergeAll(shape.args);
+    if (isApprovedHostInvocation(callee, shape)) return hostInvocationResult(callee);
     if (hasHostFlow(callee)) return flowing(Flow.HostDerived);
     return hasCapabilityFlow(argumentsFlow) ? flowing(Flow.UnknownHost) : SAFE;
   }

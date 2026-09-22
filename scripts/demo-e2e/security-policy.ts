@@ -57,6 +57,14 @@ export function isAssignment(node: ts.Node): node is ts.BinaryExpression {
   return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
 }
 
+export function isMutationAssignment(node: ts.Node): node is ts.BinaryExpression {
+  return (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+  );
+}
+
 export function isMemberExpression(
   node: ts.Node,
 ): node is ts.PropertyAccessExpression | ts.ElementAccessExpression {

@@ -6,7 +6,6 @@ import {
   hasCallableCapability,
   hasCapabilityFlow,
   hasFlow,
-  memberName,
   mergeAll,
   mergeValues,
   objectValue,
@@ -14,11 +13,10 @@ import {
   staticString,
   unwrapExpression,
 } from "./security-flow.js";
+import type { InvocationShape } from "./security-invocation.js";
 import {
   FORBIDDEN_PROPERTIES,
   HOST_CHILDREN,
-  type InvocationNode,
-  isCallWrapper,
   isFunctionExpression,
   SAFE_EMITTED_HOST_CALLS,
   SAFE_EMITTED_HOST_CONSTRUCTORS,
@@ -78,12 +76,13 @@ export function ownPropertyValue(
   return names.includes("constructor") ? mergeValues(value, flowing(Flow.InertData)) : value;
 }
 
-export function boundCallableValue(
-  callee: AbstractValue,
-  node: InvocationNode,
+export function regexMemberValue(
+  owner: AbstractValue,
+  names: readonly string[],
 ): AbstractValue | undefined {
-  if (!ts.isCallExpression(node) || memberName(node.expression) !== "bind") return undefined;
-  return callee.callableSafe ? callee : undefined;
+  return owner.regex && names.length === 1 && names[0] === "test"
+    ? { flow: 0, callableSafe: true }
+    : undefined;
 }
 
 export function isSpecialConstructorOwner(owner: AbstractValue): boolean {
@@ -92,7 +91,9 @@ export function isSpecialConstructorOwner(owner: AbstractValue): boolean {
     owner.callableSafe === true ||
     owner.constructorSpecial === true ||
     owner.flow !== 0 ||
-    owner.hostPaths !== undefined
+    owner.hostPaths !== undefined ||
+    owner.wrapper !== undefined ||
+    owner.mutator !== undefined
   );
 }
 
@@ -140,6 +141,9 @@ export function reflectMemberValue(
   if (dynamic) return unsupported("dynamic Reflect property", node, fail);
   if (names.includes("get")) return flowing(Flow.ReflectGet);
   if (names.includes("construct")) return flowing(Flow.ReflectConstruct);
+  if (names.includes("apply")) return { flow: 0, wrapper: { mode: "reflectApply", target: SAFE } };
+  if (names.includes("set")) return { flow: 0, mutator: "reflectSet" };
+  if (names.includes("defineProperty")) return { flow: 0, mutator: "reflectDefineProperty" };
   return { flow: 0, constructorSpecial: true };
 }
 
@@ -151,18 +155,24 @@ export function objectMemberValue(
 ): AbstractValue {
   if (dynamic) return unsupported("dynamic Object reflection property", node, fail);
   if (names.includes("constructor")) return unsupported("Object.constructor", node, fail);
+  if (names.includes("assign")) return { flow: 0, mutator: "assign", constructorSpecial: true };
+  if (names.includes("defineProperty")) {
+    return { flow: 0, mutator: "defineProperty", constructorSpecial: true };
+  }
   const descriptors = ["getOwnPropertyDescriptor", "getOwnPropertyDescriptors"];
   return names.some((name) => descriptors.includes(name))
     ? flowing(Flow.DescriptorGet)
     : { flow: 0, constructorSpecial: true };
 }
 
-export function inspectInvocation(
-  callee: AbstractValue,
-  node: InvocationNode,
-  args: readonly AbstractValue[],
-  fail: Fail,
-): void {
+export function inspectInvocation(callee: AbstractValue, shape: InvocationShape, fail: Fail): void {
+  const { node } = shape;
+  if (!shape.argumentsExact && isSensitiveCallee(callee)) {
+    fail("unprovable security-sensitive argument spread", node);
+  }
+  if (shape.receiver && !isCompatibleReceiver(callee, shape.receiver)) {
+    fail("incompatible extracted call receiver", node);
+  }
   if (hasFlow(callee, Flow.Forbidden)) fail("forbidden dynamic invocation", node);
   if (hasFlow(callee, Flow.InertData)) fail("inert data invocation", node);
   if (hasFlow(callee, Flow.ConstructorPotential)) fail("constructor capability invocation", node);
@@ -173,23 +183,16 @@ export function inspectInvocation(
   ) {
     fail(`unprovable global-host invocation ${callee.hostPaths?.join("|") ?? "unknown"}`, node);
   }
-  if (hasFlow(callee, Flow.SafeHostDerived) && !isApprovedHostInvocation(callee, node, args)) {
+  if (hasFlow(callee, Flow.SafeHostDerived) && !isApprovedHostInvocation(callee, shape)) {
     fail("unapproved global-host invocation", node);
   }
   if (hasFlow(callee, Flow.ReflectConstruct)) fail("Reflect.construct", node);
-  if (isWrappedReflection(callee, node)) fail("reflection utility call/apply/bind wrapper", node);
 }
 
-export function isApprovedHostInvocation(
-  callee: AbstractValue,
-  node: InvocationNode,
-  args: readonly AbstractValue[],
-): boolean {
+export function isApprovedHostInvocation(callee: AbstractValue, shape: InvocationShape): boolean {
   const paths = callee.hostPaths ?? [];
-  if (!paths.length || ts.isTaggedTemplateExpression(node)) return false;
-  const mode = ts.isNewExpression(node) ? "new" : "call";
-  const count = node.arguments?.length ?? 0;
-  return paths.every((path) => approvedHostShape(path, mode, count, args, node));
+  if (!paths.length || !shape.argumentsExact || shape.mode === "tag") return false;
+  return paths.every((path) => approvedHostShape(path, shape));
 }
 
 export function hostInvocationResult(callee: AbstractValue): AbstractValue {
@@ -200,32 +203,56 @@ export function hostInvocationResult(callee: AbstractValue): AbstractValue {
 }
 
 export function timerCallValue(
-  node: InvocationNode,
+  shape: InvocationShape,
   callee: AbstractValue,
-  args: readonly AbstractValue[],
   fail: Fail,
 ): AbstractValue {
+  const { node } = shape;
   if (hasFlow(callee, Flow.BoundTimer)) return SAFE;
-  if (ts.isTaggedTemplateExpression(node)) {
+  if (shape.mode !== "call" || !shape.argumentsExact) {
     fail("dynamic timer code", node);
     return flowing(Flow.Forbidden);
   }
-  const wrapper = ts.isCallExpression(node) ? memberName(node.expression) : undefined;
-  const callback = wrapper === "apply" ? args[1]?.elements?.[0] : args[wrapper ? 1 : 0];
-  if (wrapper === "bind" && !callback) return callee;
+  const callback = shape.args[0];
   if (!isCallableSafe(callback)) {
     fail("dynamic timer code", node);
     return flowing(Flow.Forbidden);
   }
-  return wrapper === "bind" ? flowing(Flow.BoundTimer) : SAFE;
+  return SAFE;
 }
 
-function isWrappedReflection(callee: AbstractValue, node: InvocationNode): boolean {
+function isSensitiveCallee(callee: AbstractValue): boolean {
   return (
-    ts.isCallExpression(node) &&
-    isCallWrapper(node.expression) &&
-    (hasFlow(callee, Flow.ReflectGet) || hasFlow(callee, Flow.DescriptorGet))
+    callee.flow !== 0 ||
+    callee.hostPaths !== undefined ||
+    callee.descriptor !== undefined ||
+    callee.mutator !== undefined
   );
+}
+
+function isCompatibleReceiver(callee: AbstractValue, receiver: AbstractValue): boolean {
+  if (callee.functions?.length) return !hasCapabilityFlow(receiver) && !hasHostFlow(receiver);
+  if (hasFlow(callee, Flow.ReflectGet) || hasFlow(callee, Flow.ReflectConstruct)) {
+    return hasFlow(receiver, Flow.Reflect);
+  }
+  if (hasFlow(callee, Flow.DescriptorGet) || isObjectMutator(callee)) {
+    return hasFlow(receiver, Flow.Object);
+  }
+  if (callee.mutator) return hasFlow(receiver, Flow.Reflect);
+  if (hasFlow(callee, Flow.Timer)) return isGlobalContainer(receiver);
+  if (!callee.hostPaths?.length) return true;
+  return callee.hostPaths.every((path) => {
+    const ownerPath = path.slice(0, path.lastIndexOf("."));
+    return receiver.hostPaths?.includes(ownerPath) === true;
+  });
+}
+
+function isGlobalContainer(value: AbstractValue): boolean {
+  return value.hostPaths?.every((path) => GLOBAL_CONTAINER_PATHS.has(path)) === true;
+}
+
+function isObjectMutator(value: AbstractValue): boolean {
+  return value.mutator === "assign" || value.mutator === "defineProperty";
 }
 
 function unsupported(reason: string, node: ts.Node, fail: Fail): AbstractValue {
@@ -289,22 +316,19 @@ function isCallableSafe(value: AbstractValue | undefined): boolean {
   );
 }
 
-function approvedHostShape(
-  path: string,
-  mode: "call" | "new",
-  count: number,
-  args: readonly AbstractValue[],
-  node: InvocationNode,
-): boolean {
+function approvedHostShape(path: string, shape: InvocationShape): boolean {
   const policy = HOST_CALL_POLICIES.get(path);
-  if (!policy || policy.mode !== mode || count < policy.min || count > policy.max) return false;
+  const count = shape.args.length;
+  if (!policy || policy.mode !== shape.mode || count < policy.min || count > policy.max)
+    return false;
   if (policy.callback === undefined) return true;
-  return isCallableSafe(args[policy.callback]) || isProvenHandlerCallback(node, policy.callback);
+  return (
+    isCallableSafe(shape.args[policy.callback]) ||
+    isProvenHandlerCallback(shape.node, shape.argumentNodes[policy.callback])
+  );
 }
 
-function isProvenHandlerCallback(node: InvocationNode, index: number): boolean {
-  if (ts.isTaggedTemplateExpression(node)) return false;
-  const callback = node.arguments?.[index];
+function isProvenHandlerCallback(node: ts.Node, callback: ts.Expression | undefined): boolean {
   if (!callback || !ts.isElementAccessExpression(unwrapExpression(callback))) return false;
   const element = unwrapExpression(callback) as ts.ElementAccessExpression;
   if (!isThisHandlers(element.expression)) return false;
