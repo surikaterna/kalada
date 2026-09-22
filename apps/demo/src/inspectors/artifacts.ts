@@ -2,11 +2,16 @@ import type { CompiledExpression, PreparedExpression } from "@kalada/host";
 import { type KaladaCstNode, parseKaladaV1Expression } from "@kalada/syntax";
 import type { DemoEnvironment } from "../schema/environment.js";
 import { environmentSnapshotValue } from "./environment.js";
-import { freeze, omitted, ownArray, ownData } from "./own.js";
+import { freeze, inspectSafely, omitted, ownArray, ownData } from "./own.js";
 import { programSnapshot, typeSnapshot } from "./program.js";
 import { valueSnapshot } from "./values.js";
 
 export function cstSnapshot(source: string, reveal = false): unknown {
+  return inspectSafely(() => cstSnapshotUnsafe(source, reveal), omitted);
+}
+
+function cstSnapshotUnsafe(source: string, reveal: boolean): unknown {
+  if (typeof source !== "string") return omitted();
   const parsed = parseKaladaV1Expression(source);
   return freeze({
     format: "kalada-demo-cst-v1",
@@ -24,6 +29,13 @@ export function compiledSnapshot(
   compiled: CompiledExpression | undefined,
   reveal = false,
 ): unknown {
+  return inspectSafely(() => compiledSnapshotUnsafe(compiled, reveal), omitted);
+}
+
+function compiledSnapshotUnsafe(
+  compiled: CompiledExpression | undefined,
+  reveal: boolean,
+): unknown {
   if (!compiled || ownData(compiled, "format") !== "kalada-host-compiled-expression-v1")
     return freeze({ unavailable: true });
   return freeze({
@@ -36,6 +48,10 @@ export function compiledSnapshot(
 }
 
 export function linkSnapshot(prepared: PreparedExpression | undefined): unknown {
+  return inspectSafely(() => linkSnapshotUnsafe(prepared), omitted);
+}
+
+function linkSnapshotUnsafe(prepared: PreparedExpression | undefined): unknown {
   if (!prepared || ownData(prepared, "format") !== "kalada-host-prepared-expression-v1")
     return freeze({ unavailable: true });
   return freeze({
@@ -59,11 +75,17 @@ export function linkSnapshot(prepared: PreparedExpression | undefined): unknown 
 }
 
 export function environmentSnapshot(environment: DemoEnvironment | undefined): unknown {
-  return freeze(environment ? environmentSnapshotValue(environment) : { unavailable: true });
+  return inspectSafely(
+    () => freeze(environment ? environmentSnapshotValue(environment) : { unavailable: true }),
+    omitted,
+  );
 }
 
 export function diagnosticsSnapshot(diagnostics: readonly unknown[]): unknown {
-  return freeze(ownArray(diagnostics).map(diagnosticSnapshot));
+  return inspectSafely(
+    () => freeze(ownArray(diagnostics).map(diagnosticSnapshot)),
+    () => freeze([omitted()]),
+  );
 }
 
 function diagnosticSnapshot(value: unknown): unknown {

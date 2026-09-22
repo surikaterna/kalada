@@ -1,5 +1,15 @@
 import type { DemoEnvironment } from "../schema/environment.js";
-import { boolean, number, omitted, ownArray, ownData, text } from "./own.js";
+import {
+  boolean,
+  freeze,
+  inspectSafely,
+  number,
+  omitted,
+  ownArray,
+  ownData,
+  ownEnumerableKeys,
+  text,
+} from "./own.js";
 import { typeSnapshot } from "./program.js";
 
 const CONSTRAINT_KEYS = [
@@ -17,6 +27,10 @@ const CONSTRAINT_KEYS = [
 ] as const;
 
 export function environmentSnapshotValue(environment: DemoEnvironment): unknown {
+  return inspectSafely(() => freeze(environmentSnapshotUnsafe(environment)), omitted);
+}
+
+function environmentSnapshotUnsafe(environment: DemoEnvironment): unknown {
   const normalized = ownData(ownData(environment, "adapted"), "environment");
   return {
     schema: schemaSnapshot(ownData(environment, "document")),
@@ -34,7 +48,7 @@ export function environmentSnapshotValue(environment: DemoEnvironment): unknown 
 function schemaSnapshot(document: unknown): unknown {
   const roots = ownData(document, "root");
   const nodes = ownData(document, "nodes");
-  const entries = nodes && typeof nodes === "object" ? Object.keys(nodes).sort() : [];
+  const entries = [...ownEnumerableKeys(nodes)].sort();
   return {
     formatVersion: ownData(document, "formatVersion"),
     root: {
@@ -141,7 +155,7 @@ function applicatorsSnapshot(value: unknown): unknown {
   for (const key of ["patternProperties", "dependentSchemas"]) {
     const record = ownData(value, key);
     if (!record || typeof record !== "object") continue;
-    output[key] = Object.keys(record)
+    output[key] = [...ownEnumerableKeys(record)]
       .sort()
       .map((name) => ({ name, node: refSnapshot(ownData(record, name)) }));
   }

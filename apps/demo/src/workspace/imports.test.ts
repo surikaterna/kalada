@@ -8,7 +8,8 @@ describe("import operation lifecycle", () => {
     const read = new Promise<string>((done) => {
       resolve = done;
     });
-    const apply = vi.fn();
+    const persist = vi.fn();
+    const apply = vi.fn(persist);
     const pending = coordinator.run(
       () => read,
       (text) => text,
@@ -19,6 +20,7 @@ describe("import operation lifecycle", () => {
     resolve("late");
     await expect(pending).resolves.toBe("stale");
     expect(apply).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
   });
 
   it("allows only the newest overlapping import to commit", async () => {

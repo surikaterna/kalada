@@ -119,13 +119,21 @@ describe("live workspace orchestration", () => {
     runtime.start();
     await ready(runtime);
     const seed = model.snapshot().seed;
-    const stale = runtime.generate(seed);
-    model.update("data.json", model.snapshot().dataText);
-    runtime.dataChanged();
-    expect(runtime.applyGenerated(stale, seed, () => undefined)).toBe(false);
-    await ready(runtime);
-    const current = runtime.generate(seed);
     const revision = model.snapshot().dataRevision;
+    const validationStale = runtime.generate(seed);
+    runtime.dataChanged();
+    expect(model.snapshot().dataRevision).toBe(revision);
+    expect(runtime.applyGenerated(validationStale, seed, () => undefined)).toBe(false);
+    await ready(runtime);
+    const schemaStale = runtime.generate(seed);
+    runtime.schemaChanged();
+    expect(runtime.applyGenerated(schemaStale, seed, () => undefined)).toBe(false);
+    await ready(runtime);
+    const superseded = runtime.generate(seed);
+    const newest = runtime.generate(seed);
+    expect(runtime.applyGenerated(superseded, seed, () => undefined)).toBe(false);
+    expect(runtime.applyGenerated(newest, seed, () => undefined)).toBe(true);
+    const current = runtime.generate(seed);
     expect(
       runtime.applyGenerated(current, seed, (bytes) => {
         model.update("data.json", bytes);

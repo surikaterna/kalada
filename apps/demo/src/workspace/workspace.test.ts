@@ -54,5 +54,15 @@ describe("workspace transfer and persistence", () => {
       ok: false,
       code: "PERSISTENCE_UNAVAILABLE",
     });
+    Object.defineProperty(storage, "setItem", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("denied");
+      },
+    });
+    expect(saveWorkspace(storage, BUILTIN_WORKSPACE)).toEqual({
+      ok: false,
+      code: "PERSISTENCE_UNAVAILABLE",
+    });
   });
 });

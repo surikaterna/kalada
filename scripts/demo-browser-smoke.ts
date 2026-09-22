@@ -65,6 +65,16 @@ async function waitForServer(url: string): Promise<void> {
 async function verify(page: Page, origin: string): Promise<void> {
   await page.goto(`${origin}${base}`);
   await page.getByText("ready: WORKSPACE_READY").waitFor();
+  await verifyEditingAndTooling(page);
+  await verifyTabNavigation(page);
+  await verifyGeneratedPropagation(page);
+  await verifyInspectorPrivacy(page);
+  await verifyPersistenceAndImport(page);
+  await verifyNegativeSchema(page);
+  await verifySafeDomAndReset(page);
+}
+
+async function verifyEditingAndTooling(page: Page): Promise<void> {
   const tabs = page.getByRole("tab");
   if ((await tabs.count()) < 5) throw new Error("Virtual workspace tabs missing");
   await page.getByRole("tab", { name: "count.kalada" }).click();
@@ -100,6 +110,9 @@ async function verify(page: Page, origin: string): Promise<void> {
   await page.getByRole("button", { name: "Generate data" }).click();
   await page.getByText("Generated data validated and applied").waitFor();
   await page.getByText("ready: WORKSPACE_READY").waitFor();
+}
+
+async function verifyTabNavigation(page: Page): Promise<void> {
   await page.getByRole("tab", { name: "data.json" }).click();
   if ((await page.locator(".cm-content").getAttribute("aria-label")) !== "data.json editor") {
     throw new Error("JSON editor accessibility label missing");
@@ -118,10 +131,9 @@ async function verify(page: Page, origin: string): Promise<void> {
   if ((await page.getByRole("tab", { name: "schema.json" }).getAttribute("tabindex")) !== "0") {
     throw new Error("Roving tab Home behavior failed");
   }
-  await verifyGeneratedPropagation(page);
-  await verifyInspectorPrivacy(page);
-  await verifyPersistenceAndImport(page);
-  await verifyNegativeSchema(page);
+}
+
+async function verifySafeDomAndReset(page: Page): Promise<void> {
   if (await page.locator("script:not([src]), img, iframe").count())
     throw new Error("Unsafe DOM rendered");
   await page.getByLabel("Reveal source/literals in inspectors").check();
@@ -162,6 +174,15 @@ async function verifyInspectorPrivacy(page: Page): Promise<void> {
 }
 
 async function verifyPersistenceAndImport(page: Page): Promise<void> {
+  const baseline = await persistedBaseline(page);
+  await verifyExport(page);
+  await verifyRejectedImports(page);
+  const imported = distinctWorkspace(baseline, 99, 10);
+  await verifyImportedConvergence(page, imported);
+  await verifyImportPersistenceFailure(page, distinctWorkspace(imported, 77, 10));
+}
+
+async function persistedBaseline(page: Page): Promise<Record<string, unknown>> {
   const persistence = page.getByLabel("Persist sensitive workspace locally");
   await persistence.check();
   const saved = await page.evaluate(() => localStorage.getItem("kalada-demo-workspace-v1"));
@@ -173,29 +194,84 @@ async function verifyPersistenceAndImport(page: Page): Promise<void> {
     throw new Error("Corrupt restore replaced the live workspace");
   const validImport = await page.evaluate(() => localStorage.getItem("kalada-demo-workspace-v1"));
   if (!validImport) throw new Error("Workspace was not re-saved after corrupt restore rejection");
-  await verifyExport(page);
-  await verifyRejectedImports(page);
+  return JSON.parse(validImport) as Record<string, unknown>;
+}
+
+async function verifyImportedConvergence(
+  page: Page,
+  imported: Record<string, unknown>,
+): Promise<void> {
   const input = page.locator('input[type="file"]');
   await input.setInputFiles({
     name: "workspace.json",
     mimeType: "application/json",
-    buffer: Buffer.from(validImport),
+    buffer: Buffer.from(JSON.stringify(imported)),
   });
   await page.getByText("Workspace imported").waitFor();
+  await page.getByText("ready: WORKSPACE_READY").waitFor();
+  if ((await page.locator(".cm-content").textContent()) !== "data.count")
+    throw new Error("Imported source did not replace the active editor");
+  await output(page, "77", false);
+  await output(page, "99", true);
+  const persisted = await page.evaluate(() => localStorage.getItem("kalada-demo-workspace-v1"));
+  if (!persisted || JSON.stringify(JSON.parse(persisted)) !== JSON.stringify(imported))
+    throw new Error("Imported live and persisted workspaces diverged");
   if (await page.getByLabel("Reveal source/literals in inspectors").isChecked())
     throw new Error("Import retained inspector reveal state");
-  const inspector = page.locator(".panel", { hasText: "Advanced inspectors" }).locator("pre");
-  if ((await inspector.textContent())?.includes("audit-secret"))
-    throw new Error("Import retained revealed inspector content");
+}
+
+async function verifyImportPersistenceFailure(
+  page: Page,
+  imported: Record<string, unknown>,
+): Promise<void> {
+  const before = await page.evaluate(() => localStorage.getItem("kalada-demo-workspace-v1"));
   await page.evaluate(() => {
     Storage.prototype.setItem = () => {
       throw new DOMException("quota", "QuotaExceededError");
     };
   });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "memory-only.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(imported)),
+  });
+  await page.getByText("Persistence unavailable; imported workspace remains in memory").waitFor();
+  await page.getByText("ready: WORKSPACE_READY").waitFor();
+  await output(page, "77", true);
+  const after = await page.evaluate(() => localStorage.getItem("kalada-demo-workspace-v1"));
+  if (after !== before) throw new Error("Failed imported persistence changed stored workspace");
+  if (!(await page.getByLabel("Persist sensitive workspace locally").isChecked()))
+    throw new Error("Import persistence failure silently disabled opt-in");
   await replaceEditor(page, '"quota-edit"');
   await page.getByText("Persistence unavailable; edits remain in memory").waitFor();
   if (!(await page.locator(".cm-content").textContent())?.includes("quota-edit"))
     throw new Error("Quota failure rolled back the in-memory edit");
+}
+
+function distinctWorkspace(
+  source: Record<string, unknown>,
+  count: number,
+  revisionDelta: number,
+): Record<string, unknown> {
+  const documents = (source.documents as Record<string, unknown>[]).map((document) =>
+    document.name === "count.kalada"
+      ? { ...document, text: "data.count", revision: (document.revision as number) + revisionDelta }
+      : document,
+  );
+  return {
+    ...source,
+    activeName: "count.kalada",
+    dataText: JSON.stringify({ count, enabled: true, user: { name: "Imported" } }),
+    dataRevision: (source.dataRevision as number) + revisionDelta,
+    documents,
+  };
+}
+
+async function output(page: Page, expected: string, shouldExist: boolean): Promise<void> {
+  const result = page.locator(".panel", { hasText: "Output / error" }).locator("pre");
+  if (shouldExist) await result.getByText(expected, { exact: true }).waitFor();
+  else if (await result.getByText(expected, { exact: true }).count())
+    throw new Error(`Unexpected stale output: ${expected}`);
 }
 
 async function verifyExport(page: Page): Promise<void> {

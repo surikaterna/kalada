@@ -1,5 +1,15 @@
 import { isDuration, isInstant, isOption, isResult } from "@kalada/core";
-import { freeze, ownData } from "./own.js";
+import {
+  freeze,
+  guardedCall,
+  inspectSafely,
+  isArray,
+  ownData,
+  ownDataProperty,
+  ownEnumerableKeys,
+  prototypeOf,
+  unsupported,
+} from "./own.js";
 
 const LIMITS = Object.freeze({ depth: 32, nodes: 4096, text: 256 * 1024 });
 interface Context {
@@ -8,7 +18,7 @@ interface Context {
 }
 
 export function valueSnapshot(value: unknown): unknown {
-  return freeze(visit(value, 0, { seen: new Map(), nodes: 0 }));
+  return inspectSafely(() => freeze(visit(value, 0, { seen: new Map(), nodes: 0 })), unsupported);
 }
 
 function visit(value: unknown, depth: number, context: Context): unknown {
@@ -20,13 +30,14 @@ function visit(value: unknown, depth: number, context: Context): unknown {
   const known = context.seen.get(value);
   if (known !== undefined) return { type: "reference", id: known };
   context.seen.set(value, context.seen.size + 1);
-  if (isOption(value) || isResult(value)) return algebraicSnapshot(value, depth, context);
-  if (isInstant(value) || isDuration(value)) {
+  if (guardedCall(() => isOption(value) || isResult(value)))
+    return algebraicSnapshot(value, depth, context);
+  if (guardedCall(() => isInstant(value) || isDuration(value))) {
     return { type: ownData(value, "type"), milliseconds: ownData(value, "milliseconds") };
   }
-  if (Array.isArray(value)) return arraySnapshot(value, depth, context);
-  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
-    return { type: "unsupported" };
+  if (isArray(value)) return arraySnapshot(value, depth, context);
+  const prototype = prototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return { type: "unsupported" };
   return jsonObjectSnapshot(value, depth, context);
 }
 
@@ -57,39 +68,39 @@ function algebraicSnapshot(value: object, depth: number, context: Context): unkn
 
 function arraySnapshot(value: readonly unknown[], depth: number, context: Context): unknown {
   const output: unknown[] = [];
-  for (let index = 0; index < value.length; index += 1) {
+  const length = ownData(value, "length");
+  if (!Number.isSafeInteger(length) || (length as number) < 0) return { type: "unsupported" };
+  for (let index = 0; index < (length as number); index += 1) {
     if (context.nodes >= LIMITS.nodes) {
       output.push({ type: "truncated" });
       break;
     }
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    output.push(
-      descriptor && "value" in descriptor
-        ? visit(descriptor.value, depth + 1, context)
-        : { type: "unsupported" },
-    );
+    const item = ownDataProperty(value, index);
+    output.push(item.found ? visit(item.value, depth + 1, context) : { type: "unsupported" });
   }
   return output;
 }
 
 function jsonObjectSnapshot(value: object, depth: number, context: Context): unknown {
   const output: Record<string, unknown> = Object.create(null);
-  for (const key of Object.keys(value).sort()) {
+  for (const key of [...ownEnumerableKeys(value)].sort()) {
     if (context.nodes >= LIMITS.nodes) {
       output.__kaladaInspectorTruncated = { type: "truncated" };
       break;
     }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    output[key] =
-      descriptor && "value" in descriptor
-        ? visit(descriptor.value, depth + 1, context)
-        : { type: "unsupported" };
+    const item = ownDataProperty(value, key);
+    output[key] = item.found ? visit(item.value, depth + 1, context) : { type: "unsupported" };
   }
   return output;
 }
 
 export function valueJson(value: unknown): string {
-  const text = JSON.stringify(valueSnapshot(value), null, 2);
-  if (text.length <= LIMITS.text) return text;
-  return JSON.stringify({ type: "text-truncated" }, null, 2);
+  return inspectSafely(
+    () => {
+      const text = JSON.stringify(valueSnapshot(value), null, 2);
+      if (text.length <= LIMITS.text) return text;
+      return JSON.stringify({ type: "text-truncated" }, null, 2);
+    },
+    () => '{"type":"unsupported"}',
+  );
 }

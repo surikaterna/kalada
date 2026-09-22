@@ -16,6 +16,7 @@ import { ImportCoordinator } from "../workspace/imports.js";
 import { WorkspaceModel } from "../workspace/model.js";
 import { clearWorkspace, restoreWorkspace, saveWorkspace } from "../workspace/persistence.js";
 import { exportWorkspace, importWorkspace } from "../workspace/transfer.js";
+import { button, element, panel } from "./dom.js";
 
 export function createDemoApp(mount: HTMLElement): () => void {
   const app = new DemoApp(mount);
@@ -281,8 +282,15 @@ class DemoApp {
     this.open(model.snapshot().activeName);
   }
   private persist(): void {
-    if (this.persistence && !saveWorkspace(localStorage, this.model.snapshot()).ok)
+    if (this.persistence && !this.saveCurrentWorkspace())
       this.announce("Persistence unavailable; edits remain in memory");
+  }
+  private saveCurrentWorkspace(): boolean {
+    try {
+      return saveWorkspace(localStorage, this.model.snapshot()).ok;
+    } catch {
+      return false;
+    }
   }
   private announce(message: string): void {
     this.status.textContent = message;
@@ -307,12 +315,18 @@ class DemoApp {
       return;
     }
     try {
+      let persistenceAvailable = true;
       const outcome = await this.imports.run(
         () => file.text(),
         importWorkspace,
-        (workspace) => this.restart(new WorkspaceModel(workspace)),
+        (workspace) => {
+          this.restart(new WorkspaceModel(workspace));
+          persistenceAvailable = !this.persistence || this.saveCurrentWorkspace();
+          if (!persistenceAvailable)
+            this.announce("Persistence unavailable; imported workspace remains in memory");
+        },
       );
-      if (outcome === "applied") this.announce("Workspace imported");
+      if (outcome === "applied" && persistenceAvailable) this.announce("Workspace imported");
     } catch {
       this.announce("Import rejected: invalid workspace");
     }
@@ -365,35 +379,4 @@ class DemoApp {
     for (const session of this.sessions.values()) session.dispose();
     this.runtime.dispose();
   }
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  name: K,
-  className?: string,
-): HTMLElementTagNameMap[K] {
-  const value = document.createElement(name);
-  if (className) value.className = className;
-  return value;
-}
-function button(text: string, action: () => void): HTMLButtonElement {
-  const value = document.createElement("button");
-  value.type = "button";
-  value.textContent = text;
-  value.addEventListener("click", action);
-  return value;
-}
-function panel(title: string, text: string, sensitive = false): HTMLElement {
-  const section = element("section", "panel");
-  const heading = element("h2");
-  heading.textContent = title;
-  const pre = document.createElement("pre");
-  pre.textContent = text;
-  section.append(heading);
-  if (sensitive) {
-    const warning = element("p", "sensitive");
-    warning.textContent = "Local data/result — may contain secrets";
-    section.append(warning);
-  }
-  section.append(pre);
-  return section;
 }

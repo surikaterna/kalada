@@ -65,6 +65,7 @@ export class DemoRuntime {
   private environmentGeneration = 0;
   private validationGeneration = 0;
   private settingsVersion = 1;
+  private generationRequest = 0;
   private sequence = 0;
   private state: RuntimeState = "loading";
   private code = "SCHEMA_LOADING";
@@ -130,6 +131,7 @@ export class DemoRuntime {
     }
   }
   generate(seed: number): GenerationResult {
+    this.generationRequest += 1;
     const key = this.generationKey(seed);
     if (!this.environment) return Object.freeze({ ok: false, code: "generation-unsupported" });
     const result = generateCandidate(
@@ -340,7 +342,7 @@ export class DemoRuntime {
   }
   private generationKey(seed: number): string {
     const snapshot = this.model.snapshot();
-    return `${this.workspaceEpoch}:${snapshot.schemaRevision}:${snapshot.dataRevision}:${this.environmentGeneration}:${this.settingsVersion}:${seed}:demo-input-candidate-v1`;
+    return `${this.workspaceEpoch}:${snapshot.schemaRevision}:${snapshot.dataRevision}:${this.environmentGeneration}:${this.validationGeneration}:${this.settingsVersion}:${this.generationRequest}:${seed}:demo-input-candidate-v1`;
   }
   private emit(): void {
     this.publish(this.snapshot());

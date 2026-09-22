@@ -1,8 +1,12 @@
 import type { KaladaType, KaladaV1Expression, KaladaV1Program } from "@kalada/core";
-import { omitted, ownArray, ownData } from "./own.js";
+import { freeze, inspectSafely, omitted, ownArray, ownData } from "./own.js";
 import { valueSnapshot } from "./values.js";
 
 export function programSnapshot(program: KaladaV1Program<string>, reveal: boolean): unknown {
+  return inspectSafely(() => freeze(programSnapshotUnsafe(program, reveal)), omitted);
+}
+
+function programSnapshotUnsafe(program: KaladaV1Program<string>, reveal: boolean): unknown {
   if (ownData(program, "format") !== "kalada-program") return omitted();
   return {
     format: "kalada-program",
@@ -13,21 +17,26 @@ export function programSnapshot(program: KaladaV1Program<string>, reveal: boolea
 }
 
 export function typeSnapshot(value: unknown): unknown {
+  return inspectSafely(() => freeze(typeSnapshotUnsafe(value)), omitted);
+}
+
+function typeSnapshotUnsafe(value: unknown): unknown {
   const kind = ownData(value, "kind");
   if (kind === "primitive-type") return { kind, name: ownData(value, "name") };
-  if (kind === "option-type") return { kind, value: typeSnapshot(ownData(value, "value")) };
+  if (kind === "option-type") return { kind, value: typeSnapshotUnsafe(ownData(value, "value")) };
   if (kind === "result-type")
     return {
       kind,
-      ok: typeSnapshot(ownData(value, "ok")),
-      error: typeSnapshot(ownData(value, "error")),
+      ok: typeSnapshotUnsafe(ownData(value, "ok")),
+      error: typeSnapshotUnsafe(ownData(value, "error")),
     };
-  if (kind === "array-type") return { kind, element: typeSnapshot(ownData(value, "element")) };
+  if (kind === "array-type")
+    return { kind, element: typeSnapshotUnsafe(ownData(value, "element")) };
   if (kind === "function-type")
     return {
       kind,
-      parameters: ownArray(ownData(value, "parameters")).map(typeSnapshot),
-      returns: typeSnapshot(ownData(value, "returns")),
+      parameters: ownArray(ownData(value, "parameters")).map(typeSnapshotUnsafe),
+      returns: typeSnapshotUnsafe(ownData(value, "returns")),
     };
   return value === "dynamic" ? "dynamic" : omitted();
 }
@@ -136,7 +145,7 @@ function callableExpression(value: unknown, kind: unknown, reveal: boolean): unk
     return {
       kind,
       parameters: parameters(value),
-      returns: typeSnapshot(ownData(value, "returns")),
+      returns: typeSnapshotUnsafe(ownData(value, "returns")),
       body: child(value, "body", reveal),
     };
   if (kind === "call")
@@ -153,7 +162,7 @@ function callableExpression(value: unknown, kind: unknown, reveal: boolean): unk
       functions: ownArray(ownData(value, "functions")).map((item) => ({
         name: ownData(item, "name"),
         parameters: parameters(item),
-        returns: typeSnapshot(ownData(item, "returns")),
+        returns: typeSnapshotUnsafe(ownData(item, "returns")),
         body: child(item, "body", reveal),
       })),
       body: child(value, "body", reveal),
@@ -164,7 +173,7 @@ function callableExpression(value: unknown, kind: unknown, reveal: boolean): unk
 function parameters(value: unknown): unknown {
   return ownArray(ownData(value, "parameters")).map((item) => ({
     name: ownData(item, "name"),
-    type: typeSnapshot(ownData(item, "type") as KaladaType),
+    type: typeSnapshotUnsafe(ownData(item, "type") as KaladaType),
   }));
 }
 
