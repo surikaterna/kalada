@@ -9,11 +9,14 @@ import {
 import { history, historyKeymap } from "@codemirror/commands";
 import { setDiagnostics } from "@codemirror/lint";
 import {
+  Compartment,
   EditorSelection,
+  EditorState,
   type Transaction as EditorTransaction,
   Transaction,
 } from "@codemirror/state";
 import {
+  closeHoverTooltips,
   hoverTooltip as codeMirrorHover,
   EditorView,
   keymap,
@@ -28,6 +31,7 @@ import type {
   SnapshotIdentity,
 } from "@kalada/language-service";
 import type { KaladaEditorSession, KaladaEditorSessionOptions } from "./contracts.js";
+import { detectLineSeparator, textForEditor, textFromEditor } from "./line-separator.js";
 import {
   animationWindow,
   positionAt,
@@ -37,18 +41,17 @@ import {
 } from "./session-helpers.js";
 import { keyboardTooltipField, setKeyboardTooltip } from "./tooltip-state.js";
 import { changesToEdits, rangeToOffsets } from "./translation.js";
-
 export function createKaladaEditorSession(
   options: KaladaEditorSessionOptions,
 ): KaladaEditorSession {
   return new EditorSession(options);
 }
-
 class EditorSession implements KaladaEditorSession {
   readonly extension;
   private readonly service: LanguageService;
   private readonly uri: string;
   private readonly onDocumentChange?: (snapshot: DocumentSnapshot) => void;
+  private readonly lineSeparator = new Compartment();
   private view: EditorView | null = null;
   private expectedText: string;
   private revision: number;
@@ -68,26 +71,28 @@ class EditorSession implements KaladaEditorSession {
     this.revision = opened.version;
     this.extension = this.createExtension();
   }
-
   refreshEnvironment(): void {
     this.assertOpen();
     this.invalidateRequests();
     const view = this.view;
     if (!view) return;
-    closeCompletion(view);
-    view.dispatch({ effects: setKeyboardTooltip.of(null) });
+    this.clearEditor(view, false);
     this.scheduleDiagnostics(view);
   }
-
   replaceDocument(text: string): void {
     this.assertOpen();
     if (typeof text !== "string") throw new TypeError("Replacement text must be a string");
     const view = this.view;
     if (view) {
+      const separator = detectLineSeparator(text);
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
+        changes: { from: 0, to: view.state.doc.length, insert: textForEditor(text) },
         selection: EditorSelection.cursor(0),
         annotations: Transaction.addToHistory.of(true),
+        effects:
+          separator === view.state.lineBreak
+            ? undefined
+            : this.lineSeparator.reconfigure(EditorState.lineSeparator.of(separator)),
       });
       return;
     }
@@ -101,7 +106,6 @@ class EditorSession implements KaladaEditorSession {
     this.invalidateRequests();
     this.notify(snapshot);
   }
-
   format(): boolean {
     this.assertOpen();
     const view = this.view;
@@ -120,17 +124,18 @@ class EditorSession implements KaladaEditorSession {
     const range = rangeToOffsets(view.state.doc, result.edit.range);
     if (!range) return false;
     view.dispatch({
-      changes: { ...range, insert: result.edit.text },
+      changes: { ...range, insert: textForEditor(result.edit.text) },
       annotations: Transaction.addToHistory.of(true),
     });
     return true;
   }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.invalidateRequests();
     this.cancelDiagnosticsFrame();
+    const view = this.view;
+    if (view) this.clearEditor(view, true);
     this.view = null;
     this.service.closeDocument(this.uri);
   }
@@ -150,6 +155,7 @@ class EditorSession implements KaladaEditorSession {
     });
     return [
       lifecycle,
+      this.lineSeparator.of(EditorState.lineSeparator.of(detectLineSeparator(this.expectedText))),
       history(),
       autocompletion({ override: [(context) => this.complete(context)] }),
       codeMirrorHover((view, position) => this.pointerHover(view, position)),
@@ -168,7 +174,7 @@ class EditorSession implements KaladaEditorSession {
     this.assertOpen();
     if (this.view && this.view !== view)
       throw new Error("Kalada editor session already has a view");
-    if (view.state.doc.toString() !== this.expectedText) {
+    if (textFromEditor(view.state.doc, view.state.lineBreak) !== this.expectedText) {
       throw new Error("CodeMirror document does not match the opened Kalada document");
     }
     this.view = view;
@@ -185,18 +191,19 @@ class EditorSession implements KaladaEditorSession {
   }
 
   private updateView(update: ViewUpdate): void {
-    if (!update.docChanged) return;
+    if (this.disposed || !update.docChanged) return;
     this.invalidateRequests();
     for (const transaction of update.transactions) {
       if (transaction.docChanged) this.applyTransaction(transaction);
     }
-    this.expectedText = update.state.doc.toString();
+    this.expectedText = textFromEditor(update.state.doc, update.state.lineBreak);
     this.scheduleDiagnostics(update.view);
   }
 
   private applyTransaction(transaction: EditorTransaction): void {
     const current = this.requireDocument();
-    if (current.text !== transaction.startState.doc.toString()) {
+    const startText = textFromEditor(transaction.startState.doc, transaction.startState.lineBreak);
+    if (current.text !== startText) {
       throw new Error("CodeMirror and language-service snapshots diverged");
     }
     const edits = changesToEdits(
@@ -204,13 +211,14 @@ class EditorSession implements KaladaEditorSession {
       transaction.newDoc,
       transaction.changes,
       current,
+      transaction.state.lineBreak,
     );
     const snapshot = this.service.updateDocument({
       uri: this.uri,
       version: this.nextRevision(),
       edits,
     });
-    if (snapshot.text !== transaction.newDoc.toString()) {
+    if (snapshot.text !== textFromEditor(transaction.newDoc, transaction.state.lineBreak)) {
       throw new Error("CodeMirror transaction translation changed document text");
     }
     this.expectedText = snapshot.text;
@@ -294,12 +302,17 @@ class EditorSession implements KaladaEditorSession {
   }
 
   private clearInteractions(view: EditorView): boolean {
-    closeCompletion(view);
-    view.dispatch({ effects: setKeyboardTooltip.of(null) });
+    this.clearEditor(view, false);
     view.focus();
     return true;
   }
 
+  private clearEditor(view: EditorView, diagnostics: boolean): void {
+    closeCompletion(view);
+    const interactions = { effects: [setKeyboardTooltip.of(null), closeHoverTooltips] };
+    if (diagnostics) view.dispatch(interactions, setDiagnostics(view.state, []));
+    else view.dispatch(interactions);
+  }
   private scheduleDiagnostics(view: EditorView): void {
     this.cancelDiagnosticsFrame();
     const epoch = ++this.diagnosticsEpoch;
@@ -320,7 +333,6 @@ class EditorSession implements KaladaEditorSession {
       );
     });
   }
-
   private cancelDiagnosticsFrame(): void {
     if (this.diagnosticsFrame === null || !this.view) return;
     animationWindow(this.view).cancelAnimationFrame(this.diagnosticsFrame);
@@ -384,5 +396,4 @@ class EditorSession implements KaladaEditorSession {
     if (this.disposed) throw new Error("Kalada editor session is disposed");
   }
 }
-
 type RequestKind = "completion" | "hover" | "diagnostics";

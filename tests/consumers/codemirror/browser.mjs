@@ -91,9 +91,58 @@ window.__kalada = {
     view.dispatch([first, second]);
   },
   dispose: () => session.dispose(),
+  disposeThenEdit: () => {
+    session.dispose();
+    session.dispose();
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    const text = view.state.sliceDoc();
+    const tooltips = document.querySelectorAll('[role="tooltip"]').length;
+    const diagnostics = document.querySelectorAll(".cm-diagnostic").length;
+    view.destroy();
+    return {
+      text,
+      tooltips,
+      diagnostics,
+      open: service.getDocument("memory:///browser.kalada") !== undefined,
+    };
+  },
+  crlfLifecycle: () => crlfLifecycle(),
 };
 window.__kaladaReady = true;
 
 function position(character = view.state.doc.length) {
   return { line: 0, character };
+}
+
+function crlfLifecycle() {
+  const crlfService = createLanguageService({
+    generation: 1,
+    description: normalizeManualEnvironment(shape("name")),
+  });
+  const crlfSession = createKaladaEditorSession({
+    service: crlfService,
+    document: { uri: "memory:///crlf.kalada", version: 1, text: "user.\r\n" },
+  });
+  const crlfView = new EditorView({
+    state: EditorState.create({ doc: "user.\r\n", extensions: [crlfSession.extension] }),
+    parent: document.querySelector("#editor"),
+  });
+  const opened = pair(crlfView, crlfService);
+  crlfView.dispatch({ changes: { from: 5, insert: "name" } });
+  const changed = pair(crlfView, crlfService);
+  crlfSession.replaceDocument('user.name\r\n== "x"');
+  const replaced = pair(crlfView, crlfService);
+  crlfSession.format();
+  const formatted = pair(crlfView, crlfService);
+  crlfView.destroy();
+  crlfSession.dispose();
+  crlfSession.dispose();
+  return { opened, changed, replaced, formatted };
+}
+
+function pair(targetView, targetService) {
+  return {
+    editor: targetView.state.sliceDoc(),
+    service: targetService.getDocument("memory:///crlf.kalada")?.text,
+  };
 }

@@ -41,4 +41,16 @@ describe("detached CodeMirror session", () => {
     expect(() => createKaladaEditorSession({ service: language, document })).toThrow();
     first.dispose();
   });
+
+  it("preserves detached CRLF replacement text exactly", () => {
+    const language = service();
+    const session = createKaladaEditorSession({
+      service: language,
+      document: { uri: "memory:///crlf.kalada", version: 1, text: "a\r\nb" },
+    });
+    expect(language.getDocument("memory:///crlf.kalada")?.text).toBe("a\r\nb");
+    session.replaceDocument("c\r\nd");
+    expect(language.getDocument("memory:///crlf.kalada")?.text).toBe("c\r\nd");
+    session.dispose();
+  });
 });

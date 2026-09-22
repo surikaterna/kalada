@@ -34,7 +34,7 @@ describe("CodeMirror translation", () => {
     ]);
   });
 
-  it("rejects invalid editor ranges and preserves CRLF offsets", () => {
+  it("rejects invalid editor ranges", () => {
     const document = Text.of(["a", "b"]);
     expect(
       rangeToOffsets(document, {
@@ -48,5 +48,18 @@ describe("CodeMirror translation", () => {
         end: { line: 0, character: 2 },
       }),
     ).toBeNull();
+  });
+
+  it("falls back to an exact CRLF whole-document replacement", () => {
+    const document = Text.of(["a", "b"]);
+    const changes = ChangeSet.of({ from: 3, insert: "!" }, document.length);
+    expect(
+      changesToEdits(document, changes.apply(document), changes, snapshot("a\r\nb"), "\r\n"),
+    ).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 1, character: 1 } },
+        text: "a\r\nb!",
+      },
+    ]);
   });
 });

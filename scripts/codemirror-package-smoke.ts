@@ -26,6 +26,13 @@ declare global {
       refresh(): void;
       batch(): void;
       dispose(): void;
+      disposeThenEdit(): {
+        readonly text: string;
+        readonly open: boolean;
+        readonly tooltips: number;
+        readonly diagnostics: number;
+      };
+      crlfLifecycle(): Record<string, { readonly editor: string; readonly service?: string }>;
     };
   }
 }
@@ -137,9 +144,17 @@ async function runBrowser(directory: string): Promise<void> {
   );
   try {
     const page = await browser.newPage();
+    const browserErrors: string[] = [];
+    page.on("pageerror", (error) => browserErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(message.text());
+    });
     await page.goto(`http://127.0.0.1:${address.port}`);
     await page.waitForFunction(() => window.__kaladaReady === true);
     await verifyBrowser(page);
+    if (browserErrors.length > 0) {
+      throw new Error(`CodeMirror browser errors: ${browserErrors.join(" | ")}`);
+    }
   } finally {
     await browser.close();
     await new Promise((resolveClosed) => server.close(resolveClosed));
@@ -202,7 +217,26 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   ) {
     throw new Error("Document revisions are not monotonic");
   }
-  await page.evaluate(() => window.__kalada.dispose());
+  await verifyLifecycle(page);
+}
+
+async function verifyLifecycle(page: import("playwright").Page): Promise<void> {
+  const crlf = await page.evaluate(() => window.__kalada.crlfLifecycle());
+  for (const [step, pair] of Object.entries(crlf)) {
+    if (pair.editor !== pair.service) {
+      throw new Error(`CRLF parity failed at ${step}: ${JSON.stringify(pair)}`);
+    }
+  }
+  if (crlf.opened.editor !== "user.\r\n" || crlf.changed.editor !== "user.name\r\n") {
+    throw new Error(`CRLF text was normalized: ${JSON.stringify(crlf)}`);
+  }
+  if (crlf.replaced.editor !== 'user.name\r\n== "x"') {
+    throw new Error(`CRLF replacement was normalized: ${JSON.stringify(crlf.replaced)}`);
+  }
+  const disposed = await page.evaluate(() => window.__kalada.disposeThenEdit());
+  if (disposed.open || disposed.text !== "xuser." || disposed.tooltips || disposed.diagnostics) {
+    throw new Error(`Mounted disposal was not inert: ${JSON.stringify(disposed)}`);
+  }
 }
 
 async function main(): Promise<void> {

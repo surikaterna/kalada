@@ -12,15 +12,20 @@ export function changesToEdits(
   newDoc: Text,
   changes: Readonly<{ iterChanges: (callback: ChangeCallback) => void }>,
   snapshot: DocumentSnapshot,
+  lineSeparator = "\n",
 ): readonly TextEdit[] {
   const offsets: OffsetEdit[] = [];
   changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
-    offsets.push({ from: fromA, to: toA, insert: inserted.toString() });
+    offsets.push({
+      from: fromA,
+      to: toA,
+      insert: inserted.sliceString(0, inserted.length, lineSeparator),
+    });
   });
   const coalesced = coalesceInserts(offsets);
   const translated = coalesced.map((edit) => offsetEdit(edit, startDoc, snapshot.lineIndex));
   if (translated.every((edit) => edit !== null)) return translated as readonly TextEdit[];
-  return [wholeDocumentEdit(snapshot, newDoc.toString())];
+  return [wholeDocumentEdit(snapshot, newDoc.sliceString(0, newDoc.length, lineSeparator))];
 }
 
 export function rangeToOffsets(
