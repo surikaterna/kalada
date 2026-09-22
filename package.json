@@ -9,7 +9,8 @@
     "node": ">=22.0.0"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "adapter-scheman:smoke": "bun run build && bun scripts/adapter-scheman-package-smoke.ts",
@@ -18,6 +19,7 @@
     "changeset:check": "bun scripts/check-changesets.ts",
     "codemirror:browser-smoke": "bun run build && bun scripts/codemirror-package-smoke.ts --browser-only",
     "codemirror:smoke": "bun run build && bun scripts/codemirror-package-smoke.ts",
+    "demo:browser-smoke": "bun run --filter @kalada/demo browser:smoke",
     "host:browser-smoke": "bun run build && bun scripts/host-package-smoke.ts --browser-only",
     "host:smoke": "bun run build && bun scripts/host-package-smoke.ts",
     "language-service:browser-smoke": "bun run build && bun scripts/language-service-package-smoke.ts --browser-only",
