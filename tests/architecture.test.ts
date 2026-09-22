@@ -4,6 +4,7 @@ import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
+const codeMirror = resolve(root, "packages/codemirror");
 const core = resolve(root, "packages/core");
 const host = resolve(root, "packages/host");
 const languageService = resolve(root, "packages/language-service");
@@ -20,7 +21,15 @@ describe("package boundaries", () => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort(),
-    ).toEqual(["adapter-scheman", "core", "host", "language-service", "projection", "syntax"]);
+    ).toEqual([
+      "adapter-scheman",
+      "codemirror",
+      "core",
+      "host",
+      "language-service",
+      "projection",
+      "syntax",
+    ]);
   });
 
   it("keeps core free of runtime dependencies", async () => {
@@ -70,6 +79,28 @@ describe("package boundaries", () => {
     expect(imports.every((name) => name?.startsWith(".") || name?.startsWith("@kalada/"))).toBe(
       true,
     );
+  });
+
+  it("keeps CodeMirror dependencies and translation logic in the adapter", async () => {
+    const manifest = await readJson(resolve(codeMirror, "package.json"));
+    expect(Object.keys(manifest.peerDependencies as object).sort()).toEqual([
+      "@codemirror/autocomplete",
+      "@codemirror/commands",
+      "@codemirror/lint",
+      "@codemirror/state",
+      "@codemirror/view",
+    ]);
+    const sourceDirectory = resolve(codeMirror, "src");
+    const source = (
+      await Promise.all(
+        (
+          await readdir(sourceDirectory)
+        )
+          .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+          .map((name) => readFile(resolve(sourceDirectory, name), "utf8")),
+      )
+    ).join("\n");
+    expect(source).not.toMatch(/parseKalada|editorGraph|evaluate\s*\(/u);
   });
 
   it("keeps compiler, evaluator, and profile APIs off the root entry point", async () => {

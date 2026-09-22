@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@kalada/codemirror": resolve(import.meta.dirname, "packages/codemirror/src/index.ts"),
       "@kalada/adapter-scheman": resolve(
         import.meta.dirname,
         "packages/adapter-scheman/src/index.ts",
