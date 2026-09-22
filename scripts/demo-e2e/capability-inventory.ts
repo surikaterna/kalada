@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { directNavigationFailures } from "./navigation-policy.js";
 
 const TRACKED_GLOBALS = new Set([
   "Blob",
@@ -92,7 +93,9 @@ interface ScanState {
 // This inventories bounded syntax in one emitted asset; it is not an alias-flow proof for arbitrary JS.
 export function inventoryJavaScript(path: string, source: string): JavaScriptInventory {
   const file = ts.createSourceFile(path, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
-  if (file.parseDiagnostics.length) throw new Error(`Artifact JavaScript parse failed: ${path}`);
+  const diagnostics = (file as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+    .parseDiagnostics;
+  if (diagnostics?.length) throw new Error(`Artifact JavaScript parse failed: ${path}`);
   const state: ScanState = {
     file,
     imports: new Map(),
@@ -101,6 +104,7 @@ export function inventoryJavaScript(path: string, source: string): JavaScriptInv
     failures: new Set(),
   };
   visit(file, state);
+  for (const failure of directNavigationFailures(file)) state.failures.add(failure);
   if (state.failures.size) {
     throw new Error(
       `Forbidden observed syntax in ${path}: ${[...state.failures].sort().join("; ")}`,
