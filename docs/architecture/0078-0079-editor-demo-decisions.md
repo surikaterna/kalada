@@ -74,6 +74,9 @@ never replace it with “Scheman says valid.”
 
 ## Exact suggested issue amendments (not applied)
 
+All amendments below remain **proposed and unapplied pending next-model approval**. The docs audit PASS
+is not approval to edit GitHub or acceptance of a new ADR.
+
 For **#78**, replace “Dependencies and status” with:
 
 > Ready: #77 and its #72/#73 prerequisites are merged at
@@ -115,10 +118,18 @@ Add to **#79** acceptance:
 > persisted/exported as diagnostic metadata. Current field semantics remain dynamic where syntax says
 > dynamic, even when input shape is detailed. No claim of arbitrary JSON Schema support is made.
 
-Builder/Diplomat should align #78's blocked label with Ready and keep #79 blocked. Do not mark either
-feature implemented because architecture exists. Also record the Scheman-first dependency amendment
-against ADR-0006's historical follow-up items 7/8 when this plan is approved; do not rewrite its accepted
-semantic separation or pretend its historical Standard sequencing already said Scheman-first.
+For **#75**, add this reciprocal dependency/status amendment:
+
+> #75 remains planned/deferred and no longer blocks the proposed Scheman-first #79. That demo uses
+> merged #76 plus an app-local validator bridge, alongside #73 and #78; it does not implement or close
+> #75. The standalone Standard adapter scope remains deferred. This dependency amendment is proposed,
+> not applied, pending next-model approval of the #78/#79 architecture handoff.
+
+After next-model approval, Builder/Diplomat should align #78's blocked label with Ready and keep #79
+blocked. Do not mark either feature implemented because architecture exists. Also record the
+Scheman-first dependency amendment against ADR-0006's historical follow-up items 7/8 when this plan is
+approved; do not rewrite its accepted semantic separation or pretend its historical Standard sequencing
+already said Scheman-first.
 
 ## Acceptance, risks, and handoff
 
@@ -146,3 +157,13 @@ published declarations/entry code were inspected read-only. Spelling and termino
 manually; no spellchecker or Markdown lint is installed/configured. `git diff --check` and a Markdown-only
 changed-path check are required again before commit/push. Runtime tests, install, build, and Changesets
 were intentionally not run/added for this docs-only deliverable. GitHub issue bodies/statuses are unchanged.
+
+### Docs audit follow-up
+
+Docs audit **PASS**, as reported in the handoff, with three clarifications incorporated: input-root-only
+canonicalization independent of synthetic aliases/definition-table order; one complete exact-key
+workspace envelope; and the proposed reciprocal #75 dependency amendment. The PASS context is retained
+without claiming feature verification or accepted-ADR status. These are documentation-only refinements;
+all GitHub amendments remain proposed/unapplied until next-model approval. Follow-up validation passed:
+31 relative links, balanced fences, whitespace/newlines, `git diff --check`, and exactly the two intended
+Markdown files changed. No Changeset, runtime suite, feature code, or GitHub changes.

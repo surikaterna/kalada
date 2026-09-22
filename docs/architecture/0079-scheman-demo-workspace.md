@@ -245,14 +245,25 @@ No public Scheman generator was found in v2. Implement an **app-local candidate 
 or type inference, over normalized editorGraph's `data` input root (derived only from SchemaDocument
 input). Freeze contract **`demo-input-candidate-v1`**. Never use output semanticType or runtime values.
 
-Canonical input encoding: root-first traversal, property names/definition names sorted by UTF-16 code
-units; preserve tuple/union/intersection order; assign deterministic traversal indices and encode repeat
-edges as indices. Include node kind, scalar name, required/presence, literal/enum values, constraints,
-wrappers, edges, unresolved/availability/evidence and explicit generation bounds. Exclude source-local
-node IDs, provenance, annotations/descriptions, clocks, and object insertion order. Encode only copied
-passive JSON; reject nonfinite numbers/unsupported graph payloads. Same canonical shape + uint32 seed +
-contract version/bounds produces identical candidate byte sequence. Validation acceptance additionally
-depends on the admitted canonical schema (never imply shape equality proves validator equivalence).
+Canonical input encoding covers **only the subgraph reachable from the `data` INPUT root** through
+input structural edges and resolved reference targets. The current adapter synthesizes definition
+aliases from source node IDs: build a lookup to resolve aliases/targets, but never encode or order by
+synthetic definition names, node IDs, or definition-table position. Definitions are not traversal roots;
+exclude unreachable and output-only definitions/nodes, even when present in the normalized graph.
+
+Assign canonical indices on first encounter in a root-first traversal with stable structural edge
+order: object properties sorted by UTF-16 field name, then additionalProperties; array element; tuple
+items by index, then rest; union variants/intersection operands in declared order; record key then value;
+wrapper inner; reference target. Encode repeat/cycle edges using those canonical indices. Reference
+records retain resolution status and canonical target, not the synthetic alias or source-local ID.
+Include reachable node kind, scalar name, required/presence, literal/enum values, constraints, wrappers,
+structural edges, availability, and explicit generation bounds. Encode unknown/unresolved evidence as
+codes at canonical structural paths, not raw alias-bearing paths/messages; unrelated graph-wide or
+output evidence is excluded. Exclude provenance, annotations/descriptions, clocks, and object insertion
+order. Encode only copied passive JSON; reject nonfinite numbers/unsupported graph payloads. Same
+canonical input shape + uint32 seed + contract version/bounds produces identical candidate byte sequence.
+Validation acceptance additionally depends on the admitted canonical schema (never imply shape equality
+proves validator equivalence).
 
 PRNG is xorshift32: unsigned state initialized from decimal uint32 seed, zero replaced by `0x6d2b79f5`;
 next: `x ^= x << 13; x ^= x >>> 17; x ^= x << 5; state = x >>> 0`. No Math.random/date/locale source.
@@ -297,7 +308,11 @@ Rules:
 Golden output fixtures: seed 1 bare boolean -> `true`; seed 1 unconstrained integer -> `5`; any seed
 literal `{"x":1}` -> `{"x":1}`; object with optional self-ref `next` and no required keys -> `{}` without
 PRNG draws. Add exact expected bytes for required objects, tuples, union selection/retry and constraints,
-plus canonical-ID/property-order invariance. All accepted golden data must independently validate.
+plus canonical-ID/property-order invariance. The invariance fixture must consistently rename source
+node IDs **and synthetic definition aliases**, update their references, and reorder the definition table;
+canonical bytes and seeded candidate bytes must remain identical. Adding/reordering unreachable or
+output-only definitions must likewise leave both unchanged. All accepted golden data must independently
+validate.
 Changing any rule or default bound requires generator-contract version change and new vectors.
 
 ## Inspector DTOs and result serialization (#79-I)
@@ -342,12 +357,33 @@ format. No result/raw value belongs in diagnostic telemetry (there is no telemet
 
 ## Persistence, import/export, and deterministic failure UX
 
-PROPOSED envelope `format:"kalada-demo-workspace", version:1` has exactly `schemaText`, `dataText`,
-`documents:[{name,text,revision}]`, `activeName`, `seed` (uint32), and `generatorVersion`.
-Schema/data revisions are recorded as `schemaRevision`/`dataRevision`. Validate exact keys/types, unique
-safe names, at least 3 and at most 16 expressions, valid activeName, safe integer revisions and resource
-limits before mutation. No executable functions/options, URLs, URIs, capabilities, codecs, artifacts,
-results, errors, timing, theme script, or saved editor history. Unknown format/version is rejected with
+The PROPOSED import/export and persistence envelope has this complete exact-key contract. Every field
+is required; reject missing or extra keys both at the top level and in each document record:
+
+```ts
+interface DemoWorkspaceEnvelopeV1 {
+  readonly format: "kalada-demo-workspace";
+  readonly version: 1;
+  readonly schemaText: string;
+  readonly schemaRevision: number;
+  readonly dataText: string;
+  readonly dataRevision: number;
+  readonly documents: readonly {
+    readonly name: string;
+    readonly text: string;
+    readonly revision: number;
+  }[];
+  readonly activeName: string;
+  readonly seed: number;
+  readonly generatorVersion: "demo-input-candidate-v1";
+}
+```
+
+Validate the literal format/version/generatorVersion, exact keys/types, uint32 seed, unique safe names,
+at least 3 and at most 16 expressions, activeName naming `schema.json`, `data.json`, or an expression
+document, non-negative safe-integer schemaRevision/dataRevision/document revisions, and the previously
+specified resource limits before mutation. No executable functions/options, URLs, URIs, capabilities,
+codecs, artifacts, results, errors, timing, theme script, or saved editor history. Unknown format/version is rejected with
 no state change. Known-format content with invalid schema/data may load into editors but immediately
 enters the corresponding deterministic invalid/unsupported state, never a last-good execution.
 
