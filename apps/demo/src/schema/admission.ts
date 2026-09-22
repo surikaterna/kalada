@@ -1,4 +1,5 @@
 import { DEMO_LIMITS, inspectJson, type JsonMeasurement, parseBoundedJson } from "./limits.js";
+import { analyzeReferences } from "./references.js";
 
 const TYPES = new Set(["null", "boolean", "number", "integer", "string", "array", "object"]);
 const ANNOTATIONS = new Set(["title", "description", "default", "examples"]);
@@ -55,7 +56,7 @@ interface SchemaEntry {
   readonly value: unknown;
   readonly pointer: string;
 }
-interface Edge {
+export interface SchemaEdge {
   readonly from: string;
   readonly to: string;
   readonly consuming: boolean;
@@ -71,9 +72,7 @@ export function admitSchema(value: unknown): AdmittedSchema {
   const copy = copyJson(value) as boolean | Record<string, unknown>;
   inspectJson(copy, "schema");
   const { locations, edges } = walkSchema(copy);
-  resolveReferences(copy, locations, edges);
-  rejectNonConsumingCycles(locations, edges);
-  const maxNonConsumingPaths = countNonConsumingPaths("", locations, edges);
+  const maxNonConsumingPaths = analyzeReferences(copy, locations, edges);
   return Object.freeze({
     schema: copy,
     canonical: canonicalJson(copy),
@@ -103,7 +102,7 @@ export function estimateValidationWork(
 function walkSchema(root: boolean | Record<string, unknown>) {
   const stack: SchemaEntry[] = [{ value: root, pointer: "" }];
   const locations = new Map<string, unknown>();
-  const edges: Edge[] = [];
+  const edges: SchemaEdge[] = [];
   while (stack.length > 0) {
     const entry = stack.pop();
     if (!entry || !isSchema(entry.value))
@@ -233,7 +232,7 @@ function validateAnnotations(schema: Record<string, unknown>, pointer: string): 
   }
 }
 
-function pushSchemaChildren(entry: SchemaEntry, stack: SchemaEntry[], edges: Edge[]): void {
+function pushSchemaChildren(entry: SchemaEntry, stack: SchemaEntry[], edges: SchemaEdge[]): void {
   const schema = entry.value as Record<string, unknown>;
   pushMap(schema.$defs, "$defs", entry.pointer, false, stack, edges);
   pushMap(schema.properties, "properties", entry.pointer, true, stack, edges);
@@ -257,7 +256,7 @@ function pushMap(
   parent: string,
   consuming: boolean,
   stack: SchemaEntry[],
-  edges: Edge[],
+  edges: SchemaEdge[],
 ): void {
   if (!plainRecord(value)) return;
   const names = Object.keys(value).sort().reverse();
@@ -271,97 +270,13 @@ function pushOne(
   parent: string,
   consuming: boolean,
   stack: SchemaEntry[],
-  edges: Edge[],
+  edges: SchemaEdge[],
 ): void {
   if (value === undefined) return;
   if (!isSchema(value)) throw new SchemaAdmissionError("SCHEMA_VALUE", join(parent, key));
   const pointer = join(parent, key);
   stack.push({ value, pointer });
   if (!key.startsWith("$defs/")) edges.push({ from: parent, to: pointer, consuming });
-}
-
-function resolveReferences(root: unknown, locations: Map<string, unknown>, edges: Edge[]): void {
-  for (const [pointer, value] of locations) {
-    if (!plainRecord(value) || value.$ref === undefined) continue;
-    const target = localReference(value.$ref, pointer);
-    if (!locations.has(target) || !isSchema(readPointer(root, target))) {
-      throw new SchemaAdmissionError("SCHEMA_REF_UNRESOLVED", join(pointer, "$ref"));
-    }
-    edges.push({ from: pointer, to: target, consuming: false });
-  }
-  if (edges.length > DEMO_LIMITS.schemaEdges) throw new SchemaAdmissionError("SCHEMA_EDGE_LIMIT");
-}
-
-function localReference(value: unknown, pointer: string): string {
-  if (typeof value !== "string" || (value !== "#" && !value.startsWith("#/"))) {
-    throw new SchemaAdmissionError("SCHEMA_REF_EXTERNAL", join(pointer, "$ref"));
-  }
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value.slice(1));
-  } catch {
-    throw new SchemaAdmissionError("SCHEMA_REF_ENCODING", pointer);
-  }
-  const segments = decoded === "" ? [] : decoded.slice(1).split("/");
-  for (const segment of segments)
-    if (/~(?![01])/u.test(segment)) throw new SchemaAdmissionError("SCHEMA_REF_ENCODING", pointer);
-  return segments.length === 0
-    ? ""
-    : `/${segments.map((part) => escapePointer(part.replaceAll("~1", "/").replaceAll("~0", "~"))).join("/")}`;
-}
-
-function rejectNonConsumingCycles(locations: Map<string, unknown>, edges: Edge[]): void {
-  const graph = edgeMap(edges.filter((edge) => !edge.consuming));
-  const status = new Map<string, "active" | "done">();
-  const visit = (node: string): void => {
-    if (status.get(node) === "active") {
-      throw new SchemaAdmissionError("SCHEMA_NONCONSUMING_CYCLE", node);
-    }
-    if (status.get(node) === "done") return;
-    status.set(node, "active");
-    for (const target of graph.get(node) ?? []) visit(target);
-    status.set(node, "done");
-  };
-  for (const start of locations.keys()) {
-    visit(start);
-  }
-}
-
-function countNonConsumingPaths(
-  root: string,
-  locations: Map<string, unknown>,
-  edges: Edge[],
-): number {
-  const graph = edgeMap(edges.filter((edge) => !edge.consuming));
-  const memo = new Map<string, number>();
-  const visit = (node: string): number => {
-    const known = memo.get(node);
-    if (known !== undefined) return known;
-    let paths = 1;
-    for (const target of graph.get(node) ?? []) paths = saturatingAdd(paths, visit(target));
-    memo.set(node, paths);
-    return paths;
-  };
-  let maximum = visit(root);
-  for (const node of locations.keys()) maximum = Math.max(maximum, visit(node));
-  return maximum;
-}
-
-function edgeMap(edges: Edge[]): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const edge of edges) map.set(edge.from, [...(map.get(edge.from) ?? []), edge.to]);
-  return map;
-}
-
-function readPointer(root: unknown, pointer: string): unknown {
-  let value = root;
-  if (pointer === "") return value;
-  for (const encoded of pointer.slice(1).split("/")) {
-    const key = encoded.replaceAll("~1", "/").replaceAll("~0", "~");
-    if (!value || typeof value !== "object" || !Object.hasOwn(value, key)) return undefined;
-    value = (value as Record<string, unknown>)[key];
-  }
-  return value;
 }
 
 function canonicalJson(value: unknown): string {
@@ -394,9 +309,6 @@ function join(parent: string, key: string): string {
 }
 function escapePointer(value: string): string {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
-}
-function saturatingAdd(left: number, right: number): number {
-  return Math.min(DEMO_LIMITS.validationWork + 1, left + right);
 }
 function saturatingMultiply(left: number, right: number): number {
   return left > DEMO_LIMITS.validationWork / Math.max(1, right)
