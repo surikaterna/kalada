@@ -49,6 +49,8 @@ type ToolingRun<T> =
   | Readonly<{ cancelled: true; checkpoint: ToolingCheckpoint }>
   | Readonly<{ cancelled: false; value: T }>;
 
+type SyntaxParse = (document: DocumentSnapshot) => ReturnType<typeof parseKaladaV1Expression>;
+
 interface PreparedTooling {
   readonly offset: number;
   readonly environment?: NormalizedEnvironment;
@@ -61,9 +63,10 @@ export function runCompletion(
   document: DocumentSnapshot,
   environment: EnvironmentSnapshot,
   position: Utf16Position,
-  cancellation?: CancellationToken,
+  cancellation: CancellationToken | undefined,
+  parse: SyntaxParse,
 ): ToolingRun<CompletionPayload> {
-  const prepared = prepareTooling(document, environment, position, cancellation);
+  const prepared = prepareTooling(document, environment, position, cancellation, parse);
   if (prepared.cancelled) return prepared;
   const contextCancelled = cancelledAt("context", cancellation);
   if (contextCancelled) return contextCancelled;
@@ -92,9 +95,10 @@ export function runHover(
   document: DocumentSnapshot,
   environment: EnvironmentSnapshot,
   position: Utf16Position,
-  cancellation?: CancellationToken,
+  cancellation: CancellationToken | undefined,
+  parse: SyntaxParse,
 ): ToolingRun<HoverPayload> {
-  const prepared = prepareTooling(document, environment, position, cancellation);
+  const prepared = prepareTooling(document, environment, position, cancellation, parse);
   if (prepared.cancelled) return prepared;
   const contextCancelled = cancelledAt("context", cancellation);
   if (contextCancelled) return contextCancelled;
@@ -126,14 +130,15 @@ function prepareTooling(
   document: DocumentSnapshot,
   environment: EnvironmentSnapshot,
   position: Utf16Position,
-  cancellation?: CancellationToken,
+  cancellation: CancellationToken | undefined,
+  parse: SyntaxParse,
 ): ToolingRun<PreparedTooling> {
   const offset = document.lineIndex.offsetAt(position);
   for (const checkpoint of ["captured", "environment", "before-parse"] as const) {
     const cancelled = cancelledAt(checkpoint, cancellation);
     if (cancelled) return cancelled;
   }
-  const parsed = parseKaladaV1Expression(document.text);
+  const parsed = parse(document);
   const afterParse = cancelledAt("after-parse", cancellation);
   if (afterParse) return afterParse;
   const normalized = environment.description.ok ? environment.description.environment : undefined;

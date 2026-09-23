@@ -1,6 +1,7 @@
 import type { Utf16Position } from "@kalada/host";
 import {
   formatKaladaV1Expression,
+  type KaladaParseResult,
   type KaladaSyntaxDiagnostic,
   parseKaladaV1Expression,
 } from "@kalada/syntax";
@@ -32,6 +33,7 @@ import type {
 import { DocumentStore, validVersion } from "./documents.js";
 import { LanguageServiceError } from "./errors.js";
 import { classifyHighlight } from "./highlight.js";
+import { SyntaxParseCache } from "./syntax-cache.js";
 import { runCompletion, runHover } from "./tooling.js";
 
 export function createLanguageService(initial: EnvironmentUpdate): LanguageService {
@@ -40,6 +42,7 @@ export function createLanguageService(initial: EnvironmentUpdate): LanguageServi
 
 class LanguageServiceInstance implements LanguageService {
   private readonly store = new DocumentStore();
+  private readonly syntax = new SyntaxParseCache();
   private environment: EnvironmentSnapshot;
 
   constructor(initial: EnvironmentUpdate) {
@@ -51,11 +54,15 @@ class LanguageServiceInstance implements LanguageService {
   }
 
   updateDocument(input: DocumentUpdate): DocumentSnapshot {
-    return this.store.update(input);
+    const updated = this.store.update(input);
+    this.syntax.forget(updated.uri);
+    return updated;
   }
 
   closeDocument(uri: string): DocumentSnapshot {
-    return this.store.close(uri);
+    const closed = this.store.close(uri);
+    this.syntax.forget(closed.uri);
+    return closed;
   }
 
   getDocument(uri: string): DocumentSnapshot | undefined {
@@ -111,7 +118,7 @@ class LanguageServiceInstance implements LanguageService {
         : null;
     const first = cancelled("captured") ?? cancelled("before-parse");
     if (first) return first;
-    const parsed = parseKaladaV1Expression(captured.document.text);
+    const parsed = this.parseDocument(captured.document);
     const second = cancelled("after-parse");
     if (second) return second;
     const spans = classifyHighlight(parsed);
@@ -132,6 +139,7 @@ class LanguageServiceInstance implements LanguageService {
       captured.environment,
       position,
       options?.cancellation,
+      (document) => this.parseDocument(document),
     );
     if (run.cancelled) return this.cancelled("completion", captured.identity, run.checkpoint);
     return Object.freeze({
@@ -143,7 +151,13 @@ class LanguageServiceInstance implements LanguageService {
 
   hover(uri: string, position: Utf16Position, options?: RequestOptions): HoverOutcome {
     const captured = this.capture(uri);
-    const run = runHover(captured.document, captured.environment, position, options?.cancellation);
+    const run = runHover(
+      captured.document,
+      captured.environment,
+      position,
+      options?.cancellation,
+      (document) => this.parseDocument(document),
+    );
     if (run.cancelled) return this.cancelled("hover", captured.identity, run.checkpoint);
     return Object.freeze({
       ...run.value,
@@ -204,6 +218,13 @@ class LanguageServiceInstance implements LanguageService {
       environmentGeneration: environment.generation,
     });
     return { document, environment, identity };
+  }
+
+  private parseDocument(document: DocumentSnapshot): KaladaParseResult {
+    if (this.store.documents.get(document.uri) !== document) {
+      return parseKaladaV1Expression(document.text);
+    }
+    return this.syntax.get(document);
   }
 
   private cancelled(

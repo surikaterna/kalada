@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-DDeLlN4M.js",
-      "sha256": "549c44eb3b31ab5956210e7f005595c347b8137669bde710d537642674a14467",
+      "file": "assets/environment-C1PYiEog.js",
+      "sha256": "aa95780c39e94c67dd752397ac104c7d761389d1b7258723e9b1ad2fd8b43fc6",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-D-0ZF1er.js",
+          "name": "static:./index-Cxumpsh9.js",
           "count": 1
         }
       ],
@@ -90,12 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-D-0ZF1er.js",
-      "sha256": "4db8ebc35b5846ec2e9f179e968af2f9212f726048781580c46970e1450af800",
+      "file": "assets/index-Cxumpsh9.js",
+      "sha256": "70e727b46df4920d3d8a05fcf68a70ed1da06fe8cf33ce67f4a5f646dd552539",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-DDeLlN4M.js",
+          "name": "dynamic:./environment-C1PYiEog.js",
           "count": 1
         }
       ],
@@ -281,6 +281,7 @@
         "packages/language-service/src/highlight.ts",
         "packages/language-service/src/line-index.ts",
         "packages/language-service/src/service.ts",
+        "packages/language-service/src/syntax-cache.ts",
         "packages/language-service/src/tooling-graph.ts",
         "packages/language-service/src/tooling.ts",
         "packages/syntax/src/diagnostics.ts",
@@ -314,7 +315,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "873916997ae29e7f94398ae4d0aaa158c716997cbb937fe4b9b7eab2fb6940ff",
+      "sha256": "86efe4295143f2dc5cf51e8bbc6db5498a9fbc9f64c72a3079cbdbb5bc9009b7",
       "closure": "shell",
       "imports": [],
       "capabilities": [],
