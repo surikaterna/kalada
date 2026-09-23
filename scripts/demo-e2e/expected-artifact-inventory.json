@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-BBcbKOEi.js",
-      "sha256": "f268644da7f38595b3b01babb6b4b4863299d8813c515fdffecddee017e00eea",
+      "file": "assets/environment-DDeLlN4M.js",
+      "sha256": "549c44eb3b31ab5956210e7f005595c347b8137669bde710d537642674a14467",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-D_y5Df_N.js",
+          "name": "static:./index-D-0ZF1er.js",
           "count": 1
         }
       ],
@@ -90,21 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-DVZWFT5h.css",
-      "sha256": "ece7753164992d9517f7fc3cbe226fd5484c28ef6ecc12347c0c6c58cb455b01",
-      "closure": "entry-static",
-      "imports": [],
-      "capabilities": [],
-      "urlLiterals": [],
-      "contributors": []
-    },
-    {
-      "file": "assets/index-D_y5Df_N.js",
-      "sha256": "60fa4452824c400f5d56fe50523a8db2c6d2139b71a11f991011a0db299b8da2",
+      "file": "assets/index-D-0ZF1er.js",
+      "sha256": "4db8ebc35b5846ec2e9f179e968af2f9212f726048781580c46970e1450af800",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-BBcbKOEi.js",
+          "name": "dynamic:./environment-DDeLlN4M.js",
           "count": 1
         }
       ],
@@ -206,6 +197,7 @@
         "apps/demo/src/schema/limits.ts",
         "apps/demo/src/ui/app.ts",
         "apps/demo/src/ui/dom.ts",
+        "apps/demo/src/ui/editor-theme.ts",
         "apps/demo/src/ui/styles.css",
         "apps/demo/src/workspace/imports.ts",
         "apps/demo/src/workspace/model.ts",
@@ -227,6 +219,8 @@
         "node_modules/.bun/crelt@1.0.7/node_modules/crelt/index.js",
         "node_modules/.bun/style-mod@4.1.4/node_modules/style-mod/src/style-mod.js",
         "node_modules/.bun/w3c-keyname@2.2.8/node_modules/w3c-keyname/index.js",
+        "packages/codemirror/src/completion-option.ts",
+        "packages/codemirror/src/highlight-extension.ts",
         "packages/codemirror/src/line-separator.ts",
         "packages/codemirror/src/render.ts",
         "packages/codemirror/src/session-helpers.ts",
@@ -284,6 +278,7 @@
         "packages/language-service/src/graph-fields.ts",
         "packages/language-service/src/graph-query.ts",
         "packages/language-service/src/graph-results.ts",
+        "packages/language-service/src/highlight.ts",
         "packages/language-service/src/line-index.ts",
         "packages/language-service/src/service.ts",
         "packages/language-service/src/tooling-graph.ts",
@@ -309,8 +304,17 @@
       ]
     },
     {
+      "file": "assets/index-DFUGms7F.css",
+      "sha256": "5ed89109ec26aeacd9476735bbf720513d70481d277716494fe7e268e46501cf",
+      "closure": "entry-static",
+      "imports": [],
+      "capabilities": [],
+      "urlLiterals": [],
+      "contributors": []
+    },
+    {
       "file": "index.html",
-      "sha256": "d9b3e92aa95c4cd660c0bb6b761a695a16f54541a372625806ede0d5a2f63060",
+      "sha256": "873916997ae29e7f94398ae4d0aaa158c716997cbb937fe4b9b7eab2fb6940ff",
       "closure": "shell",
       "imports": [],
       "capabilities": [],

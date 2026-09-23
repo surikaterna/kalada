@@ -107,6 +107,7 @@ window.__kalada = {
     };
   },
   crlfLifecycle: () => crlfLifecycle(),
+  highlightLifecycle: () => highlightLifecycle(),
 };
 window.__kaladaReady = true;
 
@@ -145,4 +146,62 @@ function pair(targetView, targetService) {
     editor: targetView.state.sliceDoc(),
     service: targetService.getDocument("memory:///crlf.kalada")?.text,
   };
+}
+
+function highlightLifecycle() {
+  const highlightService = createLanguageService({
+    generation: 1,
+    description: normalizeManualEnvironment(shape("name")),
+  });
+  const session = createKaladaEditorSession({
+    service: highlightService,
+    document: { uri: "memory:///highlight.kalada", version: 1, text: "data\r\n.count" },
+  });
+  const highlightView = new EditorView({
+    state: EditorState.create({ doc: "data\r\n.count", extensions: [session.extension] }),
+    parent: document.querySelector("#editor"),
+  });
+  const marks = (selector) =>
+    [...highlightView.dom.querySelectorAll(selector)].map((item) => item.textContent);
+  const result = {
+    initial: { punctuation: marks(".kalada-hl-punctuation"), field: marks(".kalada-hl-field") },
+  };
+  session.replaceDocument("data\r\n+ true");
+  result.replaced = {
+    operator: marks(".kalada-hl-operator"),
+    keyword: marks(".kalada-hl-keyword"),
+  };
+  session.replaceDocument("😀\r\ntrue");
+  result.astral = marks(".kalada-hl-keyword");
+  session.replaceDocument("data\r\n+\r\ntrue");
+  result.multiple = {
+    operator: marks(".kalada-hl-operator"),
+    keyword: marks(".kalada-hl-keyword"),
+  };
+  highlightView.dispatch({
+    changes: { from: highlightView.state.doc.length, insert: "\r\nfalse" },
+  });
+  result.edited = marks(".kalada-hl-keyword");
+  session.replaceDocument("data\n+ true");
+  result.lf = { operator: marks(".kalada-hl-operator"), keyword: marks(".kalada-hl-keyword") };
+  session.replaceDocument("data\r+ true");
+  result.cr = { operator: marks(".kalada-hl-operator"), keyword: marks(".kalada-hl-keyword") };
+  session.replaceDocument("data\r\n+ true");
+  session.format();
+  result.formatted = {
+    operator: marks(".kalada-hl-operator"),
+    keyword: marks(".kalada-hl-keyword"),
+  };
+  highlightView.destroy();
+  const reattached = new EditorView({
+    state: highlightView.state,
+    parent: document.querySelector("#editor"),
+  });
+  result.reattached = [...reattached.dom.querySelectorAll(".kalada-hl-keyword")].map(
+    (item) => item.textContent,
+  );
+  reattached.destroy();
+  session.dispose();
+  result.closed = highlightService.getDocument("memory:///highlight.kalada") === undefined;
+  return result;
 }

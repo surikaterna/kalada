@@ -75,6 +75,27 @@ export type AnalysisCheckpoint =
   | "complete";
 
 export type FormatCheckpoint = "captured" | "formatted" | "complete";
+export type HighlightCheckpoint = "captured" | "before-parse" | "after-parse" | "complete";
+export type HighlightKind =
+  | "reference"
+  | "field"
+  | "literal"
+  | "operator"
+  | "keyword"
+  | "punctuation"
+  | "invalid"
+  | "unsupported";
+export interface HighlightSpan {
+  readonly from: number;
+  readonly to: number;
+  readonly kind: HighlightKind;
+}
+export interface HighlightResult extends SnapshotIdentity {
+  readonly kind: "highlight";
+  readonly status: ResultStatus;
+  readonly spans: readonly HighlightSpan[];
+}
+export type HighlightOutcome = HighlightResult | CancelledResult;
 export type ToolingCheckpoint =
   | "captured"
   | "environment"
@@ -84,7 +105,11 @@ export type ToolingCheckpoint =
   | "before-query"
   | "after-query"
   | "complete";
-export type LanguageServiceCheckpoint = AnalysisCheckpoint | FormatCheckpoint | ToolingCheckpoint;
+export type LanguageServiceCheckpoint =
+  | AnalysisCheckpoint
+  | FormatCheckpoint
+  | ToolingCheckpoint
+  | HighlightCheckpoint;
 
 export interface CancellationToken {
   readonly isCancellationRequested: () => boolean;
@@ -100,7 +125,8 @@ export type LanguageServiceOperation =
   | "diagnostics"
   | "format"
   | "completion"
-  | "hover";
+  | "hover"
+  | "highlight";
 
 export interface CancelledResult extends SnapshotIdentity {
   readonly kind: "cancelled";
@@ -222,6 +248,7 @@ export interface LanguageService {
   readonly analyze: (uri: string, options?: RequestOptions) => AnalysisOutcome;
   readonly diagnostics: (uri: string, options?: RequestOptions) => DiagnosticsOutcome;
   readonly format: (uri: string, options?: RequestOptions) => FormatOutcome;
+  readonly highlight: (uri: string, options?: RequestOptions) => HighlightOutcome;
   readonly completion: (
     uri: string,
     position: Utf16Position,

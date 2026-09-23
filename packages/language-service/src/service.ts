@@ -1,5 +1,9 @@
 import type { Utf16Position } from "@kalada/host";
-import { formatKaladaV1Expression, type KaladaSyntaxDiagnostic } from "@kalada/syntax";
+import {
+  formatKaladaV1Expression,
+  type KaladaSyntaxDiagnostic,
+  parseKaladaV1Expression,
+} from "@kalada/syntax";
 import { runAnalysisPhases } from "./analysis.js";
 import type {
   AnalysisOutcome,
@@ -14,6 +18,7 @@ import type {
   EnvironmentUpdate,
   FormatCheckpoint,
   FormatOutcome,
+  HighlightOutcome,
   HoverOutcome,
   LanguageService,
   LanguageServiceCheckpoint,
@@ -26,6 +31,7 @@ import type {
 } from "./contracts.js";
 import { DocumentStore, validVersion } from "./documents.js";
 import { LanguageServiceError } from "./errors.js";
+import { classifyHighlight } from "./highlight.js";
 import { runCompletion, runHover } from "./tooling.js";
 
 export function createLanguageService(initial: EnvironmentUpdate): LanguageService {
@@ -95,6 +101,28 @@ class LanguageServiceInstance implements LanguageService {
     const final = this.formatCancellation("complete", captured.identity, options?.cancellation);
     if (final) return final;
     return this.formatResult(captured.document, captured.identity, formatted);
+  }
+
+  highlight(uri: string, options?: RequestOptions): HighlightOutcome {
+    const captured = this.capture(uri);
+    const cancelled = (checkpoint: "captured" | "before-parse" | "after-parse" | "complete") =>
+      options?.cancellation?.isCancellationRequested()
+        ? this.cancelled("highlight", captured.identity, checkpoint)
+        : null;
+    const first = cancelled("captured") ?? cancelled("before-parse");
+    if (first) return first;
+    const parsed = parseKaladaV1Expression(captured.document.text);
+    const second = cancelled("after-parse");
+    if (second) return second;
+    const spans = classifyHighlight(parsed);
+    const final = cancelled("complete");
+    if (final) return final;
+    return Object.freeze({
+      kind: "highlight",
+      ...captured.identity,
+      status: this.status(captured.identity),
+      spans,
+    });
   }
 
   completion(uri: string, position: Utf16Position, options?: RequestOptions): CompletionOutcome {

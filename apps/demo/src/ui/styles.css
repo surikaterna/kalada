@@ -48,6 +48,12 @@ select:focus-visible,
   font-size: 1.1rem;
   margin: 0 auto 0 0;
 }
+.shortcut-help {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: #d1dbe9;
+  background: #17202d;
+}
 .tabs {
   display: flex;
   overflow-x: auto;

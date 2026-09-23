@@ -33,6 +33,7 @@ declare global {
         readonly diagnostics: number;
       };
       crlfLifecycle(): Record<string, { readonly editor: string; readonly service?: string }>;
+      highlightLifecycle(): Record<string, unknown>;
     };
   }
 }
@@ -164,6 +165,7 @@ async function runBrowser(directory: string): Promise<void> {
 async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   const direct = await page.evaluate(() => window.__kalada.directCompletion());
   await page.locator(".cm-content").focus();
+  await page.locator(".kalada-hl-reference").waitFor();
   await page.keyboard.press("Control+Space");
   await page.locator(".cm-tooltip-autocomplete").waitFor();
   const labels = await page.locator(".cm-completionLabel").allTextContents();
@@ -207,6 +209,18 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   if (!(await page.locator(".cm-completionLabel").allTextContents()).includes("age")) {
     throw new Error("Environment refresh did not invalidate completion");
   }
+  await page.waitForTimeout(350);
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => window.__kalada.view.state.doc.toString() === "user.age");
+  await page.keyboard.press("Tab");
+  if (await page.locator(".cm-content").evaluate((node) => node === document.activeElement)) {
+    throw new Error("Inactive Tab trapped focus");
+  }
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+Space");
+  await page.locator(".cm-tooltip-autocomplete").waitFor();
+  await page.keyboard.press("Escape");
+  await page.locator(".cm-tooltip-autocomplete").waitFor({ state: "hidden" });
   await page.evaluate(() => window.__kalada.batch());
   const versions = await page.evaluate(() => window.__kalada.versions);
   if (
@@ -221,6 +235,22 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
 }
 
 async function verifyLifecycle(page: import("playwright").Page): Promise<void> {
+  const highlight = await page.evaluate(() => window.__kalada.highlightLifecycle());
+  const expectedHighlight = {
+    initial: { punctuation: ["."], field: ["count"] },
+    replaced: { operator: ["+"], keyword: ["true"] },
+    astral: ["true"],
+    multiple: { operator: ["+"], keyword: ["true"] },
+    edited: ["true", "false"],
+    lf: { operator: ["+"], keyword: ["true"] },
+    cr: { operator: ["+"], keyword: ["true"] },
+    formatted: { operator: ["+"], keyword: ["true"] },
+    reattached: ["true"],
+    closed: true,
+  };
+  if (JSON.stringify(highlight) !== JSON.stringify(expectedHighlight)) {
+    throw new Error(`Rendered highlight offsets diverged: ${JSON.stringify(highlight)}`);
+  }
   const crlf = await page.evaluate(() => window.__kalada.crlfLifecycle());
   for (const [step, pair] of Object.entries(crlf)) {
     if (pair.editor !== pair.service) {

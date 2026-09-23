@@ -88,6 +88,14 @@ async function verifyImportedConvergence(
   await waitStatus(page, "ready: WORKSPACE_READY");
   if ((await editor(page).textContent()) !== "data.count")
     throw new Error("Imported source missing");
+  await page.locator(".kalada-hl-field").waitFor();
+  const theme = await page.locator(".cm-editor").evaluate((node) => ({
+    background: getComputedStyle(node).backgroundColor,
+    caret: getComputedStyle(node.querySelector(".cm-content") ?? node).caretColor,
+  }));
+  if (theme.background !== "rgb(23, 29, 39)" || theme.caret !== "rgb(255, 218, 134)") {
+    throw new Error(`Imported editor lost dark caret/theme: ${JSON.stringify(theme)}`);
+  }
   await waitOutput(page, "99");
   const persisted = await storedWorkspace(page);
   if (!persisted || JSON.stringify(JSON.parse(persisted)) !== JSON.stringify(imported)) {
