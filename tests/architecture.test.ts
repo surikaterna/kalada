@@ -9,6 +9,39 @@ const core = resolve(root, "packages/core");
 const host = resolve(root, "packages/host");
 const languageService = resolve(root, "packages/language-service");
 
+function isModuleCall(node: ts.Node): node is ts.CallExpression {
+  return (
+    ts.isCallExpression(node) &&
+    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+  );
+}
+
+function forbiddenRoutingImport(source: string): boolean {
+  const file = ts.createSourceFile("routing.ts", source, ts.ScriptTarget.Latest, true);
+  const forbidden = /@kalada\/|core|syntax|host|codemirror|editor|evaluate/iu;
+  let found = false;
+  function visit(node: ts.Node): void {
+    let specifier: ts.Expression | undefined;
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+      specifier = node.moduleSpecifier;
+    else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    )
+      specifier = node.moduleReference.expression;
+    else if (isModuleCall(node)) specifier = node.arguments[0];
+    if (
+      (isModuleCall(node) && !specifier) ||
+      (specifier && (!ts.isStringLiteral(specifier) || forbidden.test(specifier.text)))
+    )
+      found = true;
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  return found;
+}
+
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 }
@@ -28,6 +61,7 @@ describe("package boundaries", () => {
       "host",
       "language-service",
       "projection",
+      "provider-routing",
       "syntax",
     ]);
   });
@@ -37,6 +71,43 @@ describe("package boundaries", () => {
     for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
       expect(manifest[field], field).toBeUndefined();
     }
+  });
+
+  it("keeps the private routing prototype expression-optional and headless", async () => {
+    const directory = resolve(root, "packages/provider-routing");
+    const manifest = await readJson(resolve(directory, "package.json"));
+    expect(manifest.private).toBe(true);
+    for (const field of [
+      "dependencies",
+      "optionalDependencies",
+      "peerDependencies",
+      "bundledDependencies",
+    ]) {
+      expect(manifest[field]).toBeUndefined();
+    }
+    const source = await productionSource(resolve(directory, "src"));
+    expect(forbiddenRoutingImport(source)).toBe(false);
+  });
+
+  it("detects all production import forms without blocking unrelated modules", () => {
+    for (const source of [
+      'import "@kalada/core";',
+      'import thing from "@kalada/syntax";',
+      'export { thing } from "@kalada/host";',
+      'require("@kalada/core");',
+      'import("@kalada/core");',
+      'import name = require("@kalada/core");',
+      "require(variable);",
+      "require();",
+    ])
+      expect(forbiddenRoutingImport(source), source).toBe(true);
+    for (const source of [
+      'import "node:assert";',
+      'import thing from "./local.js";',
+      'require("node:assert");',
+      'const text = "require(\\"@kalada/core\\")";',
+    ])
+      expect(forbiddenRoutingImport(source), source).toBe(false);
   });
 
   it("keeps host limited to Kalada dependencies and free of schema vendors", async () => {
