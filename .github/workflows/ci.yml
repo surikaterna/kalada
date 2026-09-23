@@ -32,6 +32,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - run: bun run build
+      - run: bun run package:policy
       - run: bun run package:smoke
       - run: bun run host:smoke
       - run: bun run host:browser-smoke
@@ -53,3 +54,19 @@ jobs:
       - name: Validate generated release integrity
         if: github.head_ref == 'changeset-release/main' && github.event.pull_request.head.repo.full_name == github.repository
         run: bun scripts/validate-release-pr.ts origin/main
+
+  package-policy-node-floor:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - name: Set up Node.js at the package engine floor
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.0.0
+      - run: bun install --frozen-lockfile
+      - run: bun run package:policy

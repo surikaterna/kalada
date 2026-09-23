@@ -20,6 +20,18 @@ host effects, or asynchronous evaluation. See
 [ADR-0001](docs/adr/0001-kalada-language-architecture.md) for the accepted boundaries and
 [ADR-0004](docs/adr/0004-deterministic-projection-v1.md) for the complete projection-v1 contract.
 
+## Package environments
+
+The packages support Node ESM, Node CommonJS, NodeNext declarations, and browser use through a
+package-aware bundler. Raw CDN package URLs and unbundled native-browser/import-map loading are not
+supported. In particular, core's generated ESM wrapper deliberately shares its CommonJS runtime,
+and syntax/projection retain package-manager-resolved imports. See the
+[package environment support matrix](docs/package-environment-support.md) and
+[ADR-0007](docs/adr/0007-package-runtime-and-browser-policy.md) for the exact boundary and evidence.
+
+Published packages require Node `>=22.0.0`. Bun `1.4.2` is the repository toolchain, not a separate
+packed-package runtime guarantee. No package exposes a `browser` condition.
+
 ## Development
 
 The repository pins Bun in `package.json` and uses a Bun workspace.
@@ -30,6 +42,7 @@ bun run lint
 bun run typecheck
 bun run test
 bun run build
+bun run package:policy
 bun run package:smoke
 bun run projection:smoke
 bun run syntax:smoke

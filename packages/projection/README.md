@@ -5,7 +5,8 @@ bounded JSON projection. It uses explicit `@kalada/core` expression ASTs; string
 projection are always literal strings, never source expressions or interpolation templates.
 
 The package is side-effect free and works in ESM, CommonJS, strict NodeNext TypeScript, and browser
-bundles. Its only runtime dependency is `@kalada/core@^0.5.0`.
+bundles. Raw CDN URLs and unbundled native-browser/import-map loading are not supported; browser
+support requires a package-aware bundler. Its only runtime dependency is `@kalada/core@^0.5.0`.
 
 ## Construct and evaluate a projection
 
