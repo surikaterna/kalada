@@ -1,0 +1,140 @@
+{
+  "cohort": "A",
+  "sha": "78d624f536d73db5ae813de5f64d8bd52fa07b29",
+  "batches": 21,
+  "warmups": 1,
+  "failures": [],
+  "valid": 20,
+  "rows": [
+    {
+      "fixture": "typical",
+      "signatures": [
+        "{\"before\":3,\"after\":3,\"text\":\"5c947ee24d13347610f0ca12df5a66a5ec2bc6c69715fc300e2f66a3fc489582\",\"status\":\"ready: WORKSPACE_READY\"}"
+      ],
+      "dispatchMs": {
+        "n": 20,
+        "median": 7.899999976158142,
+        "p95": 8.599999904632568,
+        "min": 7.599999904632568,
+        "max": 8.900000095367432,
+        "spread": 1.3000001907348633,
+        "iqr": 0.2999999523162842
+      },
+      "rafBoundaryMs": {
+        "n": 20,
+        "median": 11.25,
+        "p95": 17.40000009536743,
+        "min": 10.599999904632568,
+        "max": 17.700000047683716,
+        "spread": 7.1000001430511475,
+        "iqr": 5.199999809265137
+      },
+      "longTaskSupported": true,
+      "longTaskCount": 0
+    },
+    {
+      "fixture": "many-tokens",
+      "signatures": [
+        "{\"before\":42,\"after\":42,\"text\":\"cccea47a575a681c10e964b142ba203b3eb5ec7436f9bde87ae8573cac9f44a3\",\"status\":\"ready: WORKSPACE_READY\"}"
+      ],
+      "dispatchMs": {
+        "n": 20,
+        "median": 17.700000166893005,
+        "p95": 18.899999856948853,
+        "min": 17,
+        "max": 19.5,
+        "spread": 2.5,
+        "iqr": 0.9000000953674316
+      },
+      "rafBoundaryMs": {
+        "n": 20,
+        "median": 22.399999976158142,
+        "p95": 24.199999809265137,
+        "min": 21.40000009536743,
+        "max": 24.600000143051147,
+        "spread": 3.200000047683716,
+        "iqr": 0.9999997615814209
+      },
+      "longTaskSupported": true,
+      "longTaskCount": 0
+    },
+    {
+      "fixture": "padded-valid",
+      "signatures": [
+        "{\"before\":3,\"after\":3,\"text\":\"277f234a44226d70313df2b630e70334583a750d8c2c629d3b1c3cbda1d54d3c\",\"status\":\"ready: WORKSPACE_READY\"}"
+      ],
+      "dispatchMs": {
+        "n": 20,
+        "median": 8.699999809265137,
+        "p95": 9.300000190734863,
+        "min": 7.800000190734863,
+        "max": 9.599999904632568,
+        "spread": 1.799999713897705,
+        "iqr": 0.5000002384185791
+      },
+      "rafBoundaryMs": {
+        "n": 20,
+        "median": 17.350000023841858,
+        "p95": 23.799999952316284,
+        "min": 15.600000143051147,
+        "max": 24,
+        "spread": 8.399999856948853,
+        "iqr": 1.7000000476837158
+      },
+      "longTaskSupported": true,
+      "longTaskCount": 0
+    },
+    {
+      "fixture": "recovery",
+      "signatures": [
+        "{\"before\":[\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\"],\"after\":[\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\",\"KALADA_SYNTAX_EXPECTED_FIELD\"],\"text\":\"a204753657251da73641e80adc4833075a8639f61df0528b1ed01e44161884d6\",\"status\":\"ready: WORKSPACE_READY\"}"
+      ],
+      "dispatchMs": {
+        "n": 20,
+        "median": 17.200000047683716,
+        "p95": 18,
+        "min": 16.399999856948853,
+        "max": 19.700000047683716,
+        "spread": 3.3000001907348633,
+        "iqr": 0.7000000476837158
+      },
+      "rafBoundaryMs": {
+        "n": 20,
+        "median": 20.799999952316284,
+        "p95": 21.700000047683716,
+        "min": 19.799999952316284,
+        "max": 23.09999990463257,
+        "spread": 3.299999952316284,
+        "iqr": 0.7999999523162842
+      },
+      "longTaskSupported": true,
+      "longTaskCount": 0
+    },
+    {
+      "fixture": "crlf-astral",
+      "signatures": [
+        "{\"before\":\"🚀\",\"after\":\"🚀\",\"text\":\"31f955768aa085d98249d432976bbf715656de1215f7bc3f3fa2148cb094e9bc\",\"status\":\"ready: WORKSPACE_READY\"}"
+      ],
+      "dispatchMs": {
+        "n": 20,
+        "median": 7,
+        "p95": 7.700000047683716,
+        "min": 6.599999904632568,
+        "max": 7.799999952316284,
+        "spread": 1.2000000476837158,
+        "iqr": 0.4999997615814209
+      },
+      "rafBoundaryMs": {
+        "n": 20,
+        "median": 10.449999928474426,
+        "p95": 18.299999952316284,
+        "min": 9.5,
+        "max": 18.90000009536743,
+        "spread": 9.400000095367432,
+        "iqr": 1.8999998569488525
+      },
+      "longTaskSupported": true,
+      "longTaskCount": 0
+    }
+  ]
+}
