@@ -4,14 +4,7 @@ import { createLanguageService } from "../../../98-a-readonly/packages/language-
 function environment() {
   return normalizeManualEnvironment({
     mode: "sync",
-    bindings: [
-      {
-        id: "count-id",
-        name: "count",
-        path: ["count"],
-        semanticType: { kind: "primitive-type", name: "number" },
-      },
-    ],
+    bindings: [],
   });
 }
 
@@ -23,39 +16,36 @@ const samples = (values) => ({
 function measure(service, uris, enabled) {
   const durations = { highlight: [], diagnostics: [], analyze: [] };
   const outputs = [];
+  let firstIdentity;
   for (const uri of uris) {
     const result = {};
     for (const kind of Object.keys(durations)) {
       const start = performance.now();
       const value = service[kind](uri);
+      if (kind === "highlight" && !firstIdentity) firstIdentity = value;
       if (enabled) durations[kind].push(performance.now() - start);
       result[kind] =
         kind === "highlight"
           ? { kind: value.kind, spans: value.spans?.map(({ kind, from, to }) => [kind, from, to]) }
           : { kind: value.kind, codes: value.diagnostics?.map(({ code }) => code) };
+      result[kind].status = value.status;
+      result[kind].version = value.version;
+      result[kind].environmentGeneration = value.environmentGeneration;
     }
     outputs.push(result);
   }
   return {
     durations: Object.fromEntries(Object.entries(durations).map(([k, v]) => [k, samples(v)])),
     outputs,
+    firstIdentity,
   };
 }
 
-export function runFifty(tokenHeavy = false, enabled = true) {
-  const service = createLanguageService({ generation: 1, description: environment() });
-  const uris = Array.from({ length: 50 }, (_, i) => `memory:///synthetic/expr-${i}.kalada`);
-  const source = (i) => (tokenHeavy ? `count${" + 1".repeat(40)} + ${i}` : `count + ${i}`);
-  const start = performance.now();
-  uris.forEach((uri, i) => {
-    service.openDocument({ uri, text: source(i), version: 1 });
-  });
-  const openMs = performance.now() - start;
-  const cold = measure(service, uris, enabled);
-  const document = service.getDocument(uris[0]);
+function editFirst(service, uri) {
+  const document = service.getDocument(uri);
   const editStart = performance.now();
   service.updateDocument({
-    uri: uris[0],
+    uri,
     version: 2,
     edits: [
       {
@@ -67,26 +57,48 @@ export function runFifty(tokenHeavy = false, enabled = true) {
       },
     ],
   });
-  const editMs = performance.now() - editStart;
+  return performance.now() - editStart;
+}
+
+export function runFifty(tokenHeavy = false, enabled = true) {
+  const service = createLanguageService({ generation: 1, description: environment() });
+  const uris = Array.from({ length: 50 }, (_, i) => `memory:///synthetic/expr-${i}.kalada`);
+  const source = (i) => (tokenHeavy ? `1${" + 1".repeat(40)} + ${i}` : `1 + ${i}`);
+  const start = performance.now();
+  uris.forEach((uri, i) => {
+    service.openDocument({ uri, text: source(i), version: 1 });
+  });
+  const openMs = performance.now() - start;
+  const cold = measure(service, uris, enabled);
+  const coldCurrent = service.isCurrent(cold.firstIdentity);
+  const editMs = editFirst(service, uris[0]);
+  const oldVersionCurrent = service.isCurrent(cold.firstIdentity);
   const edited = measure(service, [uris[0]], enabled);
-  const dataStart = performance.now();
-  const data = measure(service, uris, enabled);
-  const dataMs = performance.now() - dataStart;
-  const schemaStart = performance.now();
+  const tooling = {
+    completion: service.completion(uris[0], service.getDocument(uris[0]).lineIndex.positionAt(1)),
+    hover: service.hover(uris[0], { line: 0, character: 0 }),
+  };
+  const repeatStart = performance.now();
+  const repeat = measure(service, uris, enabled);
+  const repeatMs = performance.now() - repeatStart;
+  const envOnlyStart = performance.now();
   service.updateEnvironment({ generation: 2, description: environment() });
-  const schema = measure(service, uris, enabled);
-  const schemaMs = performance.now() - schemaStart;
+  const oldEnvironmentCurrent = service.isCurrent(edited.firstIdentity);
+  const envOnly = measure(service, uris, enabled);
+  const envOnlyMs = performance.now() - envOnlyStart;
   return {
     tokenHeavy,
     openMs,
     editMs,
-    dataMs,
-    schemaMs,
+    repeatMs,
+    envOnlyMs,
     cold,
     edited,
-    data,
-    schema,
+    tooling,
+    repeat,
+    envOnly,
+    currentness: { coldCurrent, oldVersionCurrent, oldEnvironmentCurrent },
     docs: service.getWorkspaceSnapshot().documents.length,
-    note: "data phase repeats public LS analysis without changing data: LS has no data-update API",
+    unsupported: ["data update", "schema update"],
   };
 }
