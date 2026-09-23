@@ -5,7 +5,8 @@
 - Product requirements: [PRD CLP-01–12](../prd/composable-language-platform.md).
 - Behavioral contracts: [kernel CLK-01–15](./composable-language-kernel-contracts.md).
 - Delivery and authority: [ADR-0008](../adr/0008-composable-language-platform.md).
-- No assigned issue or tracker update; Formbar #92/#93 and Kalada #21/#75/#87 are coordination only.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107);
+  Formbar #92/#93 and deferred [#175](https://github.com/surikaterna/formbar/issues/175) are coordination, not approval.
 
 ## Evidence policy and gate vocabulary
 
@@ -15,9 +16,13 @@ domains proposed for review, not assignments. Each result must record source/art
 environment/version/profile identities, expected and actual output, negative diagnostics,
 dependency evidence where relevant, and reproducible harness commands before becoming evidence.
 
-P0 reviews contract feasibility. P1 proves Kalada regression parity and tiny bidirectional
-composition mechanics, including a bounded framework comparison. It cannot establish real
-consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
+P0 reviews only the [minimum experimental shape](./composable-language-kernel-contracts.md):
+declared host positions/guests, source snapshots, equal opt-in providers and direct locations.
+P0 approval is not CF01 execution, CF02 parity or CF05 safe-write proof. P1 separately proves
+Kalada regression parity and tiny bidirectional composition in *separately declared* profiles,
+including a bounded framework comparison. P1 may defer CF03 only with a reviewed, recorded gap
+when nominal infrastructure has no demonstrated consumer need; deferral is not a passing probe.
+P1 cannot establish real consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
 boundary and Kuery fit reviews. P3 proves portable runtime/effect/cache boundaries; P4 authoring
 runs in parallel with P3. The **pre-freeze review** follows P1–P4 evidence and a safe writable
 reference proof, not full P5 completion. It permits a stability review, never automatic freezing.
@@ -34,7 +39,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 | --- | --- | --- | --- | --- |
 | CF01 Mixed parser | CLP-01, 12; CLK-01, 02, 15 | Kalada source | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF02 Provider parity / Expressions | CLP-02, 04; CLK-03, 06, 08 | Kernel / Expressions / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
-| CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 → pre-freeze | PLANNED — NOT RUN |
+| CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 if justified; reviewed deferral otherwise → pre-freeze if needed | PLANNED — NOT RUN |
 | CF04 Real FSX | CLP-03, 04, 05; CLK-03, 04, 08, 09 | Formbar / Kalada / Scheman | P2 → pre-freeze | PLANNED — NOT RUN |
 | CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility, P2 proof → pre-freeze; P5 completion | PLANNED — NOT RUN |
 | CF06 EDIFACT projection | CLP-07; CLK-09, 11, 15 | Projection / decoder / Scheman | P2 → pre-freeze; P5 completion | PLANNED — NOT RUN |
@@ -49,29 +54,34 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ## Targeted scenarios and required evidence
 
-### CF01 — Mixed parser and phase lifecycle
+### CF01 — Mixed parser and phase lifecycle (separate P1 executable probe)
 
-- **Positive:** Kalada and a tiny independent language nest in both directions. Explicit profiles
-  shield quoted delimiters, comments and nested regions; CRLF/non-BMP ranges remain half-open
+- **Positive:** Kalada and a tiny independent language nest in both directions only where each
+  host profile explicitly declares the grammar position and permitted guest. Host owns outer
+  delimiters/return validation; guest lexes interior. Versioned profiles shield quoted delimiters,
+  comments and nested regions; CRLF/non-BMP ranges remain half-open
   UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
   a full lossless CST. Child exit and host validation advance predictably.
-- **Negative:** reject ambiguous registration and invalid/non-progress exit ranges. Unterminated
+- **Negative:** reject undeclared position/guest, ambiguous registration, overlapping entries
+  and invalid/non-progress exit ranges. Unterminated
   strings/comments and malformed islands stop at approved boundaries without swallowing sibling
   host structure. Deep alternating islands consume one shared budget. Invalid/partial, stale,
   unsupported, cancelled and exhausted results cannot emit; deserialized CST without admission
-  cannot borrow current `WeakMap` provenance.
-- **Evidence:** range/ownership goldens, phase-state table, shared-budget counters and bounded
-  recovery comparison with a representative integrated framework slice. Record unresolved lexical
+  cannot borrow current `WeakMap` provenance. Stale snapshot/version or unsupported lexical
+  handoff cannot authorize publication, edits or an inferred valid parse.
+- **Evidence:** future executable range/ownership goldens, phase-state table, shared-budget
+  counters and bounded recovery comparison with a representative integrated framework slice. Record unresolved lexical
   pairs as unsupported, not successes. Harness command: TBD during implementation.
 
 ### CF02 — Equal providers and Expressions compatibility
 
 - **Positive:** run existing Kalada conformance before/after extraction, including canonical
   operators/diagnostics and admitted profiles; trace Expressions' use of neutral scope/type-identity
-  infrastructure. Expressions and a minimal domain language register through identical public
-  interfaces with equal service access. Run the domain language and its headless tooling without
+  infrastructure if real consumers justify it. Expressions and a minimal domain language
+  register through identical public interfaces with equal service access. Run domain tooling without
   installing/registering Expressions; its own type rules must work without Expressions semantics.
-  Separately opt into composition: expected-type slots reuse the public Expressions checker. Demonstrate richer
+  Separately opt into composition: host-owned opaque expected-type and value/location contexts
+  hand off to the public Expressions checker. Demonstrate richer
   schema facts mapping to existing executable semantics or remaining domain-only facts.
 - **Negative:** incompatible expected types and value-as-location fail without a copied checker.
   Attempted implicit coercion, unbounded type substitution and unsupported executable use of
@@ -87,14 +97,18 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ### CF03 — Nominal registration without domain coupling
 
-- **Positive:** a trusted test package registers versioned nominal IDs, finite arguments and an
-  explicitly portable codec; equal registration generations yield equal checking decisions.
+- **Positive (later conditional infrastructure, not P0):** a trusted test package registers
+  versioned nominal IDs, finite arguments and a portable codec; equal registry generations
+  yield equal checking decisions.
   Demonstrate language-owned structural versus nominal assignment without kernel/Expressions Formbar imports.
 - **Negative:** reject equal-shaped but different nominal identities, bad argument arity,
   conflicting versions, unknown operations/codecs and source-supplied registration callbacks.
   A valid local-only nominal value fails portable admission; no built-in fragment type is added.
 - **Evidence:** registry/assignability goldens, immutable-generation tests and portable/local-only
-  admission pair. This does not require runtime fragment capture. Command: TBD during implementation.
+  admission pair if a real consumer needs nominal registration. Otherwise record the reviewed P1
+  deferral and why consumer need is unproven; do not report CF03 as passed. Before public API
+  stability, real FSX or projection need requires executable CF03 proof. This does not require runtime fragment capture.
+  Command: TBD during implementation.
 
 ### CF04 — Real FSX consumer, not a toy substitute
 
@@ -113,12 +127,16 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ### CF05 — Writable reference proof before freeze review
 
-- **Positive:** nested repeated records expose distinct inner/outer aliases. A checked, data-only
-  location descriptor updates the same stable item after reorder, under a minimal reviewed host
-  update policy with explicit read/write codec directions. Full scope recomputation clears removed
+- **Positive:** nested repeated records expose distinct inner/outer aliases. First editable
+  slot accepts only a direct statically identified writable location: Kalada checks eligibility,
+  Formbar resolves stable item identity, permissions, revision and server policy at use time.
+  A checked, data-only location descriptor updates the same item after reorder under a minimal
+  reviewed host policy. Full scope recomputation clears removed
   references; any optional incremental index equals that baseline after edits.
-- **Negative:** reject computed-value writes, index-retargeting, removed/stale items, denied writes,
-  revision conflicts and read-only codecs. Test duplicate declarations and capture/shadowing errors;
+- **Negative:** reject computed-value/read-only writes, index-retargeting, removed/stale items,
+  denied writes and revision conflicts without mutation. Where codecs are required, reject missing
+  write direction; reversible codecs/restricted update handlers are Formbar #175 needs-design, not
+  required for the first direct edit. Test duplicate declarations and capture/shadowing errors;
   names/runtime slots cannot stand in for stable entity identity.
 - **Evidence:** location descriptor traces and authorized update/rejection outcomes using a narrow
   Formbar integration or reviewed host-policy probe, not a production write UI. P1 sketches alone
@@ -238,7 +256,10 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ## Review record required before stability decisions
 
-Reviewers must attach CF01–14 outcomes or explicit blocking gaps, including real CF04 consumption,
+Kalada architecture and Formbar state/rules/FSX reviewers must record decisions or explicit
+objections for #107; those decisions are pending, not inferred from this matrix. Before API
+stability review, reviewers must attach CF01–14 outcomes or blocking gaps (or a reviewed CF03
+deferral if real consumers do not need nominal registration), including real CF04 consumption,
 both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05 safe
 write proof. P5 completion cannot be a prerequisite for deciding the contracts P5 needs. Review
 also requires CF02/04/13 provider parity, Expressions-free tooling, neutral dependency graphs,

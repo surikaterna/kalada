@@ -6,7 +6,8 @@
 - Delivery proposal: [ADR-0008](../adr/0008-composable-language-platform.md).
 - Proposed behavioral design: [kernel contracts CLK-01–15](../architecture/composable-language-kernel-contracts.md).
 - Evidence plan: [conformance CF01–14](../architecture/composable-language-conformance.md), all planned, not run.
-- Assignment: no assigned Kalada issue. Coordination: [Formbar #92][f92] and [#93][f93];
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107).
+  Coordination: [Formbar #92][f92], [#93][f93] and deferred [#175][f175];
   related Kalada [#21][k21], [#75][k75], and [#87][k87]. These references are not status updates.
 
 ## Context and outcome
@@ -58,8 +59,9 @@ The target and open choices elsewhere in this PRD are not claims about that base
 IDs are stable product requirements. Acceptance fixtures and gates are proposed future evidence,
 not tests delivered by these documents. Numeric resource budgets must follow [#87][k87]
 measurement and calibration rather than invented latency or bundle-size promises.
-CLK contracts specify minimum behavior without freezing signatures; CF scenarios distinguish toy
-mechanics from real consumer evidence. A pre-freeze review requires P1–P4 evidence and a safe
+CLK contracts distinguish the [P0 minimum experimental shape](../architecture/composable-language-kernel-contracts.md)
+from later goals without freezing signatures; CF scenarios distinguish toy mechanics from real
+consumer evidence. A pre-freeze review requires P1–P4 evidence and a safe
 writable-reference proof, not full P5 delivery, and permits review rather than automatic API freeze.
 
 ### CLP-01 — Composition and source fidelity
@@ -70,12 +72,14 @@ nodes; mixed trees preserve ownership rather than flattening every node into Kal
 Preserve needed text/trivia/ranges through source ownership; a full lossless CST is not a universal
 requirement. Checked semantic facts may exceed executable IR expressiveness only with explicit
 mapping or rejection. Partial recovered analysis cannot authorize emission.
-Support bidirectional source composition by design: domain syntax can contain Kalada expressions,
-and a registered domain region can appear inside a Kalada-led source context. This does not
-require that the region become a first-class runtime value.
+P0 permits embedding only at explicitly declared host grammar positions for listed guests in a
+versioned profile: host owns outer delimiters and return validation, guest lexes the interior.
+Reverse embedding needs a separate declared Kalada-host position/profile; bidirectional source
+composition remains a later goal, not automatic support or a runtime fragment value.
 
-**Acceptance:** Kalada plus a tiny second-language fixture compose in both directions, including
-nested delimiters, malformed islands, comments, CRLF and non-BMP characters. Recovery terminates
+**Later P1/CF01 acceptance (not P0 approval):** Kalada plus a tiny second-language fixture
+compose in both declared directions, including nested delimiters, malformed islands, comments,
+CRLF and non-BMP characters. Recovery terminates
 within configured limits; diagnostics and formatting preserve correct parent-document ranges
 and untouched source. The fixture need not execute or capture a fragment.
 Ambiguous registrations, non-progress exits and nested budget resets are rejected; unresolved
@@ -83,9 +87,11 @@ malformed-source lexical boundaries are explicit limitations, not guessed valid 
 
 ### CLP-02 — Language-neutral foundation and optional Expressions
 
-Extract source, scope, registration/type-identity and generic infrastructure contracts, with shared
-language-service routing. Type rules and lowering remain language-owned; generic infrastructure
-must not impose Expressions assignability or execution semantics. Expressions uses the same public
+P0 specifies neutral source/snapshot, opt-in equal provider access and an initial handoff that may
+carry host-owned opaque expected-type and value-versus-writable-location context. Extract shared
+scope, registration/type-identity and generic infrastructure only as real consumers justify it;
+shared language-service routing remains a later goal. Type rules and lowering remain language-owned;
+generic infrastructure must not impose Expressions assignability or execution semantics. Expressions uses the same public
 registration and service access as FSX; projection and FSX compose it rather than fork its engine.
 
 **Acceptance:** existing Kalada conformance fixtures preserve programs, behavior and diagnostics
@@ -93,7 +99,7 @@ under the Expressions package's compatibility policy. A minimal domain-only cons
 and tooling without installing/registering Expressions, Formbar, projection or editor packages.
 Dependency tests reject kernel/shared-service imports of expression syntax, checker, IR or evaluator;
 registration tests prove identical public access without privileged hooks. No duplicate engine is needed.
-Collection/structural/nominal checking needs and bounded generic support are inventoried separately
+Collection/structural/nominal checking needs and bounded generic support are inventoried later
 from pending type design choices; no new null/record/union semantics silently enter canonical Kalada.
 
 ### CLP-03 — FSX lowers to deferred Formbar declarations
@@ -103,7 +109,8 @@ FSX is declarative, JSX-like syntax, **not JavaScript or TypeScript**. Formbar o
 Explicitly compose Expressions using its public compiler/provider interfaces, making expression
 embedding straightforward without privileged integration. Compile to existing Formbar declarations
 plus embedded, deferred Expressions artifacts with explicit
-references. Do not evaluate expressions at compilation, render components, or describe the
+references. First editable slots accept only direct statically identified writable locations,
+not computed values. Do not evaluate expressions at compilation, render components, or describe the
 whole form as an executable Kalada AST. Formbar retains reactive state, scheduling and rules,
 including server enforcement; it schedules calls to the Expressions runtime. Neither compiler nor
 projection duplicates those responsibilities.
@@ -127,7 +134,9 @@ the distinction between schema structure, validation, semantic types and explici
 ### CLP-05 — Lexical scopes and writable references
 
 Use explicit lexical aliases with specified shadowing and outer-scope access. A computed value
-is not a writable location. Nested repeated items need stable identity independent of index so
+is not a writable location: Kalada checks direct static location eligibility for the first edit,
+while Formbar resolves identity, authorization, revisions and server policy at update time.
+Nested repeated items need stable identity independent of index so
 reordering cannot retarget a pending update. Formbar owns update authorization and scheduling.
 The write/reference contract must be explored in P0/P1, before read-only FSX hardens an
 incompatible design; complete writable behavior follows in P5.
@@ -137,12 +146,15 @@ shadowing behavior, reject computed-value writes and stale/removed item targets,
 item targeting across reorder. A reviewed update policy precedes enabling writes. Surface
 spelling remains open; `bind` is not the chosen syntax.
 Before stability review, a narrow executable proof must reject stale permissions, conflicts and
-unsupported write-codec directions; full P5 write UI/domain completeness is not required for it.
+unsupported write-codec directions where applicable; full P5 write UI/domain completeness is not
+required for it. Reversible codecs and restricted Kalada update handlers remain Formbar [#175][f175]
+needs-design, not a P0 prerequisite.
 
 ### CLP-06 — Domain-owned nominal types
 
-Trusted domain packages may register nominal types with explicit identity, version, checking
-and permitted operations/encoding. Neither kernel nor Expressions has a built-in `FormFragment` type.
+If consumer evidence warrants it, trusted domain packages may later register nominal types with
+explicit identity, version, checking and permitted operations/encoding. Neither kernel nor
+Expressions has a built-in `FormFragment` type.
 Source composition does not imply executable fragment capture, closures or runtime fragment values.
 
 **Acceptance:** a test domain supplies a nominal type without a Formbar import in kernel or Expressions; unknown
@@ -250,10 +262,12 @@ P6 requires reproducible packed-size/compute evidence and reviewed thresholds de
 
 ## Open decisions and approval gates
 
-P0 must settle parser context/admission boundaries, mixed-node ownership, package naming and
-compatibility strategy. It must explore aliases, outer access, stable item keys and writable
-locations early, including whether widgets require explicit bidirectional codecs or a restricted
-declarative `onChange` model. Neither arbitrary event handlers nor `bind` spelling is approved.
+P0 seeks Kalada architecture and Formbar state/rules/FSX review of the minimum shape, not
+cross-repo approval by publication. Reviewer decisions/objections remain pending. It must
+explore aliases, outer access, stable item keys and direct writable locations early;
+Formbar #175 owns the later reversible codec/restricted update-handler choice. Neither
+arbitrary event handlers nor `bind` spelling is approved. CF01's executable two-direction
+probe, CF02 shared-infra evidence and CF05 safe-write proof are separate later gates.
 
 Runtime fragment values/capture and nominal serialization remain optional. If an executable
 domain extension is needed, choose between A (lowered extension operations) and B (common
@@ -267,6 +281,7 @@ their validation is not evidence that any planned conformance scenario has run.
 
 [f92]: https://github.com/surikaterna/formbar/issues/92
 [f93]: https://github.com/surikaterna/formbar/issues/93
+[f175]: https://github.com/surikaterna/formbar/issues/175
 [k21]: https://github.com/surikaterna/kalada/issues/21
 [k75]: https://github.com/surikaterna/kalada/issues/75
 [k87]: https://github.com/surikaterna/kalada/issues/87

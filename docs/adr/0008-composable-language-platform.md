@@ -6,7 +6,7 @@
 - Minimum behavioral design: [kernel CLK-01–15](../architecture/composable-language-kernel-contracts.md).
 - Planned evidence: [conformance CF01–14](../architecture/composable-language-conformance.md), none run.
 - Researched baseline: `b694fa654938392d7f01367f7ac3d31278ce2d51`.
-- Request provenance: user-requested documentation; no assigned Kalada issue or tracker status.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107); no cross-repo approval implied.
 - Coordination: [Formbar #92](https://github.com/surikaterna/formbar/issues/92) and
   [#93](https://github.com/surikaterna/formbar/issues/93); related Kalada
   [#21](https://github.com/surikaterna/kalada/issues/21),
@@ -39,9 +39,11 @@ kernel/shared language services, without privileged hooks. Expressions owns its 
 checker/inference, operators, IR/artifact semantics and evaluator runtime. Its canonical semantics
 and compatibility stay in the Expressions package, not the kernel; a form is not an expression AST.
 
-The foundation covers source identity/UTF-16/ranges, trivia, bounded recovery and contextual
-parser entry/exit, scope/reference infrastructure, registration/type identity, generic infrastructure
-contracts, source maps and language-service routing. Type rules and lowering remain language-owned;
+P0 freezes only the [minimum experimental shape](../architecture/composable-language-kernel-contracts.md):
+neutral immutable source/snapshot with UTF-16 ownership, versioned declared embedding positions,
+equal opt-in provider access and direct-location eligibility distinct from Formbar update authority.
+Later scope/reference, type-identity, generic infrastructure, source maps and shared service routing
+depend on consumer evidence. Type rules and lowering remain language-owned;
 the kernel mandates no expression language, universal execution IR or evaluator. Avoid
 designing an exhaustive plugin API before a second small consumer proves the boundary.
 CLK-01–15 describe proposed behavior, not frozen signatures. A toy consumer proves mechanics,
@@ -81,8 +83,8 @@ RUNTIME (no source compiler, parser or editor)
 
 - Kernel/shared services import no Expressions syntax, checker, IR or evaluator. Package names
   remain open; current `core` is not synonymous with the proposed kernel. A minimal domain language
-  must use kernel/tooling without installing or registering Expressions. Shared type infrastructure
-  does not force Expressions rules. Runtime helpers must not create kernel-to-language coupling.
+  must ultimately use kernel/tooling without installing or registering Expressions. Later shared type
+  infrastructure must not force Expressions rules. Runtime helpers must not create kernel-to-language coupling.
 - Formbar owns proposed `@formbar/fsx` and a separate authoring package (names provisional),
   component contracts, lexical domain scopes, state, reactive scheduling and shared server rules.
 - Scheman v2 owns data schema evidence; validators, shape, semantic types and codecs stay separate.
@@ -112,18 +114,23 @@ than pretending current expression slots already accept a new wire format. No re
 capability callback runs during checking/compilation.
 Every phase carries document/environment identity and explicit validity/currentness; partial
 recovery supports limited tooling, never emission. Context profiles define lexical/delimiter
-ownership, deterministic handoff and shared budgets; unresolved malformed-source cases fail
-explicitly rather than assuming a universal delimiter algorithm (CLK-01/02).
+ownership, declared host positions/guests, deterministic handoff and shared budgets;
+unresolved malformed-source cases fail rather than assuming a universal delimiter algorithm (CLK-01/02).
 
-An expression value and a writable location are different contracts. Component metadata says
-which is required. Explicit lexical aliases need nested outer access, deliberate shadowing
+An expression value and a writable location are different contracts. The first FSX edit accepts
+only a direct statically identified writable location: Kalada checks eligibility, while Formbar
+resolves stable identity, permissions, revisions, conflicts and server policy at use time.
+Component metadata says which is required. Explicit lexical aliases need nested outer access, deliberate shadowing
 rules and stable repeated-item identity. Explore writes before finalizing the read contract:
 array indexes alone cannot safely target a pending update after reorder. Codec directionality,
-restricted declarative `onChange`, and surface naming remain open; `bind` is not selected.
+restricted declarative `onChange`, and surface naming remain open under
+[Formbar #175](https://github.com/surikaterna/formbar/issues/175) needs-design; `bind` is not selected.
 Full writes wait for a Formbar update-policy gate, not for a new Kalada mutation evaluator.
 
-Bidirectional **source composition** is part of the proposed foundation: an embedded language
-can return control to its enclosing language with owned ranges and context. Actual executable
+Bidirectional **source composition** is a later goal, not automatic P0 support: host grammar
+positions and permitted guests must be explicit in a versioned profile; host owns delimiters and
+validates return, guest lexes interior. Reverse embedding needs a distinct declared position and
+profile. An embedded language can return owned ranges and context. Actual executable
 fragment values, capture and lifetime semantics are optional, unresolved domain features.
 A parser can compose a domain region without executing it or making it an Expressions runtime value.
 
@@ -217,30 +224,33 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Owner:** Kalada architecture with Formbar, Scheman and Arbitre maintainers.
 - **Dependencies:** review the PRD, this ADR, kernel contracts and conformance plan alongside
   current accepted ADRs; coordinate #92/#93 and #21.
-- **Scope:** define ownership, parser context/provenance, compatibility inventory and proposed
-  package boundaries. Explore write/reference identity, outer aliases, shadowing, reorder,
-  codecs and restricted update policy now; record rejected unsafe designs and open spelling.
+- **Scope:** review minimum source/profile/provider/direct-location shape, compatibility inventory
+  and proposed boundaries, not a public API or executable CF01/02/05 claim. Explore identity,
+  outer aliases, shadowing and reorder; defer codecs/restricted handlers to Formbar #175.
+  Record rejected unsafe designs and open spelling.
   Classify optional nominal/runtime-fragment and A/B work separately from ordinary FSX.
 - **Acceptance evidence:** contract matrix, representative read/write/nested-scope sketches,
   current Formbar declaration mapping, threat model and list of explicit decisions/deferred items.
   Review CLK-01–15 feasibility, type compatibility inventory and parser ownership gaps early.
-- **Exit gate:** maintainers approve a minimum experimental contract direction and demonstrate
-  a viable write/reference path; no unknown write blocker is knowingly deferred to P5. This is
-  not API freeze or executable safe-write proof. Trace: CLP-01–06, 08–10, 12.
+- **Exit gate:** request Kalada architecture and Formbar state/rules/FSX decisions or record
+  explicit objections; approval is pending and this document is not cross-repo sign-off.
+  Review a viable direct-reference path; do not hide known blockers until P5. This is not API
+  freeze or executable safe-write proof. Trace: CLP-01–06, 08–10, 12; CLK-01–06; CF01/02/05.
 
 ### P1 — Prove the foundation with two consumers
 
 - **Owner:** Kalada foundation/syntax maintainers; Formbar reviews scope/reference fit.
 - **Dependencies:** P0 contracts.
-- **Scope:** extract neutral source/context/recovery and scope/type-identity services; migrate
-  Expressions through public registration. Run a tiny domain-only language without Expressions,
-  then explicitly compose both providers bidirectionally using the same public interfaces.
+- **Scope:** prove neutral source/context/recovery and equal public registration with a tiny
+  domain-only language without Expressions. Try separately declared reverse embedding in CF01;
+  extract shared scope/type-identity services only when evidence demonstrates the need.
   Exercise reference/location distinctions without enabling domain writes.
 - **Acceptance evidence:** existing Kalada conformance parity, malformed mixed-source/UTF-16
   fixtures, dependency graphs, and bounded comparison with an integrated framework slice.
 - **Exit gate:** real reuse, equal provider access and preserved Expressions behavior are demonstrated;
-  kernel/shared services have no expression imports. CF01–03 prove mechanics, not stable APIs or domain fit.
-  Revisit extraction if either fails. Trace: CLP-01, 02, 05, 06, 08, 12.
+  kernel/shared services have no expression imports. CF01/02 prove mechanics, not stable APIs or domain fit.
+  CF03 may be deferred only as an explicit reviewed gap if nominal registration has no demonstrated
+  consumer need; do not claim it passed. Revisit extraction if either fails. Trace: CLP-01, 02, 05, 06, 08, 12.
 
 ### P2 — Real FSX and minimum consumer probes
 
@@ -294,6 +304,8 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
   composition, real FSX, both projection probes, Arbitre ownership/handoff, Kuery fit assessment,
   portable/packed runtime, currentness and authoring. Require an executable CF05 safe-write proof
   with stable identity, stale/denied/conflicting updates and codec-direction rejection.
+  A reviewed CF03 deferral is allowed only if real FSX/projection consumers do not need nominal
+  registration; if they do, executable CF03 proof is required before public API stability.
   CF02/04/13 must prove provider parity, Expressions-free minimal tooling, public FSX composition,
   neutral dependency graphs and standalone precompiled Expressions runtime independence.
 - **Decision:** review and revise minimum contracts against actual consumer needs. Passing permits
