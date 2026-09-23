@@ -16,6 +16,14 @@ decision approves a change. Domain requirements are not permission to silently e
 P0 reviews feasibility; P1 proves mechanics. Only real-consumer evidence at the ADR pre-freeze
 gate permits consideration of API stability; passing that gate does not automatically freeze APIs.
 
+“Kernel contracts” includes boundary obligations on providers/consumers, not kernel ownership of
+every behavior below. The kernel owns shared source/scopes, registration/type identity and generic
+infrastructure contracts; shared language services route requests to providers. Expressions and FSX
+use identical public extension interfaces and service access, with no privileged Expressions hooks.
+Expressions owns grammar, checker/inference, operators, IR/artifact semantics, compatibility and
+evaluator runtime. The kernel mandates no expression language, universal execution IR or evaluator.
+A minimal domain-only language must use kernel/tooling without installing/registering Expressions.
+
 ### CLK-01 — Representations and phase results
 
 - **Inputs:** immutable source text with document/version identity, language/context identity,
@@ -23,7 +31,7 @@ gate permits consideration of API stability; passing that gate does not automati
   require explicit admission evidence; current parse-limit `WeakMap` state is process-local,
   neither portable provenance nor authorization for an arbitrary CST.
 - **Results:** distinguish source storage and optional CST/token views, language-owned AST,
-  checked semantic facts, domain declaration IR, and canonical executable Kalada expression IR.
+  checked semantic facts, domain declaration IR, and Expressions-owned canonical executable IR.
   Checked facts may be richer than executable IR; lowering supplies an explicit supported mapping
   or rejects the construct. Every result identifies phase, snapshot and environment and reports
   valid, invalid, partial, stale, unsupported, cancelled or budget-exhausted status.
@@ -51,17 +59,20 @@ gate permits consideration of API stability; passing that gate does not automati
   indistinguishable close markers need language-pair decisions; no universal delimiter algorithm
   is claimed. If safe recovery cannot establish ownership, return partial/invalid, not guessed IR.
 
-### CLK-03 — Shared checking and canonical semantics
+### CLK-03 — Public provider composition and language-owned semantics
 
 - **Inputs:** language-owned AST expression slots, expected types, lexical facts and explicit
   value-versus-location context, plus schema/component facts from the domain.
-- **Results:** shared Kalada checks produce typed expression facts or ranged diagnostics; domain
-  checks compose these with child/attribute constraints. Kalada itself must use the same services.
-- **Ownership:** Kalada retains expression inference, operators and canonical evaluation rules;
-  domains supply expectations, not alternative meanings of canonical operators.
+- **Results:** the Expressions provider produces typed expression facts or ranged diagnostics;
+  FSX explicitly composes its public interfaces with domain checks. Both register and access shared
+  services through identical public interfaces; a domain-only provider need not compose Expressions.
+- **Ownership:** Expressions retains grammar, inference/checker, operators, IR/artifact semantics
+  and evaluator; kernel services expose neutral infrastructure, not expression-specific type rules.
+  Consumers of Expressions supply expectations, not alternative meanings of its canonical operators.
 - **Rejection / exclusions:** incompatible expectations and unsupported location contexts fail
-  explicitly. No copied checker, per-domain expression engine or override of canonical rules;
-  sharing infrastructure does not force domain nodes into executable expression IR.
+  explicitly. No copied Expressions checker/engine or override of its canonical rules; independent
+  languages may define their own semantics. No kernel/shared-service imports of Expressions syntax,
+  checker, IR or evaluator, privileged registration, or mandatory Expressions installation.
 
 ### CLK-04 — Scope, identity and reference lifecycle
 
@@ -94,20 +105,22 @@ gate permits consideration of API stability; passing that gate does not automati
   evaluator is added to Kalada. Field spelling, restricted `onChange` and final conflict policy
   remain open; neither arbitrary callbacks nor a selected `bind` syntax is implied.
 
-### CLK-06 — Type vocabulary and bounded generic policy
+### CLK-06 — Type infrastructure and language-owned checking policy
 
-- **Inputs:** current canonical type facts, domain schema evidence, nominal registrations and
+- **Inputs:** language-owned type facts, domain schema evidence, nominal registrations and
   expected slot types. Needed checking capabilities include collection element expectations,
   structural field evidence, nominal identity and finite parameter substitution.
-- **Results:** assignability distinguishes structural evidence from identity-based nominal types;
-  it never equates nominal types merely because fields match. Proposed initial generic policy
+- **Results:** participating language checks distinguish structural evidence from nominal identity;
+  they never equate nominal types merely because fields match. Proposed initial generic policy
   supports declared finite arity, explicit arguments, element/field lookup and bounded substitution
   in registered constructors. Required collection support must fit existing Kalada collection
   semantics. Record evidence, optional fields and alternatives may be needed in the checker;
   their representation and assignment rules await the compatibility inventory.
-- **Ownership:** the shared checker owns assignability; adapters provide schema evidence, not new
-  canonical semantics. Each supported checked construct needs a canonical IR mapping, a domain
-  lowering, or explicit rejection if used executably.
+- **Ownership:** languages own assignability, inference and type rules. Kernel contracts provide
+  registration/type identity and generic infrastructure, not a mandatory Expressions type system.
+  The bounded generic policy above guides Expressions/composing consumers, not universal language
+  semantics; adapters provide schema evidence. Each executable construct needs a language-owned IR
+  mapping, domain lowering or explicit rejection. Expressions compatibility remains package-owned.
 - **Rejection / exclusions:** initial policy excludes arbitrary type-level execution, higher-kinded
   or unbounded recursive instantiation, implicit coercion and unconstrained conditional inference.
   Null/absence, records, unions and generic variance are design choices pending compatibility
@@ -141,16 +154,18 @@ gate permits consideration of API stability; passing that gate does not automati
 - **Rejection / exclusions:** unknown effects or operations outside the profile fail checking or
   admission; revoked authorization fails linking/use. This proposal does not assert all existing
   evaluators are deterministic. Inventory and tests precede such a claim. Optional executable
-  extension alternatives A/B remain separate decisions, not prerequisites for deferred expressions.
+  extension alternatives A/B remain separate decisions within the relevant language/domain runtime,
+  not a universal kernel execution model or prerequisites for deferred expressions.
 
 ### CLK-09 — Domain lowering and consumers
 
 - **Inputs:** current checked domain facts and checked expressions, plus target compatibility facts.
 - **Results:** FSX emits existing Formbar declarations with deferred expressions and an explicit
-  compatibility adapter where needed. Projection maps decoder-produced structured EDIFACT data
+  compatibility adapter where needed, composing Expressions via public APIs. Formbar schedules
+  calls to the Expressions runtime with those artifacts. Projection maps decoded structured EDIFACT data
   into a command validated by Scheman, or JSON into an email model for a safe domain renderer.
-- **Ownership:** each domain owns its IR, validation, renderer/decoder and target mapping; Kalada
-  owns expression semantics. Arbitre receives explicit effect requirements and owns execution.
+- **Ownership:** each domain owns its IR, validation, renderer/decoder and target mapping; Expressions
+  owns expression semantics/runtime. Arbitre receives explicit effect requirements and owns orchestration.
   Kuery gets a fit assessment of expression/context needs, not an implementation commitment.
 - **Rejection / exclusions:** unsupported target declarations, unmappable checked types or missing
   runtime capabilities block lowering/admission. No eager expression evaluation, new reactive
@@ -165,7 +180,9 @@ gate permits consideration of API stability; passing that gate does not automati
   supported islands, all tagged with currentness and owned ranges. Baseline rename is limited to
   statically resolved lexical aliases in one document; return atomic snapshot edits or explicit
   unsupported with no edits. Browser/LSP/AI must agree for identical supported requests.
-- **Ownership:** headless services own semantic answers; adapters only translate transport/UI.
+- **Ownership:** shared headless services route to registered language providers, which own semantic
+  answers; adapters only translate transport/UI. Expressions has no built-in or privileged route.
+  Domain-only queries work without Expressions installed or registered.
 - **Rejection / exclusions:** reject collision, capture and stale rename plans. Registry keys,
   dynamic names, generated symbols and cross-document references are outside initial safe rename;
   do not partially rename them. Unsupported islands report their limit rather than pretending
@@ -192,7 +209,9 @@ gate permits consideration of API stability; passing that gate does not automati
 - **Results:** bounded admission yields validated data for separate authorized linking. Record
   compiler provenance separately from runtime compatibility; an explicit producer/consumer
   matrix maps supported language, IR, profile, plugin, registry, schema and codec requirements.
-- **Ownership:** producer declares requirements; runtime validates its supported matrix before any
+- **Ownership:** Expressions owns its IR/artifact semantics and compatibility; domain runtimes own
+  theirs. Shared envelope infrastructure implies no universal execution IR. Producer declares
+  requirements; the relevant runtime validates its supported matrix before any
   capability callback, then the host resolves authorized implementations. Fresh-process and browser
   consumers must use only public runtime surfaces.
 - **Rejection / exclusions:** unknown versions/requirements, malformed nodes, missing bindings,
@@ -221,8 +240,12 @@ gate permits consideration of API stability; passing that gate does not automati
   consumers through documented public APIs, with pinned dependency/module graphs.
 - **Results:** runtime imports no parser/compiler/editor; headless compiler imports no editor/LSP;
   authoring loads lazily with initial/lazy/total graphs recorded under package browser policy.
+  Expressions runtime executes precompiled artifacts standalone without authoring, unrelated
+  providers or language registration. A minimal domain consumer uses kernel/tooling with Expressions
+  absent. Kernel/shared services import no Expressions syntax, checker, IR or evaluator.
 - **Ownership:** package maintainers enforce exports and dependency direction, consumer probes
   verify actual packed resolution rather than workspace aliases or internal source imports.
+  Genuinely shared low-level helpers are allowed; they must not introduce kernel-to-language coupling.
 - **Rejection / exclusions:** forbidden transitive imports or inability to execute a precompiled
   fixture block compliance. Current host is not asserted compliant; parser-free core/projection
   paths are only partial evidence. No raw-CDN/native-ESM guarantee or invented package versions.

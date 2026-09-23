@@ -33,7 +33,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 | ID / probe | Product / kernel coverage | Proposed owner | First phase → required gate | Status |
 | --- | --- | --- | --- | --- |
 | CF01 Mixed parser | CLP-01, 12; CLK-01, 02, 15 | Kalada source | P1 → pre-freeze | PLANNED — NOT RUN |
-| CF02 Kalada dogfood | CLP-02, 04; CLK-03, 06, 08 | Kalada semantics / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
+| CF02 Provider parity / Expressions | CLP-02, 04; CLK-03, 06, 08 | Kernel / Expressions / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF04 Real FSX | CLP-03, 04, 05; CLK-03, 04, 08, 09 | Formbar / Kalada / Scheman | P2 → pre-freeze | PLANNED — NOT RUN |
 | CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility, P2 proof → pre-freeze; P5 completion | PLANNED — NOT RUN |
@@ -44,7 +44,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 | CF10 Wire/version | CLP-06, 08, 09, 10; CLK-01, 07, 12 | Kalada runtime / Formbar artifacts | P3 → pre-freeze; P6 version window | PLANNED — NOT RUN |
 | CF11 Cache/currentness | CLP-10, 11, 12; CLK-01, 13 | Kalada host / domain hosts | P3 → pre-freeze; P6 tenancy | PLANNED — NOT RUN |
 | CF12 Authoring/maps | CLP-01, 05, 11; CLK-04, 10, 11 | Headless tooling / browser / LSP | P4 → pre-freeze | PLANNED — NOT RUN |
-| CF13 Packed surfaces | CLP-08; CLK-14 | Package / consumer maintainers | P3/P4 → pre-freeze; P6 budgets | PLANNED — NOT RUN |
+| CF13 Packed surfaces | CLP-02, 08, 11; CLK-03, 10, 14 | Package / consumer maintainers | P3/P4 → pre-freeze; P6 budgets | PLANNED — NOT RUN |
 | CF14 Hostile input | CLP-12; CLK-02, 07, 08, 12, 13, 15 | Security + each phase owner | P1 onward → pre-freeze safety; P6 measured release | PLANNED — NOT RUN |
 
 ## Targeted scenarios and required evidence
@@ -64,25 +64,32 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
   recovery comparison with a representative integrated framework slice. Record unresolved lexical
   pairs as unsupported, not successes. Harness command: TBD during implementation.
 
-### CF02 — Kalada dogfood and type compatibility
+### CF02 — Equal providers and Expressions compatibility
 
 - **Positive:** run existing Kalada conformance before/after extraction, including canonical
-  operators/diagnostics and admitted profiles; trace real use of shared scope/check services.
-  A domain expected-type slot and collection expectation reuse the checker. Demonstrate richer
+  operators/diagnostics and admitted profiles; trace Expressions' use of neutral scope/type-identity
+  infrastructure. Expressions and a minimal domain language register through identical public
+  interfaces with equal service access. Run the domain language and its headless tooling without
+  installing/registering Expressions; its own type rules must work without Expressions semantics.
+  Separately opt into composition: expected-type slots reuse the public Expressions checker. Demonstrate richer
   schema facts mapping to existing executable semantics or remaining domain-only facts.
 - **Negative:** incompatible expected types and value-as-location fail without a copied checker.
   Attempted implicit coercion, unbounded type substitution and unsupported executable use of
   record/optional/alternative evidence are rejected rather than inventing null/record/union
   semantics. Operations not verified for a pure profile cannot acquire that designation by default.
+  Fail privileged Expressions hooks, required default expression registration, expression-specific
+  assignability imposed by kernel services, or kernel/shared-service imports of expression syntax,
+  checker, IR or evaluator (including transitive imports).
 - **Evidence:** regression diffs, dependency/code-path review, explicit supported/excluded generic
   inventory and checked-to-IR mapping/rejection table. Any canonical change requires separate
-  approval. Harness command: TBD during implementation.
+  approval under Expressions compatibility policy. Include registration/access parity traces and
+  dependency assertions for the independent consumer. Harness command: TBD during implementation.
 
 ### CF03 — Nominal registration without domain coupling
 
 - **Positive:** a trusted test package registers versioned nominal IDs, finite arguments and an
   explicitly portable codec; equal registration generations yield equal checking decisions.
-  Demonstrate distinct structural versus nominal assignment without a core Formbar import.
+  Demonstrate language-owned structural versus nominal assignment without kernel/Expressions Formbar imports.
 - **Negative:** reject equal-shaped but different nominal identities, bad argument arity,
   conflicting versions, unknown operations/codecs and source-supplied registration callbacks.
   A valid local-only nominal value fails portable admission; no built-in fragment type is added.
@@ -95,9 +102,12 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
   component and Scheman facts into existing Formbar declarations and deferred Kalada programs.
   Use the real declaration validator/runtime integration with a documented expression adapter;
   changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
+  FSX explicitly composes the public Expressions provider/compiler; trace Formbar scheduling calls
+  to the Expressions runtime with deferred artifacts, not kernel evaluation of a whole form.
 - **Negative:** reject invalid children, attribute types, unknown components/capabilities, duplicate
   aliases and unresolved references. Spies detect any compile-time evaluation, rendering or
   capability invocation. A browser authorization claim cannot bypass server checks.
+  Reject reliance on private compiler hooks, privileged provider registration or a kernel evaluator.
 - **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution and
   compatibility report. Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
 
@@ -128,7 +138,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ### CF07 — JSON-to-email boundary
 
-- **Positive:** shared expressions project representative JSON into a typed email domain model;
+- **Positive:** Expressions public contracts project representative JSON into a typed email domain model;
   a minimal renderer fixture escapes text and enforces explicit safe URL/markup policy.
 - **Negative:** hostile markup/URLs are rejected or escaped by the renderer, even when expression
   checks pass. Excessive output is bounded; compiling a mapping never invokes rendering, effects
@@ -145,12 +155,13 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
   requirements fail before effect callbacks. Compile/link probes distinguish validation from
   execution; no new Kalada scheduler is introduced.
 - **Evidence:** ownership review, capability/profile manifest and callback/order counters. A/B
-  opcodes need not be chosen and full workflow delivery is not a gate. Command: TBD during implementation.
+  opcodes need not be chosen; any later A/B probe belongs to its selected language/domain runtime,
+  not universal kernel execution. Full workflow delivery is not a gate. Command: TBD during implementation.
 
 ### CF09 — Kuery fit assessment only
 
 - **Positive:** map representative query expression, binding and collection/type expectations
-  to the proposed shared contracts and canonical semantics; identify reusable services explicitly.
+  to neutral kernel contracts and optional Expressions contracts/semantics; identify reuse explicitly.
 - **Negative:** document a non-fitting domain construct and its rejection/domain-lowering boundary,
   especially if it would need unsupported generics, semantics overrides or execution authority.
 - **Evidence:** reviewed fit/gap table with input examples and expected decisions, including
@@ -197,11 +208,19 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 ### CF13 — Packed dependency surfaces
 
 - **Positive:** fresh Node/browser consumers install packed artifacts and use public exports:
-  runtime executes precompiled data, compiler runs headlessly, authoring loads lazily.
+  Expressions runtime alone executes precompiled expression artifacts without compiler/parser,
+  authoring, language registration or unrelated providers; compiler runs headlessly, authoring lazily.
+  A separate minimal domain consumer installs kernel/shared tooling without the Expressions package
+  and serves analysis queries through public provider registration. FSX explicitly installs/composes
+  Expressions through public APIs, rather than receiving an implicit kernel dependency.
 - **Negative:** fail forbidden transitive parser/compiler/editor imports in runtime, editor/LSP
   imports in compiler, eager authoring chunks, or reliance on workspace/internal source aliases.
+  Fail kernel/shared-service imports of Expressions syntax, checker, IR or evaluator; fail runtime
+  dependencies on source providers or mandatory authoring registration. Shared low-level helpers
+  are permitted only when their graphs remain language-neutral, with no kernel-to-language coupling.
 - **Evidence:** pinned packed packages, dependency graphs, browser metafiles with initial/lazy/total
-  chunks and package-policy compatibility results. Existing host is not presumed compliant;
+  chunks, explicit forbidden-import assertions and isolated install logs for both independent
+  consumers, plus public FSX composition traces. Existing host is not presumed compliant;
   thresholds await #87/P6. Commands: TBD during implementation.
 
 ### CF14 — Hostile input across the whole pipeline
@@ -221,7 +240,9 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 Reviewers must attach CF01–14 outcomes or explicit blocking gaps, including real CF04 consumption,
 both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05 safe
-write proof. P5 completion cannot be a prerequisite for deciding the contracts P5 needs. The gate
-may reject or revise the design; it does not choose optional fragments, final spellings or versions.
+write proof. P5 completion cannot be a prerequisite for deciding the contracts P5 needs. Review
+also requires CF02/04/13 provider parity, Expressions-free tooling, neutral dependency graphs,
+public FSX composition and standalone Expressions runtime evidence, not merely a parser-free bundle.
+The gate may reject or revise the design; it does not choose optional fragments, final spellings or versions.
 These planned scenarios are risk-based future tests; validating these four documentation files
 does not execute them or change any issue status.

@@ -33,19 +33,21 @@ with #93's Kalada coordination; neither issue approves this new foundation or gr
 
 ## Proposed decision
 
-Compose small shared source/semantic primitives, preserving language-owned mixed ASTs and
-lowering. Refactor Kalada expressions to use the same foundation before claiming reuse.
-Keep core expression programs canonical for expression semantics; a domain AST containing an
-expression is not a new competing expression tree or a whole-form executable Kalada AST.
+Compose small language-neutral primitives, preserving language-owned mixed ASTs and lowering.
+Kalada Expressions and FSX are peer providers with identical public registration and access to
+kernel/shared language services, without privileged hooks. Expressions owns its grammar,
+checker/inference, operators, IR/artifact semantics and evaluator runtime. Its canonical semantics
+and compatibility stay in the Expressions package, not the kernel; a form is not an expression AST.
 
 The foundation covers source identity/UTF-16/ranges, trivia, bounded recovery and contextual
-parser entry/exit, scope/reference infrastructure, type/checking services and lowering/source
-maps. Domain language rules, registries and output contracts remain domain-owned. Avoid
+parser entry/exit, scope/reference infrastructure, registration/type identity, generic infrastructure
+contracts, source maps and language-service routing. Type rules and lowering remain language-owned;
+the kernel mandates no expression language, universal execution IR or evaluator. Avoid
 designing an exhaustive plugin API before a second small consumer proves the boundary.
 CLK-01–15 describe proposed behavior, not frozen signatures. A toy consumer proves mechanics,
 not sufficient API stability: real FSX and projection evidence must inform the pre-freeze review.
 Source storage/optional CST, language ASTs, checked semantic facts, domain IR and canonical
-expression IR remain distinct. Needed source/trivia/ranges do not require a universal full
+Expressions-owned IR remain distinct. Needed source/trivia/ranges do not require a universal full
 lossless CST. Richer checking evidence must map explicitly to executable IR or be rejected;
 it cannot silently add null, record, union or generic semantics to canonical Kalada.
 
@@ -56,12 +58,12 @@ The runtime path and compile path deliberately have different dependencies.
 
 ```text
 HEADLESS COMPILATION / ANALYSIS
-[Kalada expression frontend] ------> [shared source + semantic foundation]
-[Formbar FSX compiler] ------------> [shared foundation + Kalada frontend]
-      |---------------------------> [Formbar declaration/component contracts]
-      |---------------------------> [Scheman v2 adapter / data schema facts]
-[projection source frontend] -----> [shared foundation + Kalada frontend]
-[mixed headless analysis] --------> [language-owned frontends / registry facts]
+[Expressions provider] ----> [public kernel + shared language services] <---- [FSX provider]
+[minimal domain provider] -> [public kernel + shared language services]
+[FSX provider] ------------> [Expressions public composition APIs] (explicit opt-in)
+      |-------------------> [Formbar declaration/component + Scheman contracts]
+[projection frontend] -----> [Expressions public composition APIs]
+[shared analysis routing] -> [registered provider interfaces] (no built-in language)
 
 AUTHORING (lazy, optional)
 [Formbar authoring package] ------> [mixed headless analysis]
@@ -69,21 +71,24 @@ AUTHORING (lazy, optional)
 [LSP server / VS Code adapter] ---> [mixed headless analysis]
 
 RUNTIME (no source compiler, parser or editor)
-[Formbar runtime / server rules] -> [Formbar declarations + deferred Kalada IR]
-[projection runtime] ------------> [Kalada runtime contracts]
-[runtime admission + linking] ----> [data-only IR + authorized capability registry]
-[Arbitre orchestration] ----------> [admitted programs / explicit host effects]
-[Kuery future consumer] ---------> [shared expression/runtime contracts]
+[Formbar runtime / server rules] -> [Formbar declarations + Expressions runtime]
+[projection runtime] -------------------------------------> [Expressions runtime]
+[Expressions runtime] -----------> [Expressions artifacts + authorized capabilities]
+[other domain runtime] ----------> [its own artifacts + authorized capabilities]
+[Arbitre orchestration] ---------> [selected runtime / explicit host effects]
+[runtimes, kernel] --------------> [optional genuinely shared low-level helpers]
 ```
 
-- Kalada owns generic foundation and expression semantics; package splits are a P0/P1 decision.
-  Do not put parser dependencies in core to make expressions reuse the source foundation.
+- Kernel/shared services import no Expressions syntax, checker, IR or evaluator. Package names
+  remain open; current `core` is not synonymous with the proposed kernel. A minimal domain language
+  must use kernel/tooling without installing or registering Expressions. Shared type infrastructure
+  does not force Expressions rules. Runtime helpers must not create kernel-to-language coupling.
 - Formbar owns proposed `@formbar/fsx` and a separate authoring package (names provisional),
   component contracts, lexical domain scopes, state, reactive scheduling and shared server rules.
 - Scheman v2 owns data schema evidence; validators, shape, semantic types and codecs stay separate.
-- Trusted domain packages register nominal types and capabilities. No core `FormFragment`.
+- Trusted domain packages register nominal types and capabilities. No kernel/Expressions `FormFragment`.
 - Projection owns bounded mappings as a thin expression consumer, not Formbar reactivity.
-- Arbitre owns runtime workflow orchestration/effects; Kalada owns bounded expression evaluation.
+- Arbitre owns runtime workflow orchestration/effects; Expressions owns bounded expression evaluation.
   Neither the parser nor a template acquires scheduling authority. Kuery remains a future consumer.
 
 ### Compilation is not rendering or evaluation
@@ -99,8 +104,9 @@ EDIFACT -> domain decoder -> structured data -> projection -> Scheman command va
 JSON --------------------------------------> projection -> email model -> safe domain renderer
 ```
 
-FSX is JSX-like declarative syntax, not JS/TS. Expression slots lower to programs, not eager
-values. Preserve Formbar's existing declaration version and expression adapter compatibility
+FSX is JSX-like declarative syntax, not JS/TS. It explicitly composes Expressions through public
+APIs; slots lower to deferred expression artifacts, not eager values. Formbar schedules calls to
+the Expressions runtime. Preserve existing declaration version and expression adapter compatibility
 where possible; a necessary version change requires a separately reviewed migration rather
 than pretending current expression slots already accept a new wire format. No renderer or
 capability callback runs during checking/compilation.
@@ -119,13 +125,15 @@ Full writes wait for a Formbar update-policy gate, not for a new Kalada mutation
 Bidirectional **source composition** is part of the proposed foundation: an embedded language
 can return control to its enclosing language with owned ranges and context. Actual executable
 fragment values, capture and lifetime semantics are optional, unresolved domain features.
-A parser can compose a domain region without executing it or making it a core runtime value.
+A parser can compose a domain region without executing it or making it an Expressions runtime value.
 
 ### Executable extension alternatives A and B
 
 These are contingent alternatives only if future use cases require domain operations *inside*
 an executable program. **Neither is required for ordinary FSX → Formbar declarations plus
 embedded deferred Kalada programs.** Nominal type registration alone does not authorize effects.
+Any A/B decision is scoped to the relevant Expressions or domain runtime, not a kernel execution
+model. “Common” below means common within that runtime's selected profile, not mandatory for languages.
 
 | | A: executable/lowered extension operations | B: common operations and capabilities |
 | --- | --- | --- |
@@ -145,16 +153,18 @@ does not move effects, authorization or scheduling out of domain runtimes (CLK-0
 
 ### Artifact, cache and trust boundaries
 
-Create a new data-only versioned artifact contract, rather than serializing existing compiled
-host objects. It contains declarations/program IR, explicit binding and capability manifests,
+Create language/domain-owned data-only versioned artifact contracts, not serialized compiled
+host objects or universal kernel IR. Expressions owns expression artifact semantics/compatibility;
+shared envelope helpers may carry declarations/program IR, explicit binding and capability manifests,
 nominal-type identities and source/provenance references. Source text/maps may be optional
 sidecars with retention policy; diagnostics must still identify the responsible artifact and
 domain path when source is unavailable. No live validators, runtime values or private brands
 cross this boundary.
 
 Admission validates shape, versions, allowed operations, depth/size and resource limits before
-linking. Runtime linking resolves only authorized tenant registry entries. It must execute
-portable IR without importing the source compiler; current core compile/host prepare APIs are
+linking. Runtime linking resolves only authorized tenant registry entries. The Expressions runtime
+executes its artifacts standalone without compiler/parser/authoring or unrelated providers, with no language
+registration prerequisite for expression execution; current core compile/host prepare APIs are
 not evidence that this new separation already exists.
 
 Compile identity covers source, compiler/language/IR/profile/plugin/options, ordered binding/type
@@ -167,7 +177,7 @@ grant trust or replace admission, revocation checks or current authorization.
 ### Authoring and safety
 
 Browser and VS Code/LSP are first-class thin clients over the same headless analysis, with
-mixed-context completion/hover/formatting and stable diagnostic codes, UTF-16 ranges, context,
+provider-routed mixed-context completion/hover/formatting and stable diagnostic codes, UTF-16 ranges, context,
 document version and environment generation. Lazy editor loading must not contaminate headless
 compile or runtime bundles. AI repair loops consume these diagnostics and revalidate against
 current snapshots. Cancellation and stale results cannot publish or populate current caches.
@@ -222,13 +232,14 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 
 - **Owner:** Kalada foundation/syntax maintainers; Formbar reviews scope/reference fit.
 - **Dependencies:** P0 contracts.
-- **Scope:** extract source/context/recovery and semantic services; migrate Kalada expressions;
-  implement one tiny independent language fixture with bidirectional source composition.
+- **Scope:** extract neutral source/context/recovery and scope/type-identity services; migrate
+  Expressions through public registration. Run a tiny domain-only language without Expressions,
+  then explicitly compose both providers bidirectionally using the same public interfaces.
   Exercise reference/location distinctions without enabling domain writes.
 - **Acceptance evidence:** existing Kalada conformance parity, malformed mixed-source/UTF-16
   fixtures, dependency graphs, and bounded comparison with an integrated framework slice.
-- **Exit gate:** real reuse and preserved Kalada behavior are demonstrated; no domain imports
-  leak into core. CF01–03 prove mechanics/regressions, not stable APIs or real domain fit.
+- **Exit gate:** real reuse, equal provider access and preserved Expressions behavior are demonstrated;
+  kernel/shared services have no expression imports. CF01–03 prove mechanics, not stable APIs or domain fit.
   Revisit extraction if either fails. Trace: CLP-01, 02, 05, 06, 08, 12.
 
 ### P2 — Real FSX and minimum consumer probes
@@ -283,6 +294,8 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
   composition, real FSX, both projection probes, Arbitre ownership/handoff, Kuery fit assessment,
   portable/packed runtime, currentness and authoring. Require an executable CF05 safe-write proof
   with stable identity, stale/denied/conflicting updates and codec-direction rejection.
+  CF02/04/13 must prove provider parity, Expressions-free minimal tooling, public FSX composition,
+  neutral dependency graphs and standalone precompiled Expressions runtime independence.
 - **Decision:** review and revise minimum contracts against actual consumer needs. Passing permits
   a stability review, not automatic API freeze or resolution of spellings, versions or fragments.
   P0 sketches/P1 toy mechanics alone are insufficient. Do not depend on full P5 completion: that
@@ -322,7 +335,8 @@ This proposal does not blanket-replace accepted ADRs:
 
 - [ADR-0001](./0001-kalada-language-architecture.md) remains authoritative for canonical
   expression contracts, deterministic core and host effects. Domain-owned ASTs compose those
-  expressions; any runtime extension needs a targeted amendment, not reinterpretation.
+  expressions; these remain Expressions compatibility obligations, not universal kernel semantics.
+  Any runtime extension needs a targeted amendment, not reinterpretation.
 - [ADR-0002](./0002-explicit-time-semantics.md) and
   [ADR-0003](./0003-deterministic-general-functions.md) retain time/function constraints;
   fragment capture does not silently override them.
@@ -352,7 +366,7 @@ The conformance matrix gives targeted positive/negative evidence for every CLP/C
 every scenario remains PLANNED — NOT RUN until future implementation records results.
 
 For this documentation-only change, validate local links, numbering/open-PR coordination,
-source evidence, exactly four documentation paths, CLP/CLK/CF coverage and whitespace in actual
-untracked files using `git diff --no-index --check /dev/null <path>` for each file. No runtime
+source evidence, exactly four documentation paths, CLP/CLK/CF coverage and whitespace using
+`git diff --check` for tracked edits. No runtime
 test additions are warranted: no executable behavior changes. Lint/test execution results
 belong in the handoff; future phase acceptance fixtures above are not claimed as passing now.

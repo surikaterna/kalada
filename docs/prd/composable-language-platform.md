@@ -16,10 +16,13 @@ data transformations, rules, and domain documents. Developers, integrators, appl
 and AI agents should author declarative source without executing arbitrary JavaScript or
 rebuilding parsing, scope analysis, diagnostics, and editor integration for every language.
 
-The desired platform is a composed language foundation, not a universal form evaluator.
-Kalada expressions themselves must use the reusable foundation. Domain languages own their
-syntax and mixed ASTs; a form remains a Formbar declaration containing deferred Kalada
-programs. Formbar owns state, reactive scheduling, and rules with shared server enforcement;
+The desired platform is a composed language foundation, not a mandatory expression language,
+universal execution IR or evaluator. Kalada Expressions and FSX are peer language providers using
+the same public kernel and shared language-service interfaces, with no privileged Expressions hooks.
+Expressions owns its grammar, checker/inference, operators, IR/artifact semantics and evaluator
+runtime. Languages own their syntax and mixed ASTs; FSX explicitly composes Expressions through
+public APIs. A form remains a Formbar declaration containing deferred expression artifacts.
+Formbar schedules calls to the Expressions runtime and owns state and rules with server enforcement;
 Arbitre owns workflow runtime orchestration and effects. Kuery is a future consumer, not a
 place to relocate authoring infrastructure.
 
@@ -78,15 +81,18 @@ and untouched source. The fixture need not execute or capture a fragment.
 Ambiguous registrations, non-progress exits and nested budget resets are rejected; unresolved
 malformed-source lexical boundaries are explicit limitations, not guessed valid programs.
 
-### CLP-02 — Reusable expression and semantic foundation
+### CLP-02 — Language-neutral foundation and optional Expressions
 
-Extract reusable scope, type/checking and lowering infrastructure alongside parsing. Kalada's
-own expression implementation consumes it; projection and FSX must not fork Kalada inference
-or evaluation. Language-owned rules and domain ASTs remain explicit.
+Extract source, scope, registration/type-identity and generic infrastructure contracts, with shared
+language-service routing. Type rules and lowering remain language-owned; generic infrastructure
+must not impose Expressions assignability or execution semantics. Expressions uses the same public
+registration and service access as FSX; projection and FSX compose it rather than fork its engine.
 
 **Acceptance:** existing Kalada conformance fixtures preserve programs, behavior and diagnostics
-under the compatibility policy; the second consumer reuses the foundation without importing
-Formbar, projection or editor packages. Dependency evidence shows no duplicate expression engine.
+under the Expressions package's compatibility policy. A minimal domain-only consumer uses kernel
+and tooling without installing/registering Expressions, Formbar, projection or editor packages.
+Dependency tests reject kernel/shared-service imports of expression syntax, checker, IR or evaluator;
+registration tests prove identical public access without privileged hooks. No duplicate engine is needed.
 Collection/structural/nominal checking needs and bounded generic support are inventoried separately
 from pending type design choices; no new null/record/union semantics silently enter canonical Kalada.
 
@@ -94,10 +100,13 @@ from pending type design choices; no new null/record/union semantics silently en
 
 FSX is declarative, JSX-like syntax, **not JavaScript or TypeScript**. Formbar owns the proposed
 `@formbar/fsx` compiler and a separate authoring package; final package names are provisional.
-Compile to existing Formbar declarations plus embedded, deferred Kalada programs with explicit
+Explicitly compose Expressions using its public compiler/provider interfaces, making expression
+embedding straightforward without privileged integration. Compile to existing Formbar declarations
+plus embedded, deferred Expressions artifacts with explicit
 references. Do not evaluate expressions at compilation, render components, or describe the
 whole form as an executable Kalada AST. Formbar retains reactive state, scheduling and rules,
-including server enforcement; neither compiler nor projection duplicates those responsibilities.
+including server enforcement; it schedules calls to the Expressions runtime. Neither compiler nor
+projection duplicates those responsibilities.
 
 **Acceptance:** a field/output/conditional form lowers to declaration fixtures accepted by
 Formbar; changing runtime input changes the result without recompiling source. Compile-time
@@ -133,17 +142,17 @@ unsupported write-codec directions; full P5 write UI/domain completeness is not 
 ### CLP-06 — Domain-owned nominal types
 
 Trusted domain packages may register nominal types with explicit identity, version, checking
-and permitted operations/encoding. Core must never contain a built-in `FormFragment` type.
+and permitted operations/encoding. Neither kernel nor Expressions has a built-in `FormFragment` type.
 Source composition does not imply executable fragment capture, closures or runtime fragment values.
 
-**Acceptance:** a test domain supplies a nominal type without a Formbar import in core; unknown
+**Acceptance:** a test domain supplies a nominal type without a Formbar import in kernel or Expressions; unknown
 or incompatible identities fail deterministically. Any nonportable type is rejected at a portable
 artifact boundary. Runtime fragment values/capture remain an explicit optional decision, not
 an initial FSX gate.
 
 ### CLP-07 — Projection and domain output workflows
 
-Projection remains a thin consumer of shared expression contracts with its own bounded mapping
+Projection remains a thin consumer of the Expressions package's public contracts with its own bounded mapping
 semantics, not a second language engine or Formbar reactive runtime. A future EDIFACT decoder
 produces structured data, mapping produces a command, and Scheman validates that command.
 JSON-to-rich-email mapping produces a domain model consumed by a safe domain renderer.
@@ -156,21 +165,26 @@ Mapping tests expose output-growth limits and do not invoke Formbar scheduling.
 ### CLP-08 — Separate deployment surfaces
 
 Separate runtime consumers (no parser/compiler/editor), headless compilation (no editor/LSP),
-and lazily loaded authoring tooling. Runtime admission, linking and bounded interpretation of
-portable IR are distinct from source compilation. Core/projection's current parser-free path
+and lazily loaded authoring tooling. Expressions owns runtime admission, linking and bounded
+interpretation of its portable IR, distinct from source compilation; domain runtimes own their
+artifacts. The kernel supplies no universal execution IR or evaluator. Core/projection's current parser-free path
 does not make the current syntax-dependent host a compliant runtime-only package.
 
 **Acceptance:** packed consumer graphs and browser metafiles prove forbidden imports absent
 for each surface and distinguish initial/lazy/total chunks. Runtime consumes a precompiled
-fixture without loading source tooling. Browser support follows package policy, not a presumed
+expression fixture standalone without compiler/parser/authoring or unrelated language providers.
+Genuinely shared low-level helpers are allowed, not kernel-to-language coupling or mandatory provider
+registration for execution. Browser support follows package policy, not a presumed
 raw-CDN/native-ESM guarantee.
 
 ### CLP-09 — Portable artifacts
 
-Define data-only, versioned IR envelopes for domain declarations and embedded programs, explicit
+Define data-only, versioned artifact envelopes for domain declarations and embedded programs, explicit
 binding/capability requirements and source-map/provenance references. Exclude JS closures,
 private brands, live registries and runtime values. Admission validates untrusted artifacts;
-linking resolves declared capabilities through tenant-authorized host registries.
+linking resolves declared capabilities through tenant-authorized host registries. Expressions owns
+expression IR/artifact semantics and compatibility; common envelope infrastructure does not define
+a mandatory kernel execution format.
 
 **Acceptance:** an artifact survives encode/decode and execution in a fresh process and browser
 without source parsing/compilation. Malformed nodes, missing bindings, unsupported versions and
@@ -199,7 +213,9 @@ returns atomic snapshot edits. Registry, dynamic, generated and cross-document n
 explicit unsupported with no edits; unsupported islands disclose navigation limits.
 Machine diagnostics expose stable codes, UTF-16 ranges, phase/language context and
 snapshot identity, without leaking values or secrets. AI validate–repair loops use this same
-service, not a parallel checker. IntelliJ requires an actual compatibility spike; LSP alone is
+service, not a parallel checker. Shared services route to registered language providers; Expressions
+has no built-in or privileged analysis path, and domain-only tooling needs no Expressions installation.
+IntelliJ requires an actual compatibility spike; LSP alone is
 not a compatibility guarantee.
 
 **Acceptance:** browser and VS Code fixtures agree on diagnostics and edits for identical mixed
@@ -241,7 +257,8 @@ declarative `onChange` model. Neither arbitrary event handlers nor `bind` spelli
 
 Runtime fragment values/capture and nominal serialization remain optional. If an executable
 domain extension is needed, choose between A (lowered extension operations) and B (common
-operations/capabilities) using the ADR tradeoffs; neither is needed for initial FSX lowering.
+operations/capabilities) using the ADR tradeoffs within the relevant language/domain runtime,
+never as universal kernel execution. Neither is needed for initial FSX lowering.
 Portable IR admission versus current host compilation, version windows, and tenant cache
 partitioning need conformance evidence before release. Future work is captured in the ADR's
 proposed phases, not newly created issues or invented assignments.
