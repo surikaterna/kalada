@@ -4,6 +4,8 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
+import { calibrationBatches } from "./batches.mjs";
+import { runCliBatch } from "./session.mjs";
 
 const root = import.meta.dirname;
 const cli = join(root, "node_modules/.bin/playwright-cli");
@@ -14,8 +16,12 @@ const url = args["--url"] ?? "http://127.0.0.1:4179/kalada/";
 const artifact = resolve(args["--artifact"] ?? "../92-94-editor-usability/apps/demo/dist");
 const source = resolve(args["--source"] ?? "../92-94-editor-usability");
 const sha = args["--sha"] ?? "78d624f536d73db5ae813de5f64d8bd52fa07b29";
-const batches = Number(args["--batches"] ?? 20);
-const out = resolve(args["--out"] ?? "docs/performance/99-a-raw.json");
+const smoke = args["--smoke"] === "true";
+const batches = calibrationBatches(args["--batches"] ?? (smoke ? "1" : undefined), smoke);
+const out = resolve(
+  args["--out"] ??
+    (smoke ? "/tmp/opencode/kalada-99-smoke.json" : "docs/performance/99-a-raw.json"),
+);
 const cohort = args["--cohort"] ?? "A";
 const command = (bin, ...argv) => execFileSync(bin, argv, { encoding: "utf8" }).trim();
 const hash = (text) => createHash("sha256").update(text).digest("hex");
@@ -43,9 +49,9 @@ const fixtures = [
   withinSourceCap: f.text.length + 1 <= 65536,
 }));
 
-if (!Number.isInteger(batches) || batches < 1 || batches > 100)
-  throw Error("batches must be 1..100");
 if (new URL(url).hostname !== "127.0.0.1") throw Error("loopback preview required");
+if (smoke && !out.startsWith("/tmp/opencode/"))
+  throw Error("smoke output must stay in /tmp/opencode");
 if (command("git", "-C", source, "rev-parse", "HEAD") !== sha) throw Error("source SHA mismatch");
 if (command("git", "-C", source, "status", "--porcelain", "--untracked-files=no"))
   throw Error("source worktree has tracked changes");
@@ -76,6 +82,7 @@ for (const entry of closure) {
 }
 const manifest = {
   issue: 99,
+  smoke,
   cohort,
   sha,
   base,
@@ -90,6 +97,16 @@ const manifest = {
   node: process.version,
   browserExecutable,
   browserVersion: command(browserExecutable, "--version"),
+  diagnosticTrace:
+    cohort === "A"
+      ? {
+          summary: "docs/performance/99-trace-summary.json",
+          sha256: JSON.parse(
+            readFileSync(join(root, "../../docs/performance/99-trace-summary.json")),
+          ).trace.sha256,
+          outsideCalibration: true,
+        }
+      : null,
   bun: command("bun", "--version"),
   os: `${os.platform()} ${os.release()} ${os.arch()}`,
   cpu: os.cpus()[0].model,
@@ -135,6 +152,10 @@ function checkResults(data) {
     failures.push("real keyboard typing failed");
   if (data.supersession.text !== "data.count + 1" || data.supersession.output !== "3")
     failures.push("rapid supersession stale output");
+  if (data.browserVersion !== manifest.browserVersion.replace("Google Chrome for Testing ", ""))
+    failures.push(`running browser version mismatch: ${data.browserVersion}`);
+  if (!data.browserProtocol.product?.includes(data.browserVersion))
+    failures.push(`CDP Browser.getVersion mismatch: ${data.browserProtocol.product}`);
   return failures;
 }
 function compactResults(data) {
@@ -153,9 +174,8 @@ function compactResults(data) {
     delete r.afterDispatch;
   }
 }
-function collect(session, record, i) {
+function collect(session, record, file) {
   record.openLog = cliCall(session, ["open", url, "--config", join(root, "cli.config.json")]);
-  const file = join(os.tmpdir(), `kalada-99-${process.pid}-${i}.js`);
   writeFileSync(
     file,
     template.replace("__CONFIG__", JSON.stringify({ url, origin: new URL(url).origin, fixtures })),
@@ -173,19 +193,9 @@ function collect(session, record, i) {
 for (let i = 0; i < batches; i++) {
   const session = `k99-${process.pid}-${i}`;
   const record = { batch: i, warmup: i === 0, session };
-  try {
-    collect(session, record, i);
-  } catch (error) {
-    record.failures = [...(record.failures ?? []), String(error)];
-  } finally {
-    try {
-      record.closeLog = cliCall(session, ["close"]);
-    } catch (error) {
-      record.closeError = String(error);
-    }
-    observations.push(record);
-    writeFileSync(out, `${JSON.stringify({ manifest, observations }, null, 2)}\n`);
-    console.log(`${cohort} ${i + 1}/${batches}: ${record.failures?.join("; ") || "ok"}`);
-  }
+  runCliBatch({ session, record, cliCall, execute: (file) => collect(session, record, file) });
+  observations.push(record);
+  writeFileSync(out, `${JSON.stringify({ manifest, observations }, null, 2)}\n`);
+  console.log(`${cohort} ${i + 1}/${batches}: ${record.failures?.join("; ") || "ok"}`);
 }
 if (observations.some((r) => r.failures?.length)) process.exitCode = 1;

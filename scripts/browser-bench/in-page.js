@@ -86,11 +86,16 @@ async (page) => {
       output: document.querySelector(".panel pre")?.textContent,
     };
   });
+  const cdp = await page.context().newCDPSession(page);
+  const browserProtocol = await cdp.send("Browser.getVersion");
+  await cdp.detach();
   return {
     results,
     blocked,
     requests,
     browser: await page.evaluate(() => navigator.userAgent),
+    browserVersion: page.context().browser()?.version(),
+    browserProtocol,
     viewport: page.viewportSize(),
     keyboard,
     supersession,
