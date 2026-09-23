@@ -1,5 +1,15 @@
-import { readdir, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
@@ -10,36 +20,98 @@ const host = resolve(root, "packages/host");
 const languageService = resolve(root, "packages/language-service");
 
 function isModuleCall(node: ts.Node): node is ts.CallExpression {
+  if (!ts.isCallExpression(node)) return false;
+  const callee = node.expression;
   return (
-    ts.isCallExpression(node) &&
-    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+    callee.kind === ts.SyntaxKind.ImportKeyword ||
+    (ts.isIdentifier(callee) && callee.text === "require") ||
+    (ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "module" &&
+      callee.name.text === "require")
   );
 }
 
-function forbiddenRoutingImport(source: string): boolean {
-  const file = ts.createSourceFile("routing.ts", source, ts.ScriptTarget.Latest, true);
-  const forbidden = /@kalada\/|core|syntax|host|codemirror|editor|evaluate/iu;
-  let found = false;
+function moduleSpecifier(node: ts.Node): ts.Expression | undefined {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
+  if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference))
+    return node.moduleReference.expression;
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
+    return node.argument.literal as ts.Expression;
+  if (isModuleCall(node)) return node.arguments[0];
+  return undefined;
+}
+
+function insidePackage(packageRoot: string, path: string): boolean {
+  const offset = relative(packageRoot, path);
+  return offset !== ".." && !offset.startsWith("../") && !isAbsolute(offset);
+}
+
+async function existingRealpath(path: string): Promise<string | undefined> {
+  try {
+    return await realpath(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+async function routingSpecifierForbidden(
+  specifier: string,
+  filePath: string,
+  packageRoot: string,
+): Promise<boolean> {
+  if (!specifier.startsWith(".") && !isAbsolute(specifier))
+    return /@kalada\/|core|syntax|host|codemirror|editor|evaluate/iu.test(specifier);
+  const target = resolve(dirname(filePath), specifier);
+  if (!insidePackage(packageRoot, target)) return true;
+  const root = await realpath(packageRoot);
+  const parent = await existingRealpath(dirname(target));
+  if (!parent || !insidePackage(root, parent)) return true;
+  // NodeNext source imports use .js specifiers for .ts files; check either existing target.
+  const sourceTarget = target.endsWith(".js") ? `${target.slice(0, -3)}.ts` : target;
+  for (const path of [target, sourceTarget]) {
+    const actual = await existingRealpath(path);
+    if (actual && !insidePackage(root, actual)) return true;
+  }
+  return false;
+}
+
+async function forbiddenRoutingImport(
+  filePath: string,
+  source: string,
+  packageRoot: string,
+): Promise<boolean> {
+  const file = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
+  const specifiers: string[] = [];
+  let nonliteral = false;
   function visit(node: ts.Node): void {
-    let specifier: ts.Expression | undefined;
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
-      specifier = node.moduleSpecifier;
-    else if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference)
-    )
-      specifier = node.moduleReference.expression;
-    else if (isModuleCall(node)) specifier = node.arguments[0];
-    if (
-      (isModuleCall(node) && !specifier) ||
-      (specifier && (!ts.isStringLiteral(specifier) || forbidden.test(specifier.text)))
-    )
-      found = true;
+    const specifier = moduleSpecifier(node);
+    if (isModuleCall(node) && !specifier) nonliteral = true;
+    if (specifier) {
+      if (ts.isStringLiteral(specifier)) specifiers.push(specifier.text);
+      else nonliteral = true;
+    }
     ts.forEachChild(node, visit);
   }
   visit(file);
-  return found;
+  if (nonliteral) return true;
+  for (const specifier of specifiers) {
+    if (await routingSpecifierForbidden(specifier, filePath, packageRoot)) return true;
+  }
+  return false;
+}
+
+async function routingProductionFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const paths = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) return routingProductionFiles(path);
+      return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : [];
+    }),
+  );
+  return paths.flat();
 }
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
@@ -85,11 +157,67 @@ describe("package boundaries", () => {
     ]) {
       expect(manifest[field]).toBeUndefined();
     }
-    const source = await productionSource(resolve(directory, "src"));
-    expect(forbiddenRoutingImport(source)).toBe(false);
+    const files = await routingProductionFiles(resolve(directory, "src"));
+    expect(files.length).toBeGreaterThan(0);
+    for (const filePath of files) {
+      const source = await readFile(filePath, "utf8");
+      expect(await forbiddenRoutingImport(filePath, source, directory), filePath).toBe(false);
+    }
   });
 
-  it("detects all production import forms without blocking unrelated modules", () => {
+  it("checks real source files in the graph, including an escaping symlink", async () => {
+    const fixture = await mkdtemp(resolve(tmpdir(), "routing-boundary-"));
+    try {
+      const directory = resolve(fixture, "provider-routing");
+      const sourceDirectory = resolve(directory, "src");
+      const outside = resolve(fixture, "projection/src");
+      await mkdir(sourceDirectory, { recursive: true });
+      await mkdir(outside, { recursive: true });
+      await writeFile(resolve(outside, "index.ts"), "export const outside = true;\n");
+      await writeFile(
+        resolve(sourceDirectory, "index.ts"),
+        'import "../../projection/src/index.js";\n',
+      );
+      await symlink(outside, resolve(sourceDirectory, "linked"), "dir");
+      const files = await routingProductionFiles(sourceDirectory);
+      expect(files).toEqual([resolve(sourceDirectory, "index.ts")]);
+      for (const filePath of files) {
+        expect(
+          await forbiddenRoutingImport(filePath, await readFile(filePath, "utf8"), directory),
+        ).toBe(true);
+      }
+      const source = 'import "./linked/index.js";';
+      expect(
+        await forbiddenRoutingImport(resolve(sourceDirectory, "index.ts"), source, directory),
+      ).toBe(true);
+      for (const specifier of [
+        resolve(outside, "index.js"),
+        resolve(sourceDirectory, "linked/index.js"),
+      ]) {
+        expect(
+          await forbiddenRoutingImport(
+            resolve(sourceDirectory, "index.ts"),
+            `module.require(${JSON.stringify(specifier)});`,
+            directory,
+          ),
+          specifier,
+        ).toBe(true);
+      }
+      expect(
+        await forbiddenRoutingImport(
+          resolve(sourceDirectory, "index.ts"),
+          `require(${JSON.stringify(resolve(sourceDirectory, "index.ts"))});`,
+          directory,
+        ),
+      ).toBe(false);
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
+  });
+
+  it("detects all production import forms without blocking unrelated modules", async () => {
+    const directory = resolve(root, "packages/provider-routing");
+    const filePath = resolve(directory, "src/index.ts");
     for (const source of [
       'import "@kalada/core";',
       'import thing from "@kalada/syntax";',
@@ -97,17 +225,41 @@ describe("package boundaries", () => {
       'require("@kalada/core");',
       'import("@kalada/core");',
       'import name = require("@kalada/core");',
+      'type Outside = import("@kalada/core").Outside;',
       "require(variable);",
       "require();",
+      'import "../../projection/src/index.js";',
+      'export * from "../../projection/src/index.js";',
+      'import("../../projection/src/index.js");',
+      'require("../../projection/src/index.js");',
+      'module.require("../../projection/src/index.js");',
+      'require("/tmp/outside/projection/src/index.js");',
+      'import "/tmp/outside/projection/src/index.js";',
+      'export * from "/tmp/outside/projection/src/index.js";',
+      'import("/tmp/outside/projection/src/index.js");',
+      'module.require("/tmp/outside/projection/src/index.js");',
+      'import name = require("/tmp/outside/projection/src/index.js");',
+      'type Outside = import("/tmp/outside/projection/src/index.js").Outside;',
+      "module.require(variable);",
+      'import name = require("../../projection/src/index.js");',
+      'type Outside = import("../../projection/src/index.js").Outside;',
+      'import "./../../projection/src/index.js";',
+      'import "./missing/../../../projection/src/index.js";',
     ])
-      expect(forbiddenRoutingImport(source), source).toBe(true);
+      expect(await forbiddenRoutingImport(filePath, source, directory), source).toBe(true);
     for (const source of [
       'import "node:assert";',
       'import thing from "./local.js";',
+      'export * from "./index.js";',
+      'import("./index.js");',
+      'import name = require("./index.js");',
+      'type Local = import("./index.js").Local;',
       'require("node:assert");',
+      'module.require("node:assert");',
       'const text = "require(\\"@kalada/core\\")";',
+      '// import "../../projection/src/index.js";',
     ])
-      expect(forbiddenRoutingImport(source), source).toBe(false);
+      expect(await forbiddenRoutingImport(filePath, source, directory), source).toBe(false);
   });
 
   it("keeps host limited to Kalada dependencies and free of schema vendors", async () => {
