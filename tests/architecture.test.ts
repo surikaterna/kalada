@@ -87,6 +87,7 @@ describe("package boundaries", () => {
     }
     const source = await productionSource(resolve(directory, "src"));
     expect(forbiddenRoutingImport(source)).toBe(false);
+    expect(source).not.toMatch(/from\s+["'].*expressions/iu);
   });
 
   it("detects all production import forms without blocking unrelated modules", () => {
@@ -131,6 +132,10 @@ describe("package boundaries", () => {
     });
     const hostSource = await readFile(resolve(host, "src/index.ts"), "utf8");
     expect(hostSource).not.toContain("@kalada/language-service");
+    const source = await productionSource(resolve(languageService, "src"));
+    expect(source).not.toMatch(
+      /(?:from|import\s*\(|require\s*\()[\s"']*@kalada\/provider-routing-prototype/iu,
+    );
   });
 
   it("keeps the language-service source graph headless and evaluation-free", async () => {

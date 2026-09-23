@@ -32,3 +32,24 @@ never read.
 
 `getWorkspaceSnapshot()` contains only document identities and the environment generation. Documents
 share an environment but have no imports, module resolution, or cross-file expression semantics.
+
+### Opt-in Expressions diagnostics routing
+
+`createExpressionsDiagnosticProvider(resolveEnvironment)` returns an `expressions` whole-document
+diagnostic provider structurally compatible with the private diagnostic routing prototype. Register
+it explicitly alongside independent domain providers; the language service does not register it by
+default and does not depend on the private router. The resolver receives each document's string
+`environmentGeneration` and must return `{ environmentGeneration, description }`, where
+`description` is a host `DescribeEnvironmentResult` for that exact generation. Missing or mismatched
+generations yield `EXPRESSIONS_ENVIRONMENT_UNAVAILABLE` and never reuse a prior environment.
+Each request creates a fresh language service and runs its existing parse → compile → link diagnostic
+pipeline; there is no provider cache, execution, or capability callback invocation.
+
+Routing preserves the input document identity but projects diagnostics to ordered `{ code, range }`
+only, with half-open UTF-16 **offsets** (not line/character positions). Phase, message, provenance
+and cause are intentionally lost; use `createLanguageService` for full diagnostic evidence.
+Diagnostics without a source range (notably environment and some link errors), or with an
+unmappable location, use `[0,0)` as **unknown location**, not a claim about source character zero.
+Router limits/failures are enforced by the router (100,000 UTF-16 source units and 100 diagnostics);
+resolver exceptions are router failures. This is whole-document routing only, not mixed parsing,
+LSP, or a stable universal provider API.
