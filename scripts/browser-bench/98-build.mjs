@@ -1,8 +1,11 @@
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { inject } from "./98-injections.mjs";
+import { injectB } from "./98-injections-b.mjs";
 
-const a = resolve(import.meta.dirname, "../../../98-a-readonly");
+const a = resolve(
+  process.env.KALADA_98_SOURCE ?? join(import.meta.dirname, "../../../98-a-readonly"),
+);
 const vite = await import(pathToFileURL(join(a, "apps/demo/node_modules/vite/dist/node/index.js")));
 const entry = join(import.meta.dirname, "98-fifty-entry.js");
 const alias = Object.fromEntries(
@@ -18,10 +21,16 @@ function plugin(instrumented) {
     name: instrumented ? "98-source-injection" : "98-unmodified-source",
     enforce: "pre",
     transform(code, id) {
-      if (id === entry) return code.replaceAll("/dist/index.js", "/src/index.ts");
+      if (id === entry) {
+        return code
+          .replaceAll("/dist/index.js", "/src/index.ts")
+          .replaceAll(join(import.meta.dirname, "../../../98-a-readonly"), a)
+          .replaceAll("../../../98-a-readonly/packages/", `${a}/packages/`);
+      }
       if (!instrumented) return null;
       const relative = id.replace(`${a}/`, "");
-      const updated = inject(code, relative, join(import.meta.dirname, "98-trace.js"));
+      const instrumentation = process.env.KALADA_98_B_INSTRUMENT === "1" ? injectB : inject;
+      const updated = instrumentation(code, relative, join(import.meta.dirname, "98-trace.js"));
       if (updated) seen.add(relative);
       return updated;
     },
@@ -49,16 +58,20 @@ async function build(instrumented, input, outDir, entryFileNames) {
   });
 }
 
-await build(true, null, "/tmp/opencode/98-instrumented-dist");
+if (process.env.KALADA_98_NORMAL_ONLY !== "1") {
+  await build(true, null, "/tmp/opencode/98-instrumented-dist");
+}
 await build(
   false,
   join(import.meta.dirname, "98-fifty-normal-entry.js"),
-  "/tmp/opencode/98-ls-normal-dist",
+  process.env.KALADA_98_OUT ?? "/tmp/opencode/98-ls-normal-dist",
   "98-fifty-normal.js",
 );
-await build(
-  true,
-  join(import.meta.dirname, "98-fifty-instrumented-entry.js"),
-  "/tmp/opencode/98-ls-instrumented-dist",
-  "98-fifty-instrumented.js",
-);
+if (process.env.KALADA_98_NORMAL_ONLY !== "1") {
+  await build(
+    true,
+    join(import.meta.dirname, "98-fifty-instrumented-entry.js"),
+    "/tmp/opencode/98-ls-instrumented-dist",
+    "98-fifty-instrumented.js",
+  );
+}

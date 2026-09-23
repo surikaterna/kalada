@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { runCliBatch } from "./session.mjs";
 
 const root = import.meta.dirname;
+const b = process.env.KALADA_98_FIFTY_B === "1";
 const cli = join(root, "node_modules/.bin/playwright-cli");
 const bundle = readFileSync("/tmp/opencode/98-ls-normal-dist/98-fifty-normal.js", "utf8");
 const instrumented = readFileSync(
@@ -44,7 +45,10 @@ runCliBatch({
     record.data = JSON.parse(result);
   },
 });
-writeFileSync("/tmp/opencode/98-fifty-results.json", JSON.stringify(record, null, 2));
+writeFileSync(
+  b ? "/tmp/opencode/98-b-fifty-results.json" : "/tmp/opencode/98-fifty-results.json",
+  JSON.stringify(record, null, 2),
+);
 if (record.failures?.length) throw Error(record.failures.join("; "));
 if (record.data.browserVersion !== "154.0.8037.0") throw Error("managed browser version drift");
 if (
@@ -57,16 +61,21 @@ for (const row of record.data.result) {
   const count = (caller, version) => row.grouped[`parse/${caller}/${version}`]?.count;
   if (
     ["highlight", "diagnostics", "analyze"].some(
-      (caller) => count(caller, 1) !== 148 || count(caller, 2) !== 3,
+      (caller) =>
+        count(caller, 1) !== (b && caller === "highlight" ? 50 : 148) ||
+        count(caller, 2) !== (b && caller === "highlight" ? 1 : 3),
     ) ||
-    count("completion", 2) !== 1 ||
-    count("hover", 2) !== 1
+    (!b && (count("completion", 2) !== 1 || count("hover", 2) !== 1)) ||
+    (b &&
+      Object.entries(row.grouped)
+        .filter(([key]) => key.startsWith("cache.hit/"))
+        .reduce((total, [, value]) => total + value.count, 0) !== 102)
   ) {
     throw Error("50-document parse caller/version mismatch");
   }
 }
 writeFileSync(
-  join(root, "../../docs/performance/98-fifty-raw.jsonl"),
+  join(root, `../../docs/performance/${b ? "98-b-fifty-instrumented-raw" : "98-fifty-raw"}.jsonl`),
   `${JSON.stringify(record)}\n`,
 );
 console.log(

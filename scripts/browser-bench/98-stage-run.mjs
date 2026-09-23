@@ -5,11 +5,15 @@ import { join } from "node:path";
 import { runCliBatch } from "./session.mjs";
 
 const root = import.meta.dirname;
+const b = process.env.KALADA_98_STAGE_B === "1";
 const cli = join(root, "node_modules/.bin/playwright-cli");
 const template = readFileSync(join(root, "98-stage-page.js"), "utf8").trim().replace(/;$/, "");
 const capture = readFileSync(join(root, "98-stage-capture.js"), "utf8").trim().replace(/;$/, "");
 const config = {
-  urls: { A: "http://127.0.0.1:4179/kalada/", instrumented: "http://127.0.0.1:4199/kalada/" },
+  urls: {
+    A: `http://127.0.0.1:${b ? 4201 : 4179}/kalada/`,
+    instrumented: "http://127.0.0.1:4199/kalada/",
+  },
   repetitions: Number(process.argv[2] ?? 20),
   fixtures: [
     { name: "typical", text: "data.count + 1" },
@@ -89,5 +93,8 @@ for (const row of record.data.rows) {
 }
 const artifact = JSON.stringify({ config, record });
 writeFileSync("/tmp/opencode/98-stage-raw.json", artifact);
-writeFileSync(join(root, "../../docs/performance/98-stage-raw.jsonl"), `${artifact}\n`);
+writeFileSync(
+  join(root, `../../docs/performance/${b ? "98-b-stage-raw" : "98-stage-raw"}.jsonl`),
+  `${artifact}\n`,
+);
 console.log(`captured ${record.data.rows.length} rows; browser ${record.data.browser}`);
