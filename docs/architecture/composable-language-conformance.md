@@ -117,7 +117,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ### CF06 — EDIFACT projection and three kinds of provenance
 
-- **Positive:** a small decoder fixture yields structured data with segment/element provenance;
+- **Positive:** a small structured-interchange decoder fixture (EDIFACT) yields data with segment/element provenance;
   real projection contracts map it into a command validated through Scheman. Show successful
   mapping and trace input location, mapping-source range and output validation path separately.
 - **Negative:** decoder errors, mapping errors and invalid commands retain distinct attribution;

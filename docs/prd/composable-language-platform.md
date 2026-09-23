@@ -11,8 +11,8 @@
 
 ## Context and outcome
 
-A maritime enterprise SaaS platform needs maintainable, tenant-specific forms, calculations,
-data mappings, and domain documents. Developers, implementation consultants, administrators,
+Open-source platform consumers need maintainable, configurable forms, calculations,
+data transformations, rules, and domain documents. Developers, integrators, application administrators,
 and AI agents should author declarative source without executing arbitrary JavaScript or
 rebuilding parsing, scope analysis, diagnostics, and editor integration for every language.
 
@@ -28,8 +28,8 @@ place to relocate authoring infrastructure.
 | Persona | Workflow | Observable success |
 | --- | --- | --- |
 | Platform developer | Register trusted components, schemas, capabilities and nominal types | One checked contract feeds headless compilation, browser and IDE diagnostics |
-| Consultant | Build vessel/cargo forms with nested repeated data and expressions | Explicit aliases preserve outer access; lowering emits existing declarations, not UI components |
-| Administrator | Edit permitted attributes/rules in a browser | Current, ranged diagnostics explain invalid changes before publication; server rules remain authoritative |
+| Integrator | Build configurable forms with nested repeated data and expressions | Explicit aliases preserve outer access; lowering emits existing declarations, not UI components |
+| Application administrator | Edit permitted attributes/rules in a browser | Current, ranged diagnostics explain invalid changes before publication; server rules remain authoritative |
 | AI agent | Generate source, validate, repair, revalidate | Machine diagnostics identify code, range, context and snapshot; stale output cannot authorize publication |
 | Integration developer | Decode EDIFACT and map structured data to a Scheman command | Decoder, mapping and command validation failures retain distinct provenance |
 | Communication developer | Map JSON to a rich email model | A domain renderer enforces escaping, safe URLs and markup policy independently of expression safety |
@@ -53,7 +53,7 @@ The target and open choices elsewhere in this PRD are not claims about that base
 ## Requirements and measurable acceptance
 
 IDs are stable product requirements. Acceptance fixtures and gates are proposed future evidence,
-not tests delivered by these documents. Numeric enterprise budgets must follow [#87][k87]
+not tests delivered by these documents. Numeric resource budgets must follow [#87][k87]
 measurement and calibration rather than invented latency or bundle-size promises.
 CLK contracts specify minimum behavior without freezing signatures; CF scenarios distinguish toy
 mechanics from real consumer evidence. A pre-freeze review requires P1–P4 evidence and a safe
@@ -126,7 +126,7 @@ incompatible design; complete writable behavior follows in P5.
 **Acceptance:** nested-repeater fixtures resolve distinct outer/inner aliases, expose deliberate
 shadowing behavior, reject computed-value writes and stale/removed item targets, and preserve
 item targeting across reorder. A reviewed update policy precedes enabling writes. Surface
-spelling remains open; `bind` is not the chosen syntax (the requester dislikes it).
+spelling remains open; `bind` is not the chosen syntax.
 Before stability review, a narrow executable proof must reject stale permissions, conflicts and
 unsupported write-codec directions; full P5 write UI/domain completeness is not required for it.
 
@@ -230,7 +230,7 @@ P6 requires reproducible packed-size/compute evidence and reviewed thresholds de
 - Replacing Formbar declarations, Scheman validation, Arbitre orchestration or existing Kalada ADRs.
 - Making modules/imports (#21), a new Standard adapter (#75), executable fragments or A/B extension
   operations prerequisites for ordinary FSX declarations containing deferred Kalada programs.
-- Promising direct-browser/CDN loading, IntelliJ support, fixed enterprise budgets or a release date.
+- Promising direct-browser/CDN loading, IntelliJ support, fixed resource budgets or a release date.
 
 ## Open decisions and approval gates
 

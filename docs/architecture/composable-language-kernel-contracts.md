@@ -239,7 +239,7 @@ gate permits consideration of API stability; passing that gate does not automati
   charges its cost; host owns top-level limits and tenant isolation.
 - **Rejection / exclusions:** cycles, excessive depth/work/output, unaccounted operations and
   cancelled requests stop safely, not via budget resets at child entry. Qualitative bounds apply
-  from the first probe; numerical budgets and enterprise claims await Kalada #87 measurement.
+  from the first probe; numerical budgets and performance claims await Kalada #87 measurement.
 
 ## Decisions deliberately left open
 

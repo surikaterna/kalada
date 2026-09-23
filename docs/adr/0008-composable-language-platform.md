@@ -18,7 +18,7 @@
 
 ## Context and current constraints
 
-The PRD records maritime SaaS authoring workflows and evidence distinguishing implementation
+The PRD records platform-consumer authoring workflows and evidence distinguishing implementation
 from targets. Current syntax provides a Kalada-specific lossless CST, recovery and lowering;
 its parse results carry process-local `WeakMap` limit provenance. Current host compilation
 retains that source structure, callable core compilation and private authenticity state.
@@ -287,7 +287,7 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
   a stability review, not automatic API freeze or resolution of spellings, versions or fragments.
   P0 sketches/P1 toy mechanics alone are insufficient. Do not depend on full P5 completion: that
   would make the contracts P5 needs depend cyclically on P5. Qualitative safety precedes review;
-  calibrated enterprise budgets remain the P6/#87 release gate.
+  calibrated resource budgets remain the P6/#87 release gate.
 
 ### P5 — Writable scopes and supported domain completion
 
@@ -303,9 +303,9 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
   remains authoritative. Optional executable fragments/A/B require a separate decision only
   if justified; they do not retroactively gate P2. Trace: CLP-03–07, 09, 11, 12.
 
-### P6 — Enterprise budgets, compatibility and release readiness
+### P6 — Resource budgets, compatibility and release readiness
 
-- **Owner:** package/release maintainers, security reviewers and consuming product owners.
+- **Owner:** package/release maintainers, security reviewers and consuming application maintainers.
 - **Dependencies:** P3–P5 supported surfaces; authoritative measurement follows #87 prerequisites
   and final package policy, including the work currently in PR #82.
 - **Scope:** calibrated bundle/compute thresholds, hostile-input admission bounds, tenancy,
