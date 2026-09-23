@@ -160,7 +160,7 @@ class EditorSession implements KaladaEditorSession {
       this.lineSeparator.of(EditorState.lineSeparator.of(detectLineSeparator(this.expectedText))),
       history(),
       autocompletion({ defaultKeymap: false, override: [(context) => this.complete(context)] }),
-      codeMirrorHover((view, position) => this.pointerHover(view, position)),
+      codeMirrorHover((view, position) => this.requestHover(view, position)),
       keyboardTooltipField,
       Prec.highest(
         keymap.of([
@@ -262,15 +262,16 @@ class EditorSession implements KaladaEditorSession {
     const result = this.service.highlight(this.uri, {
       cancellation: this.cancellation("highlight", epoch),
     });
-    return result.kind === "highlight" &&
-      this.viewEpoch === viewEpoch &&
-      this.publishable(result, view, epoch, "highlight")
-      ? result
-      : null;
-  }
-
-  private pointerHover(view: EditorView, offset: number): Tooltip | null {
-    return this.requestHover(view, offset);
+    if (
+      !(
+        result.kind === "highlight" &&
+        this.viewEpoch === viewEpoch &&
+        this.publishable(result, view, epoch, "highlight")
+      )
+    )
+      return null;
+    const document = this.service.getDocument(this.uri);
+    return document?.version === result.version ? { result, document } : null;
   }
 
   private keyboardHover(view: EditorView): boolean {
