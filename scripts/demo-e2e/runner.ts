@@ -9,6 +9,7 @@ import {
   editingAndTooling,
   keyboardAndSafeDom,
 } from "./scenarios-core.js";
+import { editorUsability } from "./scenarios-editor.js";
 import {
   recursiveReferences,
   seededGenerationAndPrivacy,
@@ -27,6 +28,7 @@ const localScenarios: readonly Scenario[] = [
   unsupportedReferences,
   transferAndPersistence,
   keyboardAndSafeDom,
+  editorUsability,
 ];
 
 export async function runDemoE2E(deployed: boolean): Promise<void> {

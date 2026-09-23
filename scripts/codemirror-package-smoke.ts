@@ -164,6 +164,7 @@ async function runBrowser(directory: string): Promise<void> {
 async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   const direct = await page.evaluate(() => window.__kalada.directCompletion());
   await page.locator(".cm-content").focus();
+  await page.locator(".kalada-hl-reference").waitFor();
   await page.keyboard.press("Control+Space");
   await page.locator(".cm-tooltip-autocomplete").waitFor();
   const labels = await page.locator(".cm-completionLabel").allTextContents();
@@ -207,6 +208,18 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   if (!(await page.locator(".cm-completionLabel").allTextContents()).includes("age")) {
     throw new Error("Environment refresh did not invalidate completion");
   }
+  await page.waitForTimeout(350);
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => window.__kalada.view.state.doc.toString() === "user.age");
+  await page.keyboard.press("Tab");
+  if (await page.locator(".cm-content").evaluate((node) => node === document.activeElement)) {
+    throw new Error("Inactive Tab trapped focus");
+  }
+  await page.locator(".cm-content").focus();
+  await page.keyboard.press("Control+Space");
+  await page.locator(".cm-tooltip-autocomplete").waitFor();
+  await page.keyboard.press("Escape");
+  await page.locator(".cm-tooltip-autocomplete").waitFor({ state: "hidden" });
   await page.evaluate(() => window.__kalada.batch());
   const versions = await page.evaluate(() => window.__kalada.versions);
   if (

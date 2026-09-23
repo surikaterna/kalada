@@ -10,6 +10,7 @@ const DEMO_DEPENDENCIES = {
   "@codemirror/autocomplete": "6.20.3",
   "@codemirror/commands": "6.11.1",
   "@codemirror/lang-json": "6.0.2",
+  "@codemirror/language": "6.12.4",
   "@codemirror/lint": "6.9.7",
   "@codemirror/state": "6.7.6",
   "@codemirror/view": "6.43.13",
@@ -19,6 +20,7 @@ const DEMO_DEPENDENCIES = {
   "@kalada/host": "workspace:*",
   "@kalada/language-service": "workspace:*",
   "@kalada/syntax": "workspace:*",
+  "@lezer/highlight": "1.2.3",
   "@scheman/core": "2.0.0",
 };
 

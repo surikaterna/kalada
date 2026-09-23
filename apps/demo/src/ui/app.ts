@@ -17,6 +17,7 @@ import { WorkspaceModel } from "../workspace/model.js";
 import { clearWorkspace, restoreWorkspace, saveWorkspace } from "../workspace/persistence.js";
 import { exportWorkspace, importWorkspace } from "../workspace/transfer.js";
 import { button, element, panel } from "./dom.js";
+import { editorTheme, jsonHighlight } from "./editor-theme.js";
 
 export function createDemoApp(mount: HTMLElement): () => void {
   const app = new DemoApp(mount);
@@ -76,7 +77,10 @@ class DemoApp {
     this.panels = element("aside", "panels");
     this.panels.setAttribute("aria-label", "Workspace results and inspectors");
     workspace.append(this.editor, this.panels);
-    shell.append(toolbar, this.status, this.tabs, workspace);
+    const help = element("p", "shortcut-help");
+    help.textContent =
+      "Editor shortcuts: Ctrl-Space opens completions; Enter or Tab accepts a selected completion; Escape closes suggestions and hover; Ctrl/⌘-Shift-H shows keyboard hover. Tab otherwise moves focus.";
+    shell.append(toolbar, help, this.status, this.tabs, workspace);
     this.mount.append(shell);
     this.renderTabs();
   }
@@ -112,13 +116,18 @@ class DemoApp {
   }
 
   private expressionState(name: string, session: KaladaEditorSession): EditorState {
-    return EditorState.create({ doc: this.model.text(name), extensions: [session.extension] });
+    return EditorState.create({
+      doc: this.model.text(name),
+      extensions: [editorTheme, session.extension],
+    });
   }
   private jsonState(name: "schema.json" | "data.json"): EditorState {
     return EditorState.create({
       doc: this.model.text(name),
       extensions: [
         json(),
+        editorTheme,
+        jsonHighlight,
         keymap.of(defaultKeymap),
         EditorView.contentAttributes.of({ "aria-label": `${name} editor` }),
         EditorView.updateListener.of((update) => {

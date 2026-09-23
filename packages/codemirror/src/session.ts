@@ -1,10 +1,11 @@
 import {
+  acceptCompletion,
   autocompletion,
   type CompletionResult as CodeMirrorCompletionResult,
-  type Completion,
   type CompletionContext,
   closeCompletion,
   completionKeymap,
+  selectedCompletion,
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
 import { setDiagnostics } from "@codemirror/lint";
@@ -13,6 +14,7 @@ import {
   EditorSelection,
   EditorState,
   type Transaction as EditorTransaction,
+  Prec,
   Transaction,
 } from "@codemirror/state";
 import {
@@ -24,13 +26,10 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
-import type {
-  CompletionItem,
-  DocumentSnapshot,
-  LanguageService,
-  SnapshotIdentity,
-} from "@kalada/language-service";
+import type { DocumentSnapshot, LanguageService, SnapshotIdentity } from "@kalada/language-service";
+import { completionOption } from "./completion-option.js";
 import type { KaladaEditorSession, KaladaEditorSessionOptions } from "./contracts.js";
+import { highlightExtension, refreshHighlight } from "./highlight-extension.js";
 import { detectLineSeparator, textForEditor, textFromEditor } from "./line-separator.js";
 import {
   animationWindow,
@@ -60,6 +59,7 @@ class EditorSession implements KaladaEditorSession {
   private completionEpoch = 0;
   private hoverEpoch = 0;
   private diagnosticsEpoch = 0;
+  private highlightEpoch = 0;
   private diagnosticsFrame: number | null = null;
 
   constructor(options: KaladaEditorSessionOptions) {
@@ -77,6 +77,7 @@ class EditorSession implements KaladaEditorSession {
     const view = this.view;
     if (!view) return;
     this.clearEditor(view, false);
+    view.dispatch({ effects: refreshHighlight.of() });
     this.scheduleDiagnostics(view);
   }
   replaceDocument(text: string): void {
@@ -155,17 +156,24 @@ class EditorSession implements KaladaEditorSession {
     });
     return [
       lifecycle,
+      highlightExtension((view) => this.requestHighlight(view)),
       this.lineSeparator.of(EditorState.lineSeparator.of(detectLineSeparator(this.expectedText))),
       history(),
-      autocompletion({ override: [(context) => this.complete(context)] }),
+      autocompletion({ defaultKeymap: false, override: [(context) => this.complete(context)] }),
       codeMirrorHover((view, position) => this.pointerHover(view, position)),
       keyboardTooltipField,
-      keymap.of([
-        ...completionKeymap,
-        ...historyKeymap,
-        { key: "Mod-Shift-h", run: (view) => this.keyboardHover(view) },
-        { key: "Escape", run: (view) => this.clearInteractions(view) },
-      ]),
+      Prec.highest(
+        keymap.of([
+          {
+            key: "Tab",
+            run: (view) => (selectedCompletion(view.state) ? acceptCompletion(view) : false),
+          },
+          ...completionKeymap,
+          ...historyKeymap,
+          { key: "Mod-Shift-h", run: (view) => this.keyboardHover(view) },
+          { key: "Escape", run: (view) => this.clearInteractions(view) },
+        ]),
+      ),
       EditorView.contentAttributes.of({ "aria-label": "Kalada expression editor" }),
     ];
   }
@@ -236,7 +244,9 @@ class EditorSession implements KaladaEditorSession {
       return null;
     }
     const translated = result.items.map((item) =>
-      this.translateCompletion(item, result, view, epoch),
+      completionOption(item, view, (target) =>
+        this.publishable(result, target, epoch, "completion"),
+      ),
     );
     const available = translated.filter((entry) => entry !== null);
     const first = available[0];
@@ -245,34 +255,18 @@ class EditorSession implements KaladaEditorSession {
       : null;
   }
 
-  private translateCompletion(
-    item: CompletionItem,
-    identity: SnapshotIdentity,
-    view: EditorView,
-    epoch: number,
-  ): Readonly<{ from: number; to: number; option: Completion }> | null {
-    const range = rangeToOffsets(view.state.doc, item.edit.range);
-    if (!range) return null;
-    const option: Completion = {
-      label: item.label,
-      type: item.kind === "binding" ? "variable" : item.kind,
-      detail: `${item.support}, ${item.presence}`,
-      boost: item.support === "common" ? 10 : 0,
-      apply: (target) => this.applyCompletion(target, item, identity, epoch),
-    };
-    return { ...range, option };
-  }
-
-  private applyCompletion(
-    view: EditorView,
-    item: CompletionItem,
-    identity: SnapshotIdentity,
-    epoch: number,
-  ): void {
-    if (!this.publishable(identity, view, epoch, "completion")) return;
-    const range = rangeToOffsets(view.state.doc, item.edit.range);
-    if (!range) return;
-    view.dispatch({ changes: { ...range, insert: item.edit.text } });
+  private requestHighlight(view: EditorView) {
+    if (this.disposed || this.view !== view) return null;
+    const epoch = ++this.highlightEpoch;
+    const viewEpoch = this.viewEpoch;
+    const result = this.service.highlight(this.uri, {
+      cancellation: this.cancellation("highlight", epoch),
+    });
+    return result.kind === "highlight" &&
+      this.viewEpoch === viewEpoch &&
+      this.publishable(result, view, epoch, "highlight")
+      ? result
+      : null;
   }
 
   private pointerHover(view: EditorView, offset: number): Tooltip | null {
@@ -364,6 +358,7 @@ class EditorSession implements KaladaEditorSession {
   private epoch(kind: RequestKind): number {
     if (kind === "completion") return this.completionEpoch;
     if (kind === "hover") return this.hoverEpoch;
+    if (kind === "highlight") return this.highlightEpoch;
     return this.diagnosticsEpoch;
   }
 
@@ -371,6 +366,7 @@ class EditorSession implements KaladaEditorSession {
     this.completionEpoch += 1;
     this.hoverEpoch += 1;
     this.diagnosticsEpoch += 1;
+    this.highlightEpoch += 1;
   }
 
   private nextRevision(): number {
@@ -396,4 +392,4 @@ class EditorSession implements KaladaEditorSession {
     if (this.disposed) throw new Error("Kalada editor session is disposed");
   }
 }
-type RequestKind = "completion" | "hover" | "diagnostics";
+type RequestKind = "completion" | "hover" | "diagnostics" | "highlight";
