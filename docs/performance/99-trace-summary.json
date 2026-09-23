@@ -1,0 +1,30 @@
+{
+  "issue": 99,
+  "cohort": "A diagnostic only, outside timed sessions",
+  "sourceSha": "78d624f536d73db5ae813de5f64d8bd52fa07b29",
+  "cliVersion": "0.1.21",
+  "session": "k99-trace-20260923",
+  "trace": {
+    "localPath": ".playwright-cli/traces/trace-1790156711989.trace",
+    "sha256": "25609aa4a341081e6fc106608372a71f36dec9b054ae93fa1a486195ea09ea3b",
+    "bytes": 131259
+  },
+  "network": {
+    "localPath": ".playwright-cli/traces/trace-1790156711989.network",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "eventCounts": {
+    "after": 15,
+    "before": 15,
+    "context-options": 1,
+    "event": 1,
+    "frame-snapshot": 11,
+    "input": 3,
+    "log": 13,
+    "screencast-frame": 5
+  },
+  "browserName": "chromium",
+  "playwrightVersionInCliTrace": "1.64.0-alpha-1789764292000",
+  "safety": "Fresh non-persistent profile; synthetic built-in workspace only; no external requests; trace screened for paths/credential markers. Full trace ignored locally; regenerate to inspect snapshots."
+}
