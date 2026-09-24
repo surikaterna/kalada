@@ -208,4 +208,87 @@ describe("experimental guest-owned boundary", () => {
     expect(tokens.reason).toBe("limit");
     expect(tokens.stop).toBeLessThan("{a + b}".length);
   });
+
+  it.each([
+    ["{abcdefghijklmnop}TAIL", 1, "abcdefghijklmnop", { maxIdentifierLength: 4 }],
+    ['{"abc\\u0064ef}tail"}TAIL', 1, '"abc\\u0064ef}tail"', { maxDecodedStringLength: 4 }],
+    ['🚀{"😀\\u0061}more"}TAIL', 3, '"😀\\u0061}more"', { maxDecodedStringLength: 2 }],
+  ])("bounds guest lexical limit at the full token in %s", (source, start, text, limit) => {
+    const result = parseGuestExpressionPrefix(source, start, { limits: limit });
+    const end = start + text.length;
+    expect(result).toMatchObject({ ok: false, reason: "limit", stop: end });
+    expect(result.range).toEqual({ start, end });
+    expect(result.parsed?.document.tokens[0]).toMatchObject({
+      kind: "invalid",
+      text,
+      range: { start, end },
+    });
+    expect(result.parsed?.document.tokens.at(-1)?.range).toEqual({ start: end, end });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        phase: "lex",
+        code: "KALADA_SYNTAX_LIMIT_EXCEEDED",
+        range: { start, end },
+      }),
+    );
+    expect(result.diagnostics.every((item) => item.range.end <= end)).toBe(true);
+  });
+
+  it("stops at a lexical limit even after an invalid number fills the diagnostic budget", () => {
+    const source = "{01 abcdef}TAIL";
+    const result = parseGuestExpressionPrefix(source, 1, {
+      limits: { maxDiagnostics: 1, maxIdentifierLength: 2 },
+    });
+    expect(result).toMatchObject({ ok: false, reason: "limit", stop: 10 });
+    expect(result.parsed?.document.tokens.map((item) => item.text)).toEqual([
+      "01",
+      " ",
+      "abcdef",
+      "",
+    ]);
+    expect(result.diagnostics.every((item) => item.range.end <= 10)).toBe(true);
+  });
+
+  it("does not mistake a malformed number for a new lexical limit", () => {
+    const source = "{01 abc}TAIL";
+    const result = parseGuestExpressionPrefix(source, 1);
+    expect(result).toMatchObject({ ok: false, reason: "outer-brace", stop: 7 });
+    expect(result.parsed?.document.tokens.map((item) => item.text)).toEqual(["01", " ", "abc", ""]);
+    const capped = parseGuestExpressionPrefix(source, 1, { limits: { maxDiagnostics: 1 } });
+    expect(capped.stop).toBe(7);
+    expect(capped.parsed?.document.tokens.map((item) => item.text)).toEqual(["01", " ", "abc", ""]);
+  });
+
+  it("retains token and source-window budgets for overlong guest literals", () => {
+    const source = "{abcdefghijklmnop}TAIL";
+    expect(
+      parseGuestExpressionPrefix(source, 1, {
+        limits: { maxTokens: 1, maxIdentifierLength: 4 },
+      }).stop,
+    ).toBe(17);
+    const windowed = parseGuestExpressionPrefix(source, 1, {
+      limits: { maxSourceLength: 8, maxIdentifierLength: 4 },
+    });
+    expect(windowed).toMatchObject({ ok: false, reason: "limit" });
+    expect(windowed.stop).toBeLessThanOrEqual(10);
+    expect(windowed.diagnostics.every((item) => item.range.end <= 10)).toBe(true);
+  });
+
+  it.each([
+    ["abcdefghijklmnop}TAIL", { maxIdentifierLength: 4 }],
+    ['"abc\\u0064ef}tail"}TAIL', { maxDecodedStringLength: 4 }],
+  ])("preserves whole-parser lexical remainder for %s", (source, limit) => {
+    const parsed = parseKaladaV1Expression(source, { limits: limit });
+    expect(parsed.document.tokens[0]).toMatchObject({
+      kind: "invalid",
+      text: source,
+      range: { start: 0, end: source.length },
+    });
+    expect(parsed.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "KALADA_SYNTAX_LIMIT_EXCEEDED",
+        range: { start: 0, end: source.length },
+      }),
+    );
+  });
 });
