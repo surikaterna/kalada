@@ -211,17 +211,20 @@ restricted handler or computed-value inverse is promised for this first edit.
 ### CLK-09 — Domain lowering and consumers
 
 - **Inputs:** current checked domain facts and checked expressions, plus target compatibility facts.
-- **Results:** FSX emits existing Formbar declarations with deferred expressions and an explicit
-  compatibility adapter where needed, composing Expressions via public APIs. Formbar schedules
-  calls to the Expressions runtime with those artifacts. Projection maps decoded structured EDIFACT data
-  into a command validated by Scheman, or JSON into an email model for a safe domain renderer.
+- **Results:** FSX emits Formbar declarations with deferred expressions via the proposed in-place
+  V1 Kalada slot replacement, subject to Formbar #179 signoff, composing Expressions via public
+  APIs. Formbar schedules calls to the Expressions runtime with those artifacts. Projection maps
+  decoded structured EDIFACT data into a command validated by Scheman, or JSON into an email model
+  for a safe domain renderer.
 - **Ownership:** each domain owns its IR, validation, renderer/decoder and target mapping; Expressions
   owns expression semantics/runtime. Arbitre receives explicit effect requirements and owns orchestration.
   Kuery gets a fit assessment of expression/context needs, not an implementation commitment.
 - **Rejection / exclusions:** unsupported target declarations, unmappable checked types or missing
-  runtime capabilities block lowering/admission. No eager expression evaluation, new reactive
-  engine, universal domain IR or requirement that projection generate FSX. Small decoder/renderer
-  fixtures can prove boundaries without delivering production integrations.
+  runtime capabilities block lowering/admission. Old Kuery slot data is rejected or migrated
+  explicitly, never silently reinterpreted; V2 slots are not required solely for legacy reads.
+  No eager expression evaluation, new reactive engine, universal domain IR or requirement that
+  projection generate FSX. Small decoder/renderer fixtures can prove boundaries without delivering
+  production integrations.
 
 ### CLK-10 — Headless semantic queries and safe rename
 

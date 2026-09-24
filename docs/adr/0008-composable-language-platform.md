@@ -27,13 +27,14 @@ It is not a portable cache format. Core and projection permit a partial parser-f
 but host depends on syntax. Existing headless language service and CodeMirror are useful
 foundations, not a generic composed-language service or an implemented LSP transport.
 
-Formbar V1 slots are Kuery `ValueExpression<StateRef>`, not Kalada programs (see PRD's pinned
-evidence). Validation compiles Kuery expressions, checks sorted `StateRef` dependencies and
-computation cycles, and reports definition paths rather than FSX source ranges. FSX cannot
-lower real Kalada expressions to V1 unchanged: [Formbar #179](https://github.com/surikaterna/formbar/issues/179)
-must choose tagged versioned slots or a declaration migration, preserve legacy V1 reads, and
-specify dependency/cycle checks, scoped bindings and path-to-source mapping. Formbar #92's older
-Kuery wording and #93's Kalada coordination do not approve a grammar or this decision.
+Current Formbar V1 slots are Kuery `ValueExpression<StateRef>`, not Kalada programs (see PRD's
+pinned evidence). Validation compiles Kuery expressions, checks sorted `StateRef` dependencies
+and computation cycles, and reports definition paths rather than FSX source ranges. Owner
+preference in [Formbar #179](https://github.com/surikaterna/formbar/issues/179) and Kalada #107
+is in-place V1 Kalada slot replacement, subject to Formbar engineering signoff under #179, not
+V2 solely for legacy/mixed-engine reads. Old Kuery data must be explicitly rejected or migrated,
+not silently reinterpreted; published `@formbar/declarative` may have external consumers.
+Formbar #92's older Kuery wording and #93's Kalada coordination do not approve this decision.
 
 ## Proposed decision
 
@@ -112,9 +113,10 @@ JSON --------------------------------------> projection -> email model -> safe d
 
 FSX is JSX-like declarative syntax, not JS/TS. It explicitly composes Expressions through public
 APIs; proposed slots lower to deferred expression artifacts, not eager values. Formbar schedules
-runtime calls. #179 gates real FSX lowering, including legacy V1 preservation and a versioned
-adapter or migration; parser-only [Kalada #108](https://github.com/surikaterna/kalada/issues/108)
-cannot unblock it. No renderer or capability callback runs during checking/compilation.
+runtime calls. #179 gates real FSX lowering: approve V1 replacement, Kalada dependency extraction,
+cycle checks, scoped bindings, source ranges and runtime evaluation; reject or migrate old Kuery
+data explicitly. Parser-only [Kalada #108](https://github.com/surikaterna/kalada/issues/108)
+is independent. No renderer or capability callback runs during checking/compilation.
 Every phase carries document/environment identity and explicit validity/currentness; partial
 recovery supports limited tooling, never emission. Context profiles define lexical/delimiter
 ownership, declared host positions/guests, deterministic handoff and shared budgets;
@@ -263,7 +265,8 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Dependencies:** P1 and P0 declaration/component/reference contracts.
 - **Scope:** provisional FSX compiler supports a small form, scoped read expressions, schema
   and component checking, deferred Kalada programs and source maps **after #179 decides**
-  versioned slots, dependency/cycle validation, legacy behavior and path-to-source maps.
+  V1 replacement, dependency/cycle validation, old-data handling, runtime evaluation and
+  path-to-source maps.
   No eager rendering, runtime fragment values or new reactive system.
   Add minimal EDIFACT → structured data → projection → Scheman and JSON → email model → safe
   renderer probes; fixtures need not deliver a production decoder/renderer. Review Arbitre effect
@@ -372,8 +375,9 @@ Preserve existing APIs and conformance while extracting internally. Introduce ne
 additively where possible; unavoidable semantic/package breaks require explicit versions,
 migration evidence and targeted ADR updates. #21 owns modules/imports and is not an initial
 FSX blocker; #75 owns orthogonal Standard Schema capabilities, not component registries.
-Publishable implementation changes will require appropriate Changesets and separately approved
-work. These four draft documents change no publishable surface and require no Changeset.
+An incompatible publishable Formbar V1 replacement requires a major Formbar Changeset, not
+automatically a Kalada package change. Future versioned portable artifacts remain a separate target.
+These four draft documents change no publishable surface and require no Changeset.
 
 ## Review and validation of this proposal
 

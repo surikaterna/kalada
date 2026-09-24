@@ -53,7 +53,7 @@ The target and open choices elsewhere in this PRD are not claims about that base
 | Host artifacts | [Host manifest](../../packages/host/package.json) depends on syntax; [compiled-artifact.ts](../../packages/host/src/compiled-artifact.ts) retains parsed source, functions and private authenticity state | New portable data-only IR and runtime admission/link boundary, not JSON serialization of existing host objects |
 | Schema integration | [Scheman adapter](../../packages/adapter-scheman/README.md) consumes Scheman v2, distinguishes input shape/output semantics and live capabilities | Reuse for data schemas; component contracts and writable locations need additional domain evidence; #75 is related orthogonal Standard Schema work |
 | Authoring | [Language service](../../packages/language-service/README.md) handles versioned Kalada documents, UTF-16, completion/hover and currentness; [CodeMirror](../../packages/codemirror/package.json) exists | Neither a generic mixed-language service nor an LSP server currently exists; browser and VS Code/LSP must share analysis |
-| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | V1 node/prop/computation slots use Kuery `ValueExpression<StateRef>` (see [expression contract][fb-expression]); scoped bindings and stored computations exist, but V1 does **not** accept Kalada programs. [#179][f179] must decide a tagged versioned slot or declaration migration with legacy V1 behavior before real FSX lowering; not merely a parser handoff under [#108][k108]. |
+| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | Current V1 node/prop/computation slots use Kuery `ValueExpression<StateRef>` (see [expression contract][fb-expression]); scoped bindings and stored computations exist, but V1 does **not** accept Kalada programs. Owner preference recorded in [#179][f179] and [#107][k107] is an in-place V1 Kalada slot replacement, subject to Formbar engineering signoff under #179 before real FSX lowering; no V2 is required solely for legacy/mixed-engine reads. |
 | Coordination | #92 proposes declarative tooling and still mentions the earlier Kuery core; #93 explicitly requires #92 to consume Kalada syntax | Treat #93 as coordination baseline, not proof FSX exists or this proposal is approved |
 
 ## Requirements and measurable acceptance
@@ -119,9 +119,15 @@ projection duplicates those responsibilities.
 
 Current Formbar V1 validators compile Kuery slots, extract sorted `StateRef` dependencies for
 computation reference/cycle checks, and report definition **paths**, not FSX source ranges.
-[#179][f179] must decide expression-version discrimination and migration/legacy reads, Kalada
-dependency extraction and cycle equivalence, scoped binding, and path-to-source diagnostic mapping
-before lowering a real form. General Kalada programs are not presumed translatable to Kuery AST.
+The proposed in-place V1 replacement with Kalada remains gated on Formbar engineering signoff
+in [#179][f179]: define Kalada dependency extraction and cycle equivalence, scoped binding,
+runtime evaluation and path-to-source diagnostic mapping before lowering a real form. Existing
+Kuery-encoded data must be explicitly rejected or migrated, never silently reinterpreted as Kalada;
+do not assume there are no external consumers of published `@formbar/declarative`. An incompatible
+publishable Formbar change needs a major Changeset, not automatically a Kalada package Changeset.
+Future versioned portable artifacts are a separate target, not a reason to require V2 slots now.
+General Kalada programs are not presumed translatable to Kuery AST; parser-only [#108][k108]
+does not resolve this gate.
 [#180][f180] gates repeater-scoped writes separately; first direct non-repeater edits and
 repeated-item **reads** need not wait for stable write identity.
 
@@ -298,6 +304,7 @@ their validation is not evidence that any planned conformance scenario has run.
 [f175]: https://github.com/surikaterna/formbar/issues/175
 [f179]: https://github.com/surikaterna/formbar/issues/179
 [f180]: https://github.com/surikaterna/formbar/issues/180
+[k107]: https://github.com/surikaterna/kalada/issues/107
 [k108]: https://github.com/surikaterna/kalada/issues/108
 [k21]: https://github.com/surikaterna/kalada/issues/21
 [k75]: https://github.com/surikaterna/kalada/issues/75

@@ -119,22 +119,25 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 - **Positive:** compile a minimal field/output/conditional form with nested explicit aliases,
   component and Scheman facts into Formbar declarations and deferred Kalada programs **after**
-  [Formbar #179](https://github.com/surikaterna/formbar/issues/179) selects a versioned Kalada
-  slot/adapter or declaration migration. Preserve existing V1 Kuery `ValueExpression<StateRef>`
-  reads; prove Kalada dependency extraction, computation-cycle and scoped-reference checks.
-  Use the real declaration validator/runtime integration with the decided expression adapter;
-  changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
+  [Formbar #179](https://github.com/surikaterna/formbar/issues/179) signs off on the owner-preferred
+  in-place V1 Kalada slot replacement. Prove Kalada dependency extraction, computation-cycle and
+  scoped-reference checks. Explicitly reject or migrate old Kuery data, without assuming published
+  `@formbar/declarative` has no external consumers. Use the real declaration validator/runtime
+  integration; changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
   FSX explicitly composes the public Expressions provider/compiler; trace Formbar scheduling calls
   to the Expressions runtime with deferred artifacts, not kernel evaluation of a whole form.
 - **Negative:** reject invalid children, attribute types, unknown components/capabilities, duplicate
-  aliases and unresolved references, unknown expression versions, missing dependencies and cycles.
+  aliases and unresolved references, old Kuery slot data without explicit migration, missing
+  dependencies and cycles.
   No implicit Kalada-to-Kuery AST translation or pretending parser-only
-  [#108](https://github.com/surikaterna/kalada/issues/108) resolves V1 compatibility.
+  [#108](https://github.com/surikaterna/kalada/issues/108) resolves Formbar's slot/runtime gate.
   Spies detect any compile-time evaluation, rendering or capability invocation. A browser
   authorization claim cannot bypass server checks.
   Reject reliance on private compiler hooks, privileged provider registration or a kernel evaluator.
 - **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution,
-  version/legacy migration tests and definition-diagnostic **path-to-FSX-source-range** map goldens.
+  old-data rejection/migration tests and definition-diagnostic **path-to-FSX-source-range** map goldens.
+  Incompatible publishable Formbar changes need a major Changeset; future versioned portable
+  artifacts are a separate target, not a requirement for V2 slots here.
   Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
 
 ### CF05 — Writable reference proof before freeze review
