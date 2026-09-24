@@ -4,10 +4,7 @@ import {
   createLanguageService,
   createUtf16LineIndex,
 } from "@kalada/language-service";
-import {
-  createDiagnosticRouter,
-  type DiagnosticProvider,
-} from "@kalada/provider-routing-prototype";
+import { createDiagnosticRouter, type DiagnosticProvider } from "@kalada/provider-routing";
 import { describe, expect, it } from "vitest";
 import {
   invalidEnvironment,
