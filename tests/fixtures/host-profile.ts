@@ -32,7 +32,6 @@ export type Request = Readonly<{
   budget: Readonly<{ work: number; depth: number; diagnostics: number }>;
   meter?: Meter;
   guests?: Readonly<Record<string, Guest>>;
-  guest?: Guest;
 }>;
 export type Outcome = Readonly<{
   status: Status;
@@ -164,9 +163,10 @@ export function compose(request: Request): Outcome {
 
 function resolveGuest(request: Request, selected: string): Guest | null {
   const guests = request.guests;
-  if (!guests || !Object.hasOwn(guests, selected) || typeof guests[selected] !== "function")
-    return null;
-  return request.guest ?? guests[selected];
+  if (!guests) return null;
+  // Resolve one own data entry once; never invoke a getter or consult a fallback parser.
+  const entry = Object.getOwnPropertyDescriptor(guests, selected);
+  return entry && "value" in entry && typeof entry.value === "function" ? entry.value : null;
 }
 
 function spoofed(

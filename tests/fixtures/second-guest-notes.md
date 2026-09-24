@@ -8,8 +8,10 @@ does not enumerate parsers; explicit selection overrides a permitted static
 default. The old #127 Kalada vectors still use the same host path through
 the Kalada adapter, with their lowering/source-map comparison intact.
 
-`tiny-guest.ts` independently scans ASCII decimal additions (spaces/tabs);
-its stops and diagnostic ranges are absolute JavaScript UTF-16 indices. A
+`tiny-guest.ts` independently scans ASCII decimal additions (spaces/tabs
+before, between, and after terms); the integrated recognizer independently
+matches that restricted whitespace grammar. Its stops and diagnostic ranges
+are absolute JavaScript UTF-16 indices. A
 strict integrated tiny-host recognizer is compared with delegation for a complete
 source and a malformed host sibling: accepted status, stop, ownership and
 document-level error presence agree. The integrated recognizer only emits

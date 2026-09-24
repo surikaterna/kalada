@@ -90,10 +90,12 @@ describe("#128 independent guest and explicit reverse host profile", () => {
     const nested = compose({
       ...base,
       meter,
-      guest: (text, start, shared) => {
-        const child = compose({ ...base, meter: shared });
-        expect(child).toMatchObject({ status: "budget", work: 12, depth: 2, ranges: [] });
-        return tinyGuest(text, start, shared);
+      guests: {
+        tiny: (text, start, shared) => {
+          const child = compose({ ...base, meter: shared });
+          expect(child).toMatchObject({ status: "budget", work: 12, depth: 2, ranges: [] });
+          return tinyGuest(text, start, shared);
+        },
       },
     });
     expect(nested).toMatchObject({ status: "budget", work: 12, depth: 2, ranges: [] });
@@ -139,7 +141,12 @@ describe("#128 independent guest and explicit reverse host profile", () => {
   });
 
   it("compares a strict integrated tiny-host fixture with delegation and records incomplete sibling", () => {
-    for (const source of ["host{12 + 34}TAIL", "host{12 + 34}TAIL{broken"]) {
+    for (const source of [
+      "host{12 + 34}TAIL",
+      "host{ 12 }TAIL",
+      "host{12\t+\t34}TAIL",
+      "host{12 + 34}TAIL{broken",
+    ]) {
       const integrated = integratedTiny(source);
       const delegated = runTiny(source);
       expect(delegated.status).toBe(integrated.status);
@@ -183,10 +190,12 @@ describe("#128 independent guest and explicit reverse host profile", () => {
       meter,
       explicit: "tiny",
       profiles: [{ version: 1, position: "expression", allowed: ["tiny"] }],
-      guest: (text, start, shared) => {
-        expect(shared).toBe(meter);
-        expect(compose(reverse("tiny<host{a + 1}>TAIL", { meter: shared })).status).toBe("valid");
-        return tinyGuest(text, start, shared);
+      guests: {
+        tiny: (text, start, shared) => {
+          expect(shared).toBe(meter);
+          expect(compose(reverse("tiny<host{a + 1}>TAIL", { meter: shared })).status).toBe("valid");
+          return tinyGuest(text, start, shared);
+        },
       },
     });
     expect(result).toMatchObject({
@@ -201,9 +210,13 @@ describe("#128 independent guest and explicit reverse host profile", () => {
       meter: limited,
       explicit: "tiny",
       profiles: [{ version: 1, position: "expression", allowed: ["tiny"] }],
-      guest: (text, start, shared) => {
-        expect(compose(reverse("tiny<host{a + 1}>TAIL", { meter: shared })).status).toBe("budget");
-        return tinyGuest(text, start, shared);
+      guests: {
+        tiny: (text, start, shared) => {
+          expect(compose(reverse("tiny<host{a + 1}>TAIL", { meter: shared })).status).toBe(
+            "budget",
+          );
+          return tinyGuest(text, start, shared);
+        },
       },
     });
     expect(blocked).toMatchObject({ status: "budget", ranges: [] });
@@ -211,16 +224,18 @@ describe("#128 independent guest and explicit reverse host profile", () => {
     const dirty = compose({
       ...reverse("tiny<host{a}>TAIL"),
       meter: diagnosticMeter,
-      guest: (text, start, shared) => {
-        expect(
-          compose({
-            ...reverse("host{12 + }TAIL"),
-            meter: shared,
-            profiles: [{ version: 1, position: "expression", allowed: ["tiny"] }],
-            explicit: "tiny",
-          }),
-        ).toMatchObject({ status: "partial", diagnostics: 1 });
-        return kaladaGuest(text, start, shared);
+      guests: {
+        kalada: (text, start, shared) => {
+          expect(
+            compose({
+              ...reverse("host{12 + }TAIL"),
+              meter: shared,
+              profiles: [{ version: 1, position: "expression", allowed: ["tiny"] }],
+              explicit: "tiny",
+            }),
+          ).toMatchObject({ status: "partial", diagnostics: 1 });
+          return kaladaGuest(text, start, shared);
+        },
       },
     });
     expect(dirty).toMatchObject({ status: "budget", diagnostics: 1, ranges: [] });
@@ -230,9 +245,11 @@ describe("#128 independent guest and explicit reverse host profile", () => {
     const source = "tiny<host{a}>TAIL";
     const altered = compose(
       reverse(source, {
-        guest: (text, start, meter) => {
-          meter.work = -1;
-          return kaladaGuest(text, start, meter);
+        guests: {
+          kalada: (text, start, meter) => {
+            meter.work = -1;
+            return kaladaGuest(text, start, meter);
+          },
         },
       }),
     );
@@ -240,9 +257,11 @@ describe("#128 independent guest and explicit reverse host profile", () => {
     expect(
       compose(
         reverse(source, {
-          guest: (text, start, meter) => {
-            meter.leave();
-            return kaladaGuest(text, start, meter);
+          guests: {
+            kalada: (text, start, meter) => {
+              meter.leave();
+              return kaladaGuest(text, start, meter);
+            },
           },
         }),
       ).status,
@@ -250,13 +269,17 @@ describe("#128 independent guest and explicit reverse host profile", () => {
     const genuine = kaladaGuest(source, 10, new Meter({ work: 100, depth: 2, diagnostics: 2 }));
     expect(
       compose(
-        reverse(source, { guest: () => ({ ...genuine, range: { start: 9, end: genuine.stop } }) }),
+        reverse(source, {
+          guests: { kalada: () => ({ ...genuine, range: { start: 9, end: genuine.stop } }) },
+        }),
       ).status,
     ).toBe("invalid");
     const cancelling = { ...reverse(source), cancelled: false };
-    cancelling.guest = (text, start, meter) => {
-      cancelling.cancelled = true;
-      return kaladaGuest(text, start, meter);
+    cancelling.guests = {
+      kalada: (text, start, meter) => {
+        cancelling.cancelled = true;
+        return kaladaGuest(text, start, meter);
+      },
     };
     expect(compose(cancelling).status).toBe("cancelled");
     expect(
