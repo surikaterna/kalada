@@ -21,6 +21,7 @@ describe("experimental guest-owned boundary", () => {
     ["🚀{(1 + 2) * 3}TAIL", 3, "(1 + 2) * 3", "TAIL"],
     ['{a?.field ?? "\\"}\\""}TAIL', 1, 'a?.field ?? "\\"}\\""', "TAIL"],
     ['{"// } /*" + a}TAIL', 1, '"// } /*" + a', "TAIL"],
+    ['{"\u0027`}"}TAIL', 1, '"\u0027`}"', "TAIL"],
   ])("hands off %s without consuming host tail", (source, start, expression, rest) => {
     const { result, rest: continuation } = host(source, start);
     expect(result.ok).toBe(true);
@@ -96,6 +97,42 @@ describe("experimental guest-owned boundary", () => {
     );
   });
 
+  it.each(["'", "`"])("stops at the unsupported %s opener before the host brace", (quote) => {
+    const prefix = `🚀{a + ${quote}`;
+    const opener = prefix.length - 1;
+    const source = `${prefix}bad}TAIL${"🚀}".repeat(1000)}`;
+    const { result, rest } = host(source, 3, { limits: { maxSourceLength: 16 } });
+    expect(result).toMatchObject({ ok: false, reason: "unsupported-quote", stop: opener });
+    expect(rest).toBeNull();
+    expect(result.range).toEqual({ start: 3, end: opener });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "KALADA_SYNTAX_UNSUPPORTED_FORM",
+        range: { start: opener, end: opener },
+      }),
+    );
+    expect(result.diagnostics.every((item) => item.range.end <= opener)).toBe(true);
+    expect(result.parsed?.document.tokens.map((item) => item.text).join("")).toBe("a + ");
+    expect(result.parsed?.document.tokens.at(-1)?.range).toEqual({
+      start: opener,
+      end: opener,
+    });
+    expect(result.diagnostics.map((item) => item.code)).not.toContain(
+      "KALADA_SYNTAX_LIMIT_EXCEEDED",
+    );
+  });
+
+  it.each(["'", "`"])("does not scan a %s body past a host brace", (quote) => {
+    const source = `{${quote}bad}TAIL`;
+    const result = parseGuestExpressionPrefix(source, 1);
+    expect(result).toMatchObject({ ok: false, reason: "unsupported-quote", stop: 1 });
+    expect(result.range).toEqual({ start: 1, end: 1 });
+    expect(result.parsed?.document.tokens).toEqual([
+      expect.objectContaining({ kind: "eof", range: { start: 1, end: 1 } }),
+    ]);
+    expect(result.diagnostics.every((item) => item.range.end <= 1)).toBe(true);
+  });
+
   it("preserves whole-expression comment scanning outside the guest seam", () => {
     const source = "a //comment}TAIL";
     const parsed = parseKaladaV1Expression(source);
@@ -107,6 +144,14 @@ describe("experimental guest-owned boundary", () => {
         code: "KALADA_SYNTAX_UNSUPPORTED_FORM",
         range: { start: 2, end: source.length },
       }),
+    );
+  });
+
+  it.each(["'", "`"])("preserves whole-expression %s scanning", (quote) => {
+    const source = `${quote}bad}TAIL`;
+    const parsed = parseKaladaV1Expression(source);
+    expect(parsed.document.tokens).toContainEqual(
+      expect.objectContaining({ kind: "unsupported", text: source }),
     );
   });
 

@@ -19,6 +19,7 @@ export interface GuestBoundaryResult {
     | "outer-brace"
     | "unmatched-parentheses"
     | "unsupported-comment"
+    | "unsupported-quote"
     | "eof"
     | "limit"
     | "invalid-start";
@@ -30,6 +31,8 @@ export interface GuestBoundaryResult {
  * Experimental internal syntax seam, not a package export or a host grammar contract.
  * The host declares start and independently checks/consumes source[stop] === "}".
  * Only current supported Kalada expressions succeed; future grammar belongs to the guest lexer.
+ * An unterminated supported double-quoted string is ambiguous: scanning remains bounded by
+ * maxSourceLength and fails closed, but cannot identify a brace inside that string as host-owned.
  */
 export function parseGuestExpressionPrefix(
   source: string,
@@ -79,5 +82,6 @@ export function parseGuestExpressionPrefix(
 function guestStopReason(scanned: GuestLexResult, limited: boolean): GuestBoundaryResult["reason"] {
   if (scanned.stop === null) return limited ? "limit" : "eof";
   if (scanned.unsupportedComment) return "unsupported-comment";
+  if (scanned.unsupportedQuote) return "unsupported-quote";
   return scanned.unmatchedParentheses ? "unmatched-parentheses" : "outer-brace";
 }
