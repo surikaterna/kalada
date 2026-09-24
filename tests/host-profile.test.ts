@@ -8,6 +8,7 @@ import {
   type Request,
   type Snapshot,
 } from "./fixtures/host-profile.js";
+import { kaladaGuest } from "./fixtures/kalada-guest.js";
 
 const profile: Profile = Object.freeze({ version: 1, position: "expression", allowed: ["kalada"] });
 
@@ -18,6 +19,7 @@ function request(source: string, overrides: Partial<Request> = {}): Request {
     current: snapshot,
     profiles: [profile],
     explicit: "kalada",
+    guests: { kalada: kaladaGuest },
     budget: { work: 1000, depth: 1, diagnostics: 10 },
     ...overrides,
   };

@@ -1,14 +1,25 @@
-import type { GuestBoundaryResult } from "../../packages/syntax/src/guest-boundary.js";
-import { parseGuestExpressionPrefix } from "../../packages/syntax/src/guest-boundary.js";
-
 type Status = "valid" | "invalid" | "unsupported" | "partial" | "stale" | "cancelled" | "budget";
-type Owner = "host" | "kalada";
+type Owner = "host" | string;
 type Range = Readonly<{ start: number; end: number; owner: Owner }>;
+export type GuestResult = Readonly<{
+  ok: boolean;
+  // Cooperative guests report already-metered scan work so the host does not debit it twice.
+  chargedWork?: number;
+  stop: number;
+  range: Readonly<{ start: number; end: number }>;
+  reason: string;
+  diagnostics: readonly unknown[];
+  parsed: null | Readonly<{
+    document: Readonly<{ source: string }>;
+    diagnostics: readonly unknown[];
+  }>;
+}>;
+export type Guest = (source: string, start: number, meter: Meter) => GuestResult;
 
 export type Snapshot = Readonly<{ source: string; version: number; environment: string }>;
 export type Profile = Readonly<{
   version: 1;
-  position: "expression";
+  position: "expression" | "reverse";
   allowed: readonly string[];
   rootDefault?: string;
 }>;
@@ -20,20 +31,21 @@ export type Request = Readonly<{
   cancelled?: boolean;
   budget: Readonly<{ work: number; depth: number; diagnostics: number }>;
   meter?: Meter;
-  guest?: (source: string, start: number, meter: Meter) => GuestBoundaryResult;
+  guests?: Readonly<Record<string, Guest>>;
+  guest?: Guest;
 }>;
 export type Outcome = Readonly<{
   status: Status;
   reason: string;
   ranges: readonly Range[];
   stop: number | null;
-  guest: GuestBoundaryResult | null;
+  guest: GuestResult | null;
   work: number;
   depth: number;
   diagnostics: number;
 }>;
 
-const openers = ["host{", "🚀\r\nhost{"] as const;
+const openers = { expression: ["host{", "🚀\r\nhost{"], reverse: ["tiny<host{"] } as const;
 
 export class Meter {
   work = 0;
@@ -77,6 +89,10 @@ export class Meter {
     return this.limits.work - this.work;
   }
 
+  get activeDepth(): number {
+    return this.active;
+  }
+
   get remainingDiagnostics(): number {
     return this.limits.diagnostics - this.diagnostics;
   }
@@ -92,8 +108,8 @@ export class Meter {
   }
 }
 
-function entryStart(source: string): number | null {
-  const declared = openers.find((item) => source.startsWith(item));
+function entryStart(source: string, position: Profile["position"]): number | null {
+  const declared = openers[position].find((item) => source.startsWith(item));
   return declared ? declared.length : null;
 }
 
@@ -117,36 +133,57 @@ export function compose(request: Request): Outcome {
   const { snapshot, current, budget } = request;
   const meter = request.meter ?? new Meter(budget);
   const admitted = Object.freeze({ ...snapshot });
-  if (
-    snapshot.version !== current.version ||
-    snapshot.environment !== current.environment ||
-    snapshot.source !== current.source
-  )
-    return outcome("stale", "snapshot/environment mismatch");
+  if (!sameIdentity(snapshot, current)) return outcome("stale", "snapshot/environment mismatch");
   if (request.cancelled) return outcome("cancelled", "cancelled before entry");
   const selection = select(request);
-  if (selection) return selection;
-  const start = entryStart(snapshot.source);
+  if (selection instanceof Object && "status" in selection) return selection;
+  const start = entryStart(snapshot.source, request.profiles[0].position);
   if (start === null) return outcome("invalid", "undeclared host position");
+  const parser = resolveGuest(request, selection);
+  if (!parser) return outcome("unsupported", "unregistered guest");
   if (!meter.advance(start) || !meter.hasRoom() || !meter.enter())
     return outcome("budget", "shared entry budget exhausted", meter);
-  let guest: GuestBoundaryResult;
+  let guest: GuestResult;
+  const before = {
+    work: meter.work,
+    diagnostics: meter.diagnostics,
+    depth: meter.depth,
+    active: meter.activeDepth,
+  };
   try {
-    guest = request.guest
-      ? request.guest(snapshot.source, start, meter)
-      : parseGuestExpressionPrefix(snapshot.source, start, {
-          limits: {
-            maxSourceLength: meter.remainingWork,
-            maxDiagnostics: meter.remainingDiagnostics,
-          },
-        });
+    guest = parser(snapshot.source, start, meter);
   } finally {
     meter.leave();
   }
   if (request.cancelled) return outcome("cancelled", "cancelled after guest return");
   if (!sameIdentity(admitted, request.snapshot) || !sameIdentity(admitted, request.current))
     return outcome("stale", "snapshot/environment changed during guest");
-  return acceptGuest(request, guest, start, meter);
+  if (spoofed(meter, before)) return outcome("budget", "spoofed or exhausted meter", meter);
+  return acceptGuest(request, guest, start, selection, meter, before.work);
+}
+
+function resolveGuest(request: Request, selected: string): Guest | null {
+  const guests = request.guests;
+  if (!guests || !Object.hasOwn(guests, selected) || typeof guests[selected] !== "function")
+    return null;
+  return request.guest ?? guests[selected];
+}
+
+function spoofed(
+  meter: Meter,
+  before: { work: number; diagnostics: number; depth: number; active: number },
+): boolean {
+  return (
+    meter.exhausted ||
+    !meter.hasRoom() ||
+    meter.work < before.work ||
+    meter.diagnostics < before.diagnostics ||
+    meter.depth < before.depth ||
+    meter.activeDepth !== before.active - 1 ||
+    meter.depth > meter.limits.depth ||
+    meter.work > meter.limits.work ||
+    meter.diagnostics > meter.limits.diagnostics
+  );
 }
 
 function sameIdentity(left: Snapshot, right: Snapshot): boolean {
@@ -157,57 +194,81 @@ function sameIdentity(left: Snapshot, right: Snapshot): boolean {
   );
 }
 
-function select(request: Request): Outcome | null {
+function select(request: Request): Outcome | string {
   const { snapshot } = request;
-  if (entryStart(snapshot.source) === null) return outcome("invalid", "undeclared host position");
   if (request.profiles.length !== 1) return outcome("invalid", "overlapping or missing slot");
   const profile = request.profiles[0];
-  if (profile?.version !== 1 || profile.position !== "expression")
+  if (profile?.version !== 1 || !Object.hasOwn(openers, profile.position))
     return outcome("unsupported", "unknown profile version or position");
+  if (entryStart(snapshot.source, profile.position) === null)
+    return outcome("invalid", "undeclared host position");
   if (new Set(profile.allowed).size !== profile.allowed.length)
     return outcome("invalid", "ambiguous guest registration");
   const selected = request.explicit ?? profile.rootDefault;
   if (!selected) return outcome("unsupported", "explicit guest required");
-  if (!profile.allowed.includes(selected) || selected !== "kalada")
+  if (!profile.allowed.includes(selected))
     return outcome("unsupported", "forbidden or unsupported guest");
-  return null;
+  return selected;
 }
 
 function acceptGuest(
   request: Request,
-  guest: GuestBoundaryResult,
+  guest: GuestResult,
   start: number,
+  selected: string,
   meter: Meter,
+  startWork: number,
 ): Outcome {
   const { snapshot } = request;
+  if (!guest?.range || !Array.isArray(guest.diagnostics))
+    return outcome("invalid", "non-progress, out-of-range or non-delimiter exit", meter);
   const stop = guest.stop;
   const diagnostics = guest.diagnostics.length;
-  if (
-    meter.exhausted ||
-    !meter.advance(Number.isSafeInteger(stop) ? Math.max(0, stop - start) : 0) ||
-    !meter.report(diagnostics)
-  )
+  if (!accountGuest(meter, stop, start, diagnostics, guest.chargedWork ?? 0, startWork))
     return outcome("budget", "shared guest budget exhausted", meter);
-  if (guest.reason === "unsupported-comment") return outcome("unsupported", guest.reason, meter);
+  if (guest.reason === "unsupported-comment" || guest.reason === "unsupported-token")
+    return outcome("unsupported", guest.reason, meter);
   if (guest.reason === "eof" || guest.reason === "limit")
     return outcome(guest.reason === "limit" ? "budget" : "partial", guest.reason, meter);
   if (!validExit(snapshot.source, guest, start))
     return outcome("invalid", "non-progress, out-of-range or non-delimiter exit", meter);
-  if (
-    !guest.ok ||
-    guest.reason !== "outer-brace" ||
-    !guest.parsed ||
-    diagnostics !== 0 ||
-    guest.parsed.diagnostics.length !== 0
-  )
-    return outcome("partial", guest.reason, meter);
+  if (!cleanGuest(guest)) return outcome("partial", guest.reason, meter);
   if (guest.parsed.document.source !== snapshot.source)
     return outcome("invalid", "guest source identity mismatch", meter);
   if (meter.diagnostics !== 0) return outcome("partial", "nested diagnostic", meter);
-  return finishHost(request, guest, start, meter);
+  return finishHost(request, guest, start, selected, meter);
 }
 
-function validExit(source: string, guest: GuestBoundaryResult, start: number): boolean {
+function accountGuest(
+  meter: Meter,
+  stop: number,
+  start: number,
+  count: number,
+  charged: number,
+  startWork: number,
+): boolean {
+  return (
+    !meter.exhausted &&
+    Number.isSafeInteger(charged) &&
+    charged >= 0 &&
+    charged <= meter.work - startWork &&
+    charged <= stop - start &&
+    meter.advance(Number.isSafeInteger(stop) ? Math.max(0, stop - start - charged) : 0) &&
+    meter.report(count)
+  );
+}
+
+function cleanGuest(guest: GuestResult): boolean {
+  return (
+    guest.ok &&
+    guest.reason === "outer-brace" &&
+    !!guest.parsed &&
+    guest.diagnostics.length === 0 &&
+    guest.parsed.diagnostics.length === 0
+  );
+}
+
+function validExit(source: string, guest: GuestResult, start: number): boolean {
   const stop = guest.stop;
   return (
     Number.isSafeInteger(stop) &&
@@ -221,13 +282,16 @@ function validExit(source: string, guest: GuestBoundaryResult, start: number): b
 
 function finishHost(
   request: Request,
-  guest: GuestBoundaryResult,
+  guest: GuestResult,
   start: number,
+  selected: string,
   meter: Meter,
 ): Outcome {
   const { snapshot } = request;
   const stop = guest.stop;
   const tail = snapshot.source.slice(stop + 1);
+  if (request.profiles[0].position === "reverse" && !tail.startsWith(">"))
+    return outcome("invalid", "reverse host close missing", meter);
   if (/[{}]/u.test(tail)) return outcome("invalid", "malformed host sibling", meter);
   if (!meter.advance(1 + tail.length))
     return outcome("budget", "shared host continuation budget exhausted", meter);
@@ -241,7 +305,7 @@ function finishHost(
     diagnostics: meter.diagnostics,
     ranges: Object.freeze([
       Object.freeze({ start: 0, end: start, owner: "host" as const }),
-      Object.freeze({ start, end: stop, owner: "kalada" as const }),
+      Object.freeze({ start, end: stop, owner: selected }),
       Object.freeze({ start: stop, end: snapshot.source.length, owner: "host" as const }),
     ]),
   });
