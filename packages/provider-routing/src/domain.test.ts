@@ -39,6 +39,28 @@ describe("independent domain routing", () => {
     expect(router.diagnose("domain", { ...snapshot, text: "plain" }).status).toBe("unsupported");
   });
 
+  it("captures identity exactly once and leaves stale outcomes identifiable", () => {
+    let reads = 0;
+    const input = {
+      ...snapshot,
+      get environmentGeneration() {
+        return ++reads === 1 ? "schema-1" : "schema-2";
+      },
+    };
+    const result = createDiagnosticRouter([domain]).diagnose("domain", input);
+    expect(reads).toBe(1);
+    expect(result.document.environmentGeneration).toBe("schema-1");
+    expect(result.document.environmentGeneration).not.toBe(input.environmentGeneration);
+    expect(() =>
+      createDiagnosticRouter([domain]).diagnose("domain", {
+        ...snapshot,
+        get text(): string {
+          throw new Error("untrusted input");
+        },
+      }),
+    ).toThrow("untrusted input");
+  });
+
   it("rejects duplicate registration, implicit selection and invalid identity", () => {
     expect(() => createDiagnosticRouter([domain, domain])).toThrow("Duplicate language ID");
     const router = createDiagnosticRouter([domain]);

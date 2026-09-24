@@ -12,35 +12,13 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { importsModule, isModuleCall, moduleSpecifier } from "./module-specifiers.js";
 
 const root = resolve(import.meta.dirname, "..");
 const codeMirror = resolve(root, "packages/codemirror");
 const core = resolve(root, "packages/core");
 const host = resolve(root, "packages/host");
 const languageService = resolve(root, "packages/language-service");
-
-function isModuleCall(node: ts.Node): node is ts.CallExpression {
-  if (!ts.isCallExpression(node)) return false;
-  const callee = node.expression;
-  return (
-    callee.kind === ts.SyntaxKind.ImportKeyword ||
-    (ts.isIdentifier(callee) && callee.text === "require") ||
-    (ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression) &&
-      callee.expression.text === "module" &&
-      callee.name.text === "require")
-  );
-}
-
-function moduleSpecifier(node: ts.Node): ts.Expression | undefined {
-  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
-  if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference))
-    return node.moduleReference.expression;
-  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
-    return node.argument.literal as ts.Expression;
-  if (isModuleCall(node)) return node.arguments[0];
-  return undefined;
-}
 
 function insidePackage(packageRoot: string, path: string): boolean {
   const offset = relative(packageRoot, path);
@@ -145,10 +123,18 @@ describe("package boundaries", () => {
     }
   });
 
-  it("keeps the private routing prototype expression-optional and headless", async () => {
+  it("keeps the published diagnostic router expression-optional and headless", async () => {
     const directory = resolve(root, "packages/provider-routing");
     const manifest = await readJson(resolve(directory, "package.json"));
-    expect(manifest.private).toBe(true);
+    expect(manifest.name).toBe("@kalada/provider-routing");
+    expect(manifest.private).toBeUndefined();
+    expect(manifest.exports).toEqual({
+      ".": {
+        import: { types: "./dist/index.d.ts", default: "./dist/index.js" },
+        require: { types: "./dist/index.d.cts", default: "./dist/index.cjs" },
+      },
+      "./package.json": "./package.json",
+    });
     for (const field of [
       "dependencies",
       "optionalDependencies",
@@ -285,9 +271,7 @@ describe("package boundaries", () => {
     const hostSource = await readFile(resolve(host, "src/index.ts"), "utf8");
     expect(hostSource).not.toContain("@kalada/language-service");
     const source = await productionSource(resolve(languageService, "src"));
-    expect(source).not.toMatch(
-      /(?:from|import\s*\(|require\s*\()[\s"']*@kalada\/provider-routing-prototype/iu,
-    );
+    expect(importsModule(source, "@kalada/provider-routing")).toBe(false);
   });
 
   it("keeps the language-service source graph headless and evaluation-free", async () => {

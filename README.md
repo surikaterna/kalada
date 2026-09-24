@@ -6,7 +6,8 @@ at its canonical root. The native profile
 supports typed lexical functions, bounded recursion, and the `map`, `filter`, `some`, and `every`
 core function values in addition to Option, Result, temporal values, and exhaustive matches.
 
-See the [core API guide](packages/core/README.md),
+See the [experimental neutral diagnostic routing guide](packages/provider-routing/README.md),
+[core API guide](packages/core/README.md),
 [syntax API guide](packages/syntax/README.md), and
 [projection API and migration guide](packages/projection/README.md) for executable examples,
 limits, security boundaries, omission semantics, and public entry points. Projection v1 constructs

@@ -1,4 +1,5 @@
-// Provisional, private whole-document diagnostic routing; not a published kernel API.
+/** Experimental diagnostic contract v1; not a parser, checker, or runtime API. */
+export const DIAGNOSTIC_CONTRACT_VERSION = 1;
 export interface DocumentSnapshot {
   readonly uri: string;
   readonly text: string;
@@ -26,7 +27,7 @@ export type RoutedOutcome = ProviderOutcome & {
   readonly document: DocumentSnapshot;
 };
 
-// Fixed qualitative safety bounds for this probe, not calibrated platform budgets.
+// Fixed qualitative safety bounds, not calibrated platform budgets.
 const MAX_TEXT = 100_000;
 const MAX_IDENTITY = 2_048;
 const MAX_DIAGNOSTICS = 100;

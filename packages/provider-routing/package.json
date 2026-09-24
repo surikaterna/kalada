@@ -1,16 +1,43 @@
 {
-  "name": "@kalada/provider-routing-prototype",
+  "name": "@kalada/provider-routing",
   "version": "0.0.0",
-  "private": true,
+  "description": "Experimental neutral whole-document diagnostic routing for Kalada consumers",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/surikaterna/kalada",
+    "directory": "packages/provider-routing"
+  },
   "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --target node22 --clean",
+    "build": "tsup src/index.ts --format esm,cjs --dts --target node22 --clean",
     "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }
