@@ -8,6 +8,8 @@ import {
   type Request,
   type Snapshot,
 } from "./fixtures/host-profile.js";
+import { kaladaGuest } from "./fixtures/kalada-guest.js";
+import { tinyGuest } from "./fixtures/tiny-guest.js";
 
 const profile: Profile = Object.freeze({ version: 1, position: "expression", allowed: ["kalada"] });
 
@@ -18,6 +20,7 @@ function request(source: string, overrides: Partial<Request> = {}): Request {
     current: snapshot,
     profiles: [profile],
     explicit: "kalada",
+    guests: { kalada: kaladaGuest },
     budget: { work: 1000, depth: 1, diagnostics: 10 },
     ...overrides,
   };
@@ -119,15 +122,19 @@ describe("#127 one declared host slot (not full CF01)", () => {
   it("rejects cancellation or environment mutation during a guest call", () => {
     const source = "host{a}TAIL";
     const cancel = { ...request(source), cancelled: false };
-    cancel.guest = (text, start) => {
-      cancel.cancelled = true;
-      return parseGuestExpressionPrefix(text, start);
+    cancel.guests = {
+      kalada: (text, start) => {
+        cancel.cancelled = true;
+        return parseGuestExpressionPrefix(text, start);
+      },
     };
     expect(compose(cancel).status).toBe("cancelled");
     const stale = { ...request(source), current: { ...request(source).current } };
-    stale.guest = (text, start) => {
-      stale.current = { ...stale.current, environment: "schema-B" };
-      return parseGuestExpressionPrefix(text, start);
+    stale.guests = {
+      kalada: (text, start) => {
+        stale.current = { ...stale.current, environment: "schema-B" };
+        return parseGuestExpressionPrefix(text, start);
+      },
     };
     expect(compose(stale).status).toBe("stale");
   });
@@ -147,7 +154,7 @@ describe("#127 one declared host slot (not full CF01)", () => {
         parsed: { ...genuine.parsed, document: { ...genuine.parsed.document, source: "wrong" } },
       },
     ]) {
-      const result = compose(request(source, { guest: () => guest }));
+      const result = compose(request(source, { guests: { kalada: () => guest } }));
       expect(result.status).not.toBe("valid");
       expect(result.ranges).toEqual([]);
     }
@@ -173,7 +180,7 @@ describe("#127 one declared host slot (not full CF01)", () => {
     };
     const malformed = compose(
       request(source, {
-        guest: () => ({ ...validGuest, diagnostics: [diagnostic, diagnostic] }),
+        guests: { kalada: () => ({ ...validGuest, diagnostics: [diagnostic, diagnostic] }) },
         budget: { work: 1000, depth: 1, diagnostics: 1 },
       }),
     );
@@ -184,14 +191,14 @@ describe("#127 one declared host slot (not full CF01)", () => {
   it("shares one mutable meter with a nested toy host/guest without resetting any limit", () => {
     const outer = "host{a}TAIL";
     const inner = "host{a + }TAIL";
-    const toy: NonNullable<Request["guest"]> = (source, start, meter) => {
+    const toy: NonNullable<Request["guests"]>[string] = (source, start, meter) => {
       expect(meter).toBe(shared);
       const child = compose(request(inner, { meter }));
       expect(child.status).toBe("partial");
       return parseGuestExpressionPrefix(source, start);
     };
     const shared = new Meter({ work: 100, depth: 2, diagnostics: 2 });
-    const done = compose(request(outer, { meter: shared, guest: toy }));
+    const done = compose(request(outer, { meter: shared, guests: { kalada: toy } }));
     expect(done).toMatchObject({ status: "partial", depth: 2, diagnostics: 1, ranges: [] });
     expect(done.work).toBe(outer.indexOf("}") + inner.indexOf("}"));
     expect(shared.work).toBe(done.work);
@@ -199,9 +206,11 @@ describe("#127 one declared host slot (not full CF01)", () => {
     const nested = compose(
       request(outer, {
         meter: clean,
-        guest: (source, start, same) => {
-          expect(compose(request("host{b}TAIL", { meter: same })).status).toBe("valid");
-          return parseGuestExpressionPrefix(source, start);
+        guests: {
+          kalada: (source, start, same) => {
+            expect(compose(request("host{b}TAIL", { meter: same })).status).toBe("valid");
+            return parseGuestExpressionPrefix(source, start);
+          },
         },
       }),
     );
@@ -212,19 +221,23 @@ describe("#127 one declared host slot (not full CF01)", () => {
     const exhausted = compose(
       request(outer, {
         meter: diagnosticMeter,
-        guest: (source, start, same) => {
-          expect(compose(request(inner, { meter: same })).diagnostics).toBe(1);
-          const second = compose(
-            request(inner, {
-              meter: same,
-              guest: (text, at) => {
-                secondCalled = true;
-                return parseGuestExpressionPrefix(text, at);
-              },
-            }),
-          );
-          expect(second.status).toBe("budget");
-          return parseGuestExpressionPrefix(source, start);
+        guests: {
+          kalada: (source, start, same) => {
+            expect(compose(request(inner, { meter: same })).diagnostics).toBe(1);
+            const second = compose(
+              request(inner, {
+                meter: same,
+                guests: {
+                  kalada: (text, at) => {
+                    secondCalled = true;
+                    return parseGuestExpressionPrefix(text, at);
+                  },
+                },
+              }),
+            );
+            expect(second.status).toBe("budget");
+            return parseGuestExpressionPrefix(source, start);
+          },
         },
       }),
     );
@@ -241,18 +254,22 @@ describe("#127 one declared host slot (not full CF01)", () => {
       const result = compose(
         request(outer, {
           meter,
-          guest: (source, start, same) => {
-            calls.push(same.depth);
-            compose(
-              request(inner, {
-                meter: same,
-                guest: (text, at) => {
-                  calls.push(same.depth);
-                  return parseGuestExpressionPrefix(text, at);
-                },
-              }),
-            );
-            return parseGuestExpressionPrefix(source, start);
+          guests: {
+            kalada: (source, start, same) => {
+              calls.push(same.depth);
+              compose(
+                request(inner, {
+                  meter: same,
+                  guests: {
+                    kalada: (text, at) => {
+                      calls.push(same.depth);
+                      return parseGuestExpressionPrefix(text, at);
+                    },
+                  },
+                }),
+              );
+              return parseGuestExpressionPrefix(source, start);
+            },
           },
         }),
       );
@@ -278,7 +295,7 @@ describe("#127 one declared host slot (not full CF01)", () => {
     );
     if (!parsed.parsed) throw new Error("expected real diagnostic CST");
     expect(lowerKaladaV1Expression(parsed.parsed).ok).toBe(false);
-    const admitted = compose(request(source, { guest: () => parsed }));
+    const admitted = compose(request(source, { guests: { kalada: () => parsed } }));
     expect(admitted).toMatchObject({ status: "partial", stop: null, guest: null, ranges: [] });
   });
 
@@ -306,7 +323,7 @@ describe("#127 one declared host slot (not full CF01)", () => {
   it("rejects invalid and unsupported selection before invoking guest or consuming host tail", () => {
     const source = "🚀\r\nhost{a}TAIL";
     let calls = 0;
-    const guest: NonNullable<Request["guest"]> = (text, start) => {
+    const guest: NonNullable<Request["guests"]>[string] = (text, start) => {
       calls++;
       return parseGuestExpressionPrefix(text, start);
     };
@@ -315,7 +332,7 @@ describe("#127 one declared host slot (not full CF01)", () => {
       { explicit: "other" },
       { profiles: [{ ...profile, version: 2 as 1 }] },
     ]) {
-      expect(compose(request(source, { guest, ...overrides }))).toMatchObject({
+      expect(compose(request(source, { guests: { kalada: guest }, ...overrides }))).toMatchObject({
         stop: null,
         guest: null,
         ranges: [],
@@ -323,5 +340,48 @@ describe("#127 one declared host slot (not full CF01)", () => {
       });
     }
     expect(calls).toBe(0);
+  });
+
+  it("never attributes an override or an accessor's parser to the selected guest", () => {
+    const source = "host{12}TAIL";
+    let wrongCalls = 0;
+    const wrong: NonNullable<Request["guests"]>[string] = (text, start, meter) => {
+      wrongCalls++;
+      return tinyGuest(text, start, meter);
+    };
+    const ignored = compose({ ...request(source), guest: wrong } as Request);
+    expect(ignored.status).toBe("valid");
+    expect(ignored.ranges[1].owner).toBe("kalada");
+    expect(wrongCalls).toBe(0);
+    const registered: Record<string, NonNullable<Request["guests"]>[string]> = {
+      kalada: (text, start, meter) => {
+        registered.kalada = wrong;
+        return kaladaGuest(text, start, meter);
+      },
+    };
+    const stable = compose(request(source, { guests: registered }));
+    expect(stable.status).toBe("valid");
+    expect(stable.ranges[1].owner).toBe("kalada");
+    expect(wrongCalls).toBe(0);
+
+    let getterCalls = 0;
+    const guests = Object.defineProperty({}, "kalada", {
+      get() {
+        getterCalls++;
+        return wrong;
+      },
+    }) as Record<string, typeof wrong>;
+    expect(compose(request(source, { guests }))).toMatchObject({
+      status: "unsupported",
+      work: 0,
+      ranges: [],
+    });
+    expect(getterCalls).toBe(0);
+    expect(wrongCalls).toBe(0);
+    expect(compose(request(source, { guests: {}, explicit: "missing" }))).toMatchObject({
+      status: "unsupported",
+      work: 0,
+      ranges: [],
+    });
   });
 });
