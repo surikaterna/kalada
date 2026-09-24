@@ -201,6 +201,88 @@ describe("#132 test-local phase admission", () => {
     expect(meter[field]).toBe(value);
   });
 
+  it.each(["limits", "work"] as const)("rejects a throwing %s getter at entry", (field) => {
+    const meter = new Meter({ work: 512, depth: 1, diagnostics: 3 });
+    let reads = 0;
+    Object.defineProperty(meter, field, {
+      get() {
+        reads++;
+        throw new Error("hostile meter secret");
+      },
+    });
+    const result = admitPhase({ ...admissionProbe("host{1}TAIL"), meter });
+    expect(result.outcome).toMatchObject({
+      status: "budget",
+      reason: "invalid or mutated shared meter",
+      ranges: [],
+      work: 0,
+      depth: 0,
+      diagnostics: 0,
+    });
+    expect(reads).toBe(1);
+    expect(result.authentic).toBe(false);
+    expect(result.counters).toEqual(zero);
+    expect(result.phases).not.toContain("guest returned");
+    expect(result.phases).not.toContain("publishable");
+  });
+
+  it.each(["NaN limit", "malformed limits", "throwing limit field"] as const)(
+    "rejects %s at entry",
+    (kind) => {
+      const meter = new Meter({ work: 512, depth: 1, diagnostics: 3 });
+      if (kind === "NaN limit") (meter.limits as { work: number }).work = NaN;
+      if (kind === "malformed limits") Object.defineProperty(meter, "limits", { value: null });
+      if (kind === "throwing limit field")
+        Object.defineProperty(meter.limits, "work", {
+          get() {
+            throw new Error("hostile limit secret");
+          },
+        });
+      const result = admitPhase({ ...admissionProbe("host{1}TAIL"), meter });
+      expect(result.outcome).toMatchObject({
+        status: "budget",
+        reason: "invalid or mutated shared meter",
+        ranges: [],
+      });
+      expect(result.authentic).toBe(false);
+      expect(result.counters).toEqual(zero);
+    },
+  );
+
+  it.each(["limits", "work"] as const)(
+    "rejects a throwing %s getter installed by the callback",
+    (field) => {
+      const meter = new Meter({ work: 512, depth: 1, diagnostics: 3 });
+      let reads = 0;
+      const result = admitPhase({
+        ...admissionProbe("host{1}TAIL"),
+        meter,
+        onReturn: (guest) => {
+          Object.defineProperty(meter, field, {
+            get() {
+              reads++;
+              throw new Error("hostile meter secret");
+            },
+          });
+          return guest;
+        },
+      });
+      expect(result.outcome).toMatchObject({
+        status: "budget",
+        reason: "invalid or mutated shared meter",
+        ranges: [],
+        work: 0,
+        depth: 0,
+        diagnostics: 0,
+      });
+      expect(reads).toBe(1);
+      expect(result.authentic).toBe(false);
+      expect(result.counters).toEqual(zero);
+      expect(result.phases).not.toContain("phase admitted");
+      expect(result.phases).not.toContain("publishable");
+    },
+  );
+
   it.each([
     ["negative", -1000],
     ["NaN", NaN],

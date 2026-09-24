@@ -56,61 +56,100 @@ function dispatch(probe: Probe, phases: Phase[]) {
   const entryMeter = meterState(meter);
   let authentic = false;
   let meterTampered = false;
-  const composed = validMeter(meter)
-    ? composeSafely({
-        snapshot: probe.snapshot,
-        current: probe.current,
-        get cancelled() {
-          return probe.cancelled;
-        },
-        profiles: [{ version: 1, position: "expression", allowed: ["kalada"] }],
-        explicit: "kalada",
-        budget: { work: 512, depth: 1, diagnostics: 3 },
-        meter,
-        guests: {
-          kalada: (source, start, meter) => {
-            const trusted = kaladaGuest(source, start, meter);
-            const beforeCallback = meterState(meter);
-            const returned = Object.hasOwn(probe, "onReturn")
-              ? probe.onReturn?.(trusted, probe)
-              : trusted;
-            if (!sameMeter(meterState(meter), beforeCallback) || probe.meter !== suppliedMeter)
-              meterTampered = true;
-            authentic = returned === trusted;
-            phases.push("guest returned");
-            return returned;
+  const composed =
+    entryMeter && validMeter(entryMeter)
+      ? composeSafely({
+          snapshot: probe.snapshot,
+          current: probe.current,
+          get cancelled() {
+            return probe.cancelled;
           },
-        },
-      })
-    : invalidMeter();
-  const outcome =
-    meterTampered ||
-    (composed.status === "valid" && !validMeter(meter)) ||
-    !sameLimits(meterState(meter), entryMeter) ||
-    probe.meter !== suppliedMeter ||
-    (composed.status === "valid" &&
-      (composed.work !== meter.work ||
-        composed.depth !== meter.depth ||
-        composed.diagnostics !== meter.diagnostics))
-      ? invalidMeter()
-      : composed;
-  return { outcome, authentic };
+          profiles: [{ version: 1, position: "expression", allowed: ["kalada"] }],
+          explicit: "kalada",
+          budget: { work: 512, depth: 1, diagnostics: 3 },
+          meter,
+          guests: {
+            kalada: (source, start, meter) => {
+              const trusted = kaladaGuest(source, start, meter);
+              const beforeCallback = meterState(meter);
+              const returned = Object.hasOwn(probe, "onReturn")
+                ? probe.onReturn?.(trusted, probe)
+                : trusted;
+              const afterCallback = meterState(meter);
+              const unchanged =
+                beforeCallback && afterCallback && sameMeter(afterCallback, beforeCallback);
+              if (!unchanged || probe.meter !== suppliedMeter) {
+                meterTampered = true;
+                throw new Error("shared meter changed during guest callback");
+              }
+              authentic = returned === trusted;
+              phases.push("guest returned");
+              return returned;
+            },
+          },
+        })
+      : invalidMeter();
+  const finalMeter = entryMeter && !meterTampered ? meterState(meter) : null;
+  const invalid = meterInvalid(
+    composed,
+    entryMeter,
+    finalMeter,
+    meterTampered,
+    probe.meter !== suppliedMeter,
+  );
+  return { outcome: invalid ? invalidMeter() : composed, authentic: authentic && !invalid };
 }
 
-type MeterState = ReturnType<typeof meterState>;
+function meterInvalid(
+  composed: Outcome,
+  entryMeter: MeterState | null,
+  finalMeter: MeterState | null,
+  meterTampered: boolean,
+  replaced: boolean,
+) {
+  return (
+    !entryMeter ||
+    !finalMeter ||
+    meterTampered ||
+    !sameLimits(finalMeter, entryMeter) ||
+    replaced ||
+    (composed.status === "valid" &&
+      (!validMeter(finalMeter) ||
+        composed.work !== finalMeter.work ||
+        composed.depth !== finalMeter.depth ||
+        composed.diagnostics !== finalMeter.diagnostics))
+  );
+}
 
-function meterState(meter: Meter) {
-  return {
-    limits: meter.limits,
-    workLimit: meter.limits.work,
-    depthLimit: meter.limits.depth,
-    diagnosticsLimit: meter.limits.diagnostics,
-    work: meter.work,
-    depth: meter.depth,
-    diagnostics: meter.diagnostics,
-    active: meter.activeDepth,
-    exhausted: meter.exhausted,
-  };
+type MeterState = {
+  limits: Meter["limits"];
+  workLimit: number;
+  depthLimit: number;
+  diagnosticsLimit: number;
+  work: number;
+  depth: number;
+  diagnostics: number;
+  active: number;
+  exhausted: boolean;
+};
+
+function meterState(meter: Meter): MeterState | null {
+  try {
+    const limits = meter.limits;
+    return {
+      limits,
+      workLimit: limits.work,
+      depthLimit: limits.depth,
+      diagnosticsLimit: limits.diagnostics,
+      work: meter.work,
+      depth: meter.depth,
+      diagnostics: meter.diagnostics,
+      active: meter.activeDepth,
+      exhausted: meter.exhausted,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function sameLimits(left: MeterState, right: MeterState) {
@@ -133,8 +172,7 @@ function sameMeter(left: MeterState, right: MeterState) {
   );
 }
 
-function validMeter(meter: Meter) {
-  const state = meterState(meter);
+function validMeter(state: MeterState) {
   return (
     [state.workLimit, state.depthLimit, state.diagnosticsLimit].every(
       (value) => Number.isSafeInteger(value) && value >= 0,

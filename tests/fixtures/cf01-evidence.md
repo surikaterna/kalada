@@ -54,6 +54,8 @@ must stay open. Coordinate the public-path gap with #111; #102 PR #105 and
 #104 PR #106 remain separate open work. The fixture is not a security boundary
 for arbitrary plugin code: a hostile callback can loop or mutate the shared
 meter; the admission fixture rejects invalid entry/return meter state and callback
-meter mutation before actions, but cooperative budgeting cannot provide process
-isolation. No CF02/CF13,
+meter mutation before actions, aborting the guest handoff when the postcallback
+meter snapshot is unreadable or changed. This prevents further fixture/host reads
+of a known-poisoned meter, not hostile-plugin sandboxing: cooperative callbacks
+and budgeting cannot provide process isolation. No CF02/CF13,
 Formbar #184, production FSX, or API-freeze claim follows from these tests.
