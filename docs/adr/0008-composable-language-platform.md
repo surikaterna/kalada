@@ -6,7 +6,8 @@
 - Minimum behavioral design: [kernel CLK-01–15](../architecture/composable-language-kernel-contracts.md).
 - Planned evidence: [conformance CF01–14](../architecture/composable-language-conformance.md), none run.
 - Researched baseline: `b694fa654938392d7f01367f7ac3d31278ce2d51`.
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107); no cross-repo approval implied.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
+  [PR #126](https://github.com/surikaterna/kalada/pull/126); no cross-repo approval implied.
 - Coordination: [Formbar #92](https://github.com/surikaterna/formbar/issues/92) and
   [#93](https://github.com/surikaterna/formbar/issues/93); related Kalada
   [#21](https://github.com/surikaterna/kalada/issues/21),
@@ -26,10 +27,13 @@ It is not a portable cache format. Core and projection permit a partial parser-f
 but host depends on syntax. Existing headless language service and CodeMirror are useful
 foundations, not a generic composed-language service or an implemented LSP transport.
 
-Formbar already has versioned declarations with node expression slots, scoped bindings and
-stored computations (see PRD's pinned evidence). FSX should make these authorable, not create
-a replacement rendering or reactive system. Formbar #92's older Kuery wording must be read
-with #93's Kalada coordination; neither issue approves this new foundation or grammar.
+Formbar V1 slots are Kuery `ValueExpression<StateRef>`, not Kalada programs (see PRD's pinned
+evidence). Validation compiles Kuery expressions, checks sorted `StateRef` dependencies and
+computation cycles, and reports definition paths rather than FSX source ranges. FSX cannot
+lower real Kalada expressions to V1 unchanged: [Formbar #179](https://github.com/surikaterna/formbar/issues/179)
+must choose tagged versioned slots or a declaration migration, preserve legacy V1 reads, and
+specify dependency/cycle checks, scoped bindings and path-to-source mapping. Formbar #92's older
+Kuery wording and #93's Kalada coordination do not approve a grammar or this decision.
 
 ## Proposed decision
 
@@ -107,11 +111,10 @@ JSON --------------------------------------> projection -> email model -> safe d
 ```
 
 FSX is JSX-like declarative syntax, not JS/TS. It explicitly composes Expressions through public
-APIs; slots lower to deferred expression artifacts, not eager values. Formbar schedules calls to
-the Expressions runtime. Preserve existing declaration version and expression adapter compatibility
-where possible; a necessary version change requires a separately reviewed migration rather
-than pretending current expression slots already accept a new wire format. No renderer or
-capability callback runs during checking/compilation.
+APIs; proposed slots lower to deferred expression artifacts, not eager values. Formbar schedules
+runtime calls. #179 gates real FSX lowering, including legacy V1 preservation and a versioned
+adapter or migration; parser-only [Kalada #108](https://github.com/surikaterna/kalada/issues/108)
+cannot unblock it. No renderer or capability callback runs during checking/compilation.
 Every phase carries document/environment identity and explicit validity/currentness; partial
 recovery supports limited tooling, never emission. Context profiles define lexical/delimiter
 ownership, declared host positions/guests, deterministic handoff and shared budgets;
@@ -120,10 +123,12 @@ unresolved malformed-source cases fail rather than assuming a universal delimite
 An expression value and a writable location are different contracts. The first FSX edit accepts
 only a direct statically identified writable location: Kalada checks eligibility, while Formbar
 resolves stable identity, permissions, revisions, conflicts and server policy at use time.
-Component metadata says which is required. Explicit lexical aliases need nested outer access, deliberate shadowing
-rules and stable repeated-item identity. Explore writes before finalizing the read contract:
-array indexes alone cannot safely target a pending update after reorder. Codec directionality,
-restricted declarative `onChange`, and surface naming remain open under
+Component metadata says which is required. Explicit lexical aliases need nested outer access and
+deliberate shadowing rules. Current repeated instances and row keys derive identity from indexes:
+first direct non-repeater writes and repeated-item reads are separate from repeater-scoped writes.
+[Formbar #180](https://github.com/surikaterna/formbar/issues/180) gates the latter on stable
+item identity and atomic resolve/authorize/update so reorder/replacement cannot retarget a write.
+Codec directionality, restricted declarative `onChange` and surface naming remain open under
 [Formbar #175](https://github.com/surikaterna/formbar/issues/175) needs-design; `bind` is not selected.
 Full writes wait for a Formbar update-policy gate, not for a new Kalada mutation evaluator.
 
@@ -257,8 +262,9 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Owner:** Formbar compiler maintainers, with Kalada and Scheman integration reviewers.
 - **Dependencies:** P1 and P0 declaration/component/reference contracts.
 - **Scope:** provisional FSX compiler supports a small form, scoped read expressions, schema
-  and component checking, deferred Kalada programs and source maps. No eager rendering,
-  runtime fragment values or new reactive system; declaration adapter changes are explicit.
+  and component checking, deferred Kalada programs and source maps **after #179 decides**
+  versioned slots, dependency/cycle validation, legacy behavior and path-to-source maps.
+  No eager rendering, runtime fragment values or new reactive system.
   Add minimal EDIFACT → structured data → projection → Scheman and JSON → email model → safe
   renderer probes; fixtures need not deliver a production decoder/renderer. Review Arbitre effect
   ownership and Kuery fit/gaps without requiring a Kuery implementation. Prove safe writable
@@ -266,7 +272,8 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Acceptance evidence:** declaration validation/golden fixtures, nested read aliases,
   invalid attribute/child/type diagnostics, compile-time non-invocation and changing-input
   runtime tests without source recompilation; CF04–09 evidence includes both projection probes,
-  stable-item reorder/removal/conflict/codec rejection, Arbitre boundary and Kuery fit assessment.
+  stable-item reorder/removal/conflict/codec rejection (#180 before repeater writes), Arbitre
+  boundary and Kuery fit assessment.
 - **Exit gate:** Formbar executes the compiled declarations through its existing runtime path;
   compatibility gaps are resolved or explicitly block stability/release review. Tiny P1 fixtures
   cannot substitute for real consumption. Trace: CLP-02–07, 08, 11, 12.

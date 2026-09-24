@@ -5,7 +5,8 @@
 - Authority: [PRD](../prd/composable-language-platform.md) and proposed
   [ADR-0008](../adr/0008-composable-language-platform.md); evidence plan:
   [conformance matrix](./composable-language-conformance.md).
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107).
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
+  [PR #126](https://github.com/surikaterna/kalada/pull/126).
   Formbar #92/#93 and [#175](https://github.com/surikaterna/formbar/issues/175) coordinate domain ownership;
   no cross-repository approval is implied.
 
@@ -44,9 +45,16 @@ needs-design for reversible codecs/restricted Kalada update handlers. #175 is no
 
 Illustrative source only, **not** a selected `bind` keyword or FSX grammar: in a declared
 FSX attribute expression position, `<Field value={Kalada: item.name} />` may enter Kalada if
-the profile admits it. The host retains `{`/`}`, Kalada lexes strings/comments/nesting inside,
-and the host validates the return range and close. An Expressions-hosted FSX region works only
-if a *distinct* Expressions profile declares that grammar position and FSX as an allowed guest.
+the profile admits it. The host retains `{`/`}`, and Kalada lexes the interior using its
+**currently supported grammar**, returning a bounded consumed range/stop reason; the host
+validates the range and closing delimiter. Comments and brace syntax are not yet supported by
+Kalada's expression lexer/parser: they fail closed, not succeed by host pre-scanning or an
+invented restricted grammar. [Kalada #110](https://github.com/surikaterna/kalada/issues/110)
+prototypes this narrow guest-owned boundary, not a permanent restricted subset or completion
+of [CF01 / #108](https://github.com/surikaterna/kalada/issues/108). As Kalada's supported
+grammar grows, the handoff must support that grammar with corresponding fixtures. An
+Expressions-hosted FSX region works only if a *distinct* Expressions profile declares that
+grammar position and FSX as an allowed guest.
 Undeclared position/guest, overlapping entries, non-progress/invalid exit or unsupported lexical
 handoff return explicit unsupported/invalid/partial results, never an inferred valid program.
 Unterminated interior source may yield a bounded partial diagnostic but cannot emit or edit.
@@ -87,7 +95,8 @@ restricted handler or computed-value inverse is promised for this first edit.
 - **Results:** an entered child returns an owned range, exit reason, consumed boundary and
   diagnostics; the host validates its expected close boundary and forward progress. Proposed
   default: host selects entry at a declared position, retains outer delimiters, and child lexing
-  shields strings, comments and balanced nesting from premature exit. Alternative
+  shields delimiters within its **supported** strings, comments and balanced nesting from
+  premature exit; unsupported lexical constructs fail closed. Alternative
   raw-text or child-owned delimiter modes require explicit profile contracts and fixtures.
 - **Ownership:** host chooses the entry context, child owns interior lexical rules, host validates
   re-entry. Reverse entry needs its own declared host position/profile. Nested islands debit a

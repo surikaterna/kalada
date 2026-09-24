@@ -5,7 +5,8 @@
 - Product requirements: [PRD CLP-01–12](../prd/composable-language-platform.md).
 - Behavioral contracts: [kernel CLK-01–15](./composable-language-kernel-contracts.md).
 - Delivery and authority: [ADR-0008](../adr/0008-composable-language-platform.md).
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107);
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
+  [PR #126](https://github.com/surikaterna/kalada/pull/126);
   Formbar #92/#93 and deferred [#175](https://github.com/surikaterna/formbar/issues/175) are coordination, not approval.
 
 ## Evidence policy and gate vocabulary
@@ -58,12 +59,16 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 - **Positive:** Kalada and a tiny independent language nest in both directions only where each
   host profile explicitly declares the grammar position and permitted guest. Host owns outer
-  delimiters/return validation; guest lexes interior. Versioned profiles shield quoted delimiters,
-  comments and nested regions; CRLF/non-BMP ranges remain half-open
-  UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
+  delimiters/return validation; guest lexes interior and returns a bounded range/stop reason.
+  First fixtures succeed for **currently supported Kalada grammar** (e.g. quoted delimiter,
+  parentheses, host continuation), not an invented scanner subset. Versioned profiles eventually
+  shield quoted delimiters, supported comments and nested regions; CRLF/non-BMP ranges remain
+  half-open UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
   a full lossless CST. Child exit and host validation advance predictably.
 - **Negative:** reject undeclared position/guest, ambiguous registration, overlapping entries
-  and invalid/non-progress exit ranges. Unterminated
+  and invalid/non-progress exit ranges. Unsupported Kalada comments/braces currently fail closed
+  (see [#110](https://github.com/surikaterna/kalada/issues/110)); add positive and malformed
+  cases as each construct enters supported grammar. Unterminated
   strings/comments and malformed islands stop at approved boundaries without swallowing sibling
   host structure. Deep alternating islands consume one shared budget. Invalid/partial, stale,
   unsupported, cancelled and exhausted results cannot emit; deserialized CST without admission
@@ -113,33 +118,45 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 ### CF04 — Real FSX consumer, not a toy substitute
 
 - **Positive:** compile a minimal field/output/conditional form with nested explicit aliases,
-  component and Scheman facts into existing Formbar declarations and deferred Kalada programs.
-  Use the real declaration validator/runtime integration with a documented expression adapter;
+  component and Scheman facts into Formbar declarations and deferred Kalada programs **after**
+  [Formbar #179](https://github.com/surikaterna/formbar/issues/179) selects a versioned Kalada
+  slot/adapter or declaration migration. Preserve existing V1 Kuery `ValueExpression<StateRef>`
+  reads; prove Kalada dependency extraction, computation-cycle and scoped-reference checks.
+  Use the real declaration validator/runtime integration with the decided expression adapter;
   changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
   FSX explicitly composes the public Expressions provider/compiler; trace Formbar scheduling calls
   to the Expressions runtime with deferred artifacts, not kernel evaluation of a whole form.
 - **Negative:** reject invalid children, attribute types, unknown components/capabilities, duplicate
-  aliases and unresolved references. Spies detect any compile-time evaluation, rendering or
-  capability invocation. A browser authorization claim cannot bypass server checks.
+  aliases and unresolved references, unknown expression versions, missing dependencies and cycles.
+  No implicit Kalada-to-Kuery AST translation or pretending parser-only
+  [#108](https://github.com/surikaterna/kalada/issues/108) resolves V1 compatibility.
+  Spies detect any compile-time evaluation, rendering or capability invocation. A browser
+  authorization claim cannot bypass server checks.
   Reject reliance on private compiler hooks, privileged provider registration or a kernel evaluator.
-- **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution and
-  compatibility report. Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
+- **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution,
+  version/legacy migration tests and definition-diagnostic **path-to-FSX-source-range** map goldens.
+  Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
 
 ### CF05 — Writable reference proof before freeze review
 
 - **Positive:** nested repeated records expose distinct inner/outer aliases. First editable
-  slot accepts only a direct statically identified writable location: Kalada checks eligibility,
-  Formbar resolves stable item identity, permissions, revision and server policy at use time.
+  slot accepts only a direct statically identified writable location: Kalada checks eligibility.
+  Direct non-repeater writes and repeated-item reads are distinct from repeater-scoped writes:
+  before the latter, [Formbar #180](https://github.com/surikaterna/formbar/issues/180) must replace
+  index-derived instance/row identity with stable item identity. Formbar then resolves identity,
+  permissions, revision and server policy at use time.
   A checked, data-only location descriptor updates the same item after reorder under a minimal
   reviewed host policy. Full scope recomputation clears removed
   references; any optional incremental index equals that baseline after edits.
 - **Negative:** reject computed-value/read-only writes, index-retargeting, removed/stale items,
-  denied writes and revision conflicts without mutation. Where codecs are required, reject missing
+  replaced items, duplicate/missing stable keys, denied writes and revision conflicts without
+  mutation or fallback to an array index. Where codecs are required, reject missing
   write direction; reversible codecs/restricted update handlers are Formbar #175 needs-design, not
   required for the first direct edit. Test duplicate declarations and capture/shadowing errors;
   names/runtime slots cannot stand in for stable entity identity.
 - **Evidence:** location descriptor traces and authorized update/rejection outcomes using a narrow
-  Formbar integration or reviewed host-policy probe, not a production write UI. P1 sketches alone
+  Formbar integration or reviewed host-policy probe, including nested reorder/deletion/replacement
+  and atomic resolve/authorize/update, not a production write UI. P1 sketches alone
   are insufficient; executable safe identity/update proof is required before pre-freeze review.
   Field syntax and complete P5 write behavior remain open. Command: TBD during implementation.
 

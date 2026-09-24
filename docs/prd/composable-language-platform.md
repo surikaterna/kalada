@@ -6,8 +6,10 @@
 - Delivery proposal: [ADR-0008](../adr/0008-composable-language-platform.md).
 - Proposed behavioral design: [kernel contracts CLK-01–15](../architecture/composable-language-kernel-contracts.md).
 - Evidence plan: [conformance CF01–14](../architecture/composable-language-conformance.md), all planned, not run.
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107).
-  Coordination: [Formbar #92][f92], [#93][f93] and deferred [#175][f175];
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
+  open [PR #126](https://github.com/surikaterna/kalada/pull/126).
+  Coordination: [Formbar #92][f92], [#93][f93], expression-slot decision [#179][f179],
+  repeater-write gate [#180][f180] and later [#175][f175];
   related Kalada [#21][k21], [#75][k75], and [#87][k87]. These references are not status updates.
 
 ## Context and outcome
@@ -51,7 +53,7 @@ The target and open choices elsewhere in this PRD are not claims about that base
 | Host artifacts | [Host manifest](../../packages/host/package.json) depends on syntax; [compiled-artifact.ts](../../packages/host/src/compiled-artifact.ts) retains parsed source, functions and private authenticity state | New portable data-only IR and runtime admission/link boundary, not JSON serialization of existing host objects |
 | Schema integration | [Scheman adapter](../../packages/adapter-scheman/README.md) consumes Scheman v2, distinguishes input shape/output semantics and live capabilities | Reuse for data schemas; component contracts and writable locations need additional domain evidence; #75 is related orthogonal Standard Schema work |
 | Authoring | [Language service](../../packages/language-service/README.md) handles versioned Kalada documents, UTF-16, completion/hover and currentness; [CodeMirror](../../packages/codemirror/package.json) exists | Neither a generic mixed-language service nor an LSP server currently exists; browser and VS Code/LSP must share analysis |
-| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | Existing version-1 declarations have expression slots, scoped bindings and computations; FSX must lower to these contracts with an explicit expression compatibility adapter where needed |
+| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | V1 node/prop/computation slots use Kuery `ValueExpression<StateRef>` (see [expression contract][fb-expression]); scoped bindings and stored computations exist, but V1 does **not** accept Kalada programs. [#179][f179] must decide a tagged versioned slot or declaration migration with legacy V1 behavior before real FSX lowering; not merely a parser handoff under [#108][k108]. |
 | Coordination | #92 proposes declarative tooling and still mentions the earlier Kuery core; #93 explicitly requires #92 to consume Kalada syntax | Treat #93 as coordination baseline, not proof FSX exists or this proposal is approved |
 
 ## Requirements and measurable acceptance
@@ -115,6 +117,14 @@ whole form as an executable Kalada AST. Formbar retains reactive state, scheduli
 including server enforcement; it schedules calls to the Expressions runtime. Neither compiler nor
 projection duplicates those responsibilities.
 
+Current Formbar V1 validators compile Kuery slots, extract sorted `StateRef` dependencies for
+computation reference/cycle checks, and report definition **paths**, not FSX source ranges.
+[#179][f179] must decide expression-version discrimination and migration/legacy reads, Kalada
+dependency extraction and cycle equivalence, scoped binding, and path-to-source diagnostic mapping
+before lowering a real form. General Kalada programs are not presumed translatable to Kuery AST.
+[#180][f180] gates repeater-scoped writes separately; first direct non-repeater edits and
+repeated-item **reads** need not wait for stable write identity.
+
 **Acceptance:** a field/output/conditional form lowers to declaration fixtures accepted by
 Formbar; changing runtime input changes the result without recompiling source. Compile-time
 spies prove no evaluator, renderer or capability callback is invoked. Equivalent server/client
@@ -149,6 +159,10 @@ Before stability review, a narrow executable proof must reject stale permissions
 unsupported write-codec directions where applicable; full P5 write UI/domain completeness is not
 required for it. Reversible codecs and restricted Kalada update handlers remain Formbar [#175][f175]
 needs-design, not a P0 prerequisite.
+
+Current repeated runtime/renderer identity is index-derived; this cannot safely address a pending
+repeater-scoped write after reorder/replacement. [#180][f180] requires stable item identity and
+atomic resolve/authorize/update before those writes, distinct from [#175][f175] codec/handler design.
 
 ### CLP-06 — Domain-owned nominal types
 
@@ -282,6 +296,9 @@ their validation is not evidence that any planned conformance scenario has run.
 [f92]: https://github.com/surikaterna/formbar/issues/92
 [f93]: https://github.com/surikaterna/formbar/issues/93
 [f175]: https://github.com/surikaterna/formbar/issues/175
+[f179]: https://github.com/surikaterna/formbar/issues/179
+[f180]: https://github.com/surikaterna/formbar/issues/180
+[k108]: https://github.com/surikaterna/kalada/issues/108
 [k21]: https://github.com/surikaterna/kalada/issues/21
 [k75]: https://github.com/surikaterna/kalada/issues/75
 [k87]: https://github.com/surikaterna/kalada/issues/87
@@ -289,3 +306,4 @@ their validation is not evidence that any planned conformance scenario has run.
 [fb-nodes]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/nodes.ts
 [fb-bindings]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/bindings.ts
 [fb-computations]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/computations.ts
+[fb-expression]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/expressions/src/contracts.ts
