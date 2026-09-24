@@ -1,11 +1,26 @@
 import type { KaladaToken, KaladaTokenKind } from "./cst-types.js";
-import { DiagnosticSink } from "./diagnostics.js";
+import { DiagnosticSink, diagnostic } from "./diagnostics.js";
 import { deepFreeze, freezeRange } from "./freeze.js";
+import {
+  type GuestTokenState,
+  isDigit,
+  limitedToken,
+  scanNumber,
+  scanString,
+  token,
+} from "./lex-literals.js";
 import type { KaladaSyntaxDiagnostic, KaladaSyntaxLimits } from "./public-types.js";
 
 export interface LexResult {
   readonly tokens: readonly KaladaToken[];
   readonly diagnostics: readonly KaladaSyntaxDiagnostic[];
+}
+
+export interface GuestLexResult extends LexResult {
+  readonly stop: number | null;
+  readonly unmatchedParentheses: boolean;
+  readonly unsupportedComment: boolean;
+  readonly unsupportedQuote: boolean;
 }
 
 const VALID_OPERATORS = [
@@ -67,17 +82,124 @@ export function lex(source: string, limits: KaladaSyntaxLimits): LexResult {
   return result(tokens, sink);
 }
 
+// The bounded window prevents any token scanner (including strings/comments) from reading host tail.
+export function lexGuest(
+  source: string,
+  start: number,
+  limits: KaladaSyntaxLimits,
+): GuestLexResult {
+  const window = source.slice(start, start + limits.maxSourceLength + 1);
+  const scanned = scanGuest(window, limits);
+  return deepFreeze({
+    stop: scanned.stop === null ? null : start + scanned.stop,
+    unmatchedParentheses: scanned.unmatchedParentheses,
+    unsupportedComment: scanned.unsupportedComment,
+    unsupportedQuote: scanned.unsupportedQuote,
+    tokens: scanned.tokens.map((item) =>
+      token(item.kind, item.text, start + item.range.start, start + item.range.end),
+    ),
+    diagnostics: scanned.diagnostics.map((item) =>
+      diagnostic(
+        item.phase,
+        item.code,
+        item.message,
+        freezeRange(start + item.range.start, start + item.range.end),
+        item.path,
+      ),
+    ),
+  });
+}
+
+function scanGuest(source: string, limits: KaladaSyntaxLimits): GuestLexResult {
+  const sink = new DiagnosticSink(limits);
+  const tokens: KaladaToken[] = [];
+  let offset = 0;
+  let depth = 0;
+  let unmatchedParentheses = false;
+  let unsupportedComment = false;
+  let unsupportedQuote = false;
+  let stop: number | null = null;
+  while (offset < source.length) {
+    if (source[offset] === "}") {
+      stop = offset;
+      unmatchedParentheses ||= depth !== 0;
+      break;
+    }
+    if (offset >= limits.maxSourceLength || tokens.length >= limits.maxTokens) {
+      sink.limit("lex", freezeRange(offset, offset));
+      break;
+    }
+    const opener = ambiguousGuestOpener(source, offset);
+    if (opener !== null) {
+      // Ownership is ambiguous at this seam; never scan the body for a host brace.
+      sink.add("lex", "KALADA_SYNTAX_UNSUPPORTED_FORM", freezeRange(offset, offset));
+      stop = offset;
+      unsupportedComment = opener === "comment";
+      unsupportedQuote = opener === "quote";
+      break;
+    }
+    const guest: GuestTokenState = { limited: false };
+    const next = scanToken(source, offset, limits, sink, guest);
+    tokens.push(next);
+    offset = next.range.end;
+    if (guest.limited) break;
+    depth += parenthesisDelta(next);
+    unmatchedParentheses ||= depth < 0;
+    if (offset > limits.maxSourceLength)
+      sink.limit("lex", freezeRange(limits.maxSourceLength, offset));
+  }
+  if (stop === null && source.length > limits.maxSourceLength) {
+    sink.limit("lex", freezeRange(limits.maxSourceLength, limits.maxSourceLength));
+  }
+  return finishGuest(tokens, sink, offset, {
+    stop,
+    unmatchedParentheses,
+    unsupportedComment,
+    unsupportedQuote,
+  });
+}
+
+function finishGuest(
+  tokens: KaladaToken[],
+  sink: DiagnosticSink,
+  offset: number,
+  state: Pick<
+    GuestLexResult,
+    "stop" | "unmatchedParentheses" | "unsupportedComment" | "unsupportedQuote"
+  >,
+): GuestLexResult {
+  tokens.push(token("eof", "", offset, offset));
+  return deepFreeze({
+    tokens,
+    diagnostics: sink.diagnostics,
+    ...state,
+  });
+}
+
+function ambiguousGuestOpener(source: string, offset: number): "comment" | "quote" | null {
+  if (source.startsWith("//", offset) || source.startsWith("/*", offset)) return "comment";
+  if (source[offset] === "'" || source[offset] === "`") return "quote";
+  return null;
+}
+
+function parenthesisDelta(found: KaladaToken): number {
+  if (found.kind === "left-parenthesis") return 1;
+  if (found.kind === "right-parenthesis") return -1;
+  return 0;
+}
+
 function scanToken(
   source: string,
   start: number,
   limits: KaladaSyntaxLimits,
   sink: DiagnosticSink,
+  guest?: GuestTokenState,
 ): KaladaToken {
   const character = source[start] as string;
   if (isWhitespace(character)) return scanWhile(source, start, isWhitespace, "whitespace");
-  if (isIdentifierStart(character)) return scanIdentifier(source, start, limits, sink);
+  if (isIdentifierStart(character)) return scanIdentifier(source, start, limits, sink, guest);
   if (isDigit(character)) return scanNumber(source, start, sink);
-  if (character === '"') return scanString(source, start, limits, sink);
+  if (character === '"') return scanString(source, start, limits, sink, guest);
   return scanSymbol(source, start, sink);
 }
 
@@ -110,83 +232,16 @@ function scanIdentifier(
   start: number,
   limits: KaladaSyntaxLimits,
   sink: DiagnosticSink,
+  guest?: GuestTokenState,
 ): KaladaToken {
   const found = scanWhile(source, start, isIdentifierContinue, "identifier");
   if (found.text.length > limits.maxIdentifierLength) {
-    const range = freezeRange(start, source.length);
-    sink.limit("lex", range);
-    return token("invalid", source.slice(start), start, source.length);
+    return limitedToken(source, start, found.range.end, sink, guest);
   }
   const keyword = (["true", "false", "null", "in", "xor"] as const).find(
     (item) => item === found.text,
   );
   return keyword ? token(keyword, found.text, found.range.start, found.range.end) : found;
-}
-
-function scanNumber(source: string, start: number, sink: DiagnosticSink): KaladaToken {
-  let end = scanDigits(source, start);
-  if (source[end] === "." && isDigit(source[end + 1] as string)) {
-    end = scanDigits(source, end + 1);
-  }
-  if (source[end] === "e" || source[end] === "E") {
-    end += 1;
-    if (source[end] === "+" || source[end] === "-") end += 1;
-    end = scanDigits(source, end);
-  }
-  let text = source.slice(start, end);
-  let valid = validNumber(text);
-  if (source[end] === "." && !(valid && isIdentifierStart(source[end + 1] as string))) {
-    end += 1;
-    text = source.slice(start, end);
-    valid = false;
-  }
-  if (!valid) sink.add("lex", "KALADA_SYNTAX_INVALID_NUMBER", freezeRange(start, end));
-  return token(valid ? "number" : "invalid", text, start, end);
-}
-
-function scanDigits(source: string, start: number): number {
-  let end = start;
-  while (end < source.length && isDigit(source[end] as string)) end += 1;
-  return end;
-}
-
-function validNumber(text: string): boolean {
-  return (
-    /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u.test(text) &&
-    Number.isFinite(Number(text))
-  );
-}
-
-function scanString(
-  source: string,
-  start: number,
-  limits: KaladaSyntaxLimits,
-  sink: DiagnosticSink,
-): KaladaToken {
-  let end = start + 1;
-  let escaped = false;
-  while (end < source.length) {
-    const character = source[end] as string;
-    end += 1;
-    if (!escaped && character === '"') break;
-    escaped = !escaped && character === "\\";
-    if (character !== "\\") escaped = false;
-  }
-  const text = source.slice(start, end);
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    value = null;
-  }
-  if (typeof value === "string" && value.length > limits.maxDecodedStringLength) {
-    const range = freezeRange(start, source.length);
-    sink.limit("lex", range);
-    return token("invalid", source.slice(start), start, source.length);
-  }
-  const valid = typeof value === "string";
-  if (!valid) sink.add("lex", "KALADA_SYNTAX_INVALID_STRING", freezeRange(start, end));
-  return token(valid ? "string" : "invalid", text, start, end);
 }
 
 function scanComment(source: string, start: number, sink: DiagnosticSink): KaladaToken {
@@ -262,10 +317,6 @@ function matchAt(source: string, start: number, values: readonly string[]): stri
   );
 }
 
-function token(kind: KaladaTokenKind, text: string, start: number, end: number): KaladaToken {
-  return Object.freeze({ kind, text, range: freezeRange(start, end) });
-}
-
 function result(tokens: KaladaToken[], sink: DiagnosticSink): LexResult {
   return deepFreeze({ tokens, diagnostics: sink.diagnostics });
 }
@@ -280,8 +331,4 @@ function isIdentifierStart(value: string): boolean {
 
 function isIdentifierContinue(value: string): boolean {
   return value?.length === 1 && /[A-Za-z0-9_]/u.test(value);
-}
-
-function isDigit(value: string): boolean {
-  return /[0-9]/u.test(value);
 }
