@@ -10,9 +10,9 @@ The phase table in `phase-admission.ts` is monotonic per request:
 
 | Phase | Evidence required before advancing | Rejection consequence |
 | --- | --- | --- |
-| captured → selected | source/version/environment match, explicit permitted Kalada profile | no callback/action |
-| selected → guest returned | bounded callback returned in declared `host{}` slot | no action |
-| guest returned → host validated | current snapshot still matches, not cancelled; actual brace, owner ranges, tail and shared meter validated by `compose` | no action |
+| captured → dispatch-requested | source/version/environment match, dispatch configured for Kalada; host slot not yet selected | no callback/action |
+| dispatch-requested → guest returned | callback returned from a declared `host{}` slot; not yet admitted | no action |
+| guest returned → host validated | current snapshot still matches, not cancelled; actual brace, owner ranges, tail and shared meter validated by `compose` and admission checks | no action |
 | host validated → phase admitted | returned result is the **same object** as this invocation's trusted Kalada guest result; owner range equals its stop | no lower/emit/edit |
 | phase admitted → lowerable | real `lowerKaladaV1Expression` succeeds using parse-result identity provenance | no emit/edit on lower failure |
 | lowerable → publishable | whole single-slot host valid | test-local emit/edit counters increment |
@@ -53,5 +53,7 @@ directions is not implemented by test-only #132; CF01 is not passed and #108
 must stay open. Coordinate the public-path gap with #111; #102 PR #105 and
 #104 PR #106 remain separate open work. The fixture is not a security boundary
 for arbitrary plugin code: a hostile callback can loop or mutate the shared
-meter; cooperative budgeting cannot provide process isolation. No CF02/CF13,
+meter; the admission fixture rejects invalid entry/return meter state and callback
+meter mutation before actions, but cooperative budgeting cannot provide process
+isolation. No CF02/CF13,
 Formbar #184, production FSX, or API-freeze claim follows from these tests.

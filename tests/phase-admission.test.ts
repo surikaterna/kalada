@@ -14,7 +14,7 @@ describe("#132 test-local phase admission", () => {
     const result = admitPhase(admissionProbe(source));
     expect(result.phases).toEqual([
       "captured",
-      "selected",
+      "dispatch-requested",
       "guest returned",
       "host validated",
       "phase admitted",
@@ -64,7 +64,7 @@ describe("#132 test-local phase admission", () => {
     expect(result.lowered?.ok).toBe(false);
     expect(result.phases).toEqual([
       "captured",
-      "selected",
+      "dispatch-requested",
       "guest returned",
       "host validated",
       "phase admitted",
@@ -176,6 +176,79 @@ describe("#132 test-local phase admission", () => {
         expect(result.counters).toEqual(zero);
       }
     }
+  });
+
+  it("records a dispatch request, not selection, for an undeclared host slot", () => {
+    const result = admitPhase(admissionProbe("other{1}TAIL"));
+    expect(result.phases).toEqual(["captured", "dispatch-requested"]);
+    expect(result.outcome.status).toBe("invalid");
+    expect(result.counters).toEqual(zero);
+  });
+
+  it.each([
+    ["negative work", "work", -1000],
+    ["NaN work", "work", NaN],
+    ["overlimit work", "work", 6],
+    ["negative depth", "depth", -1],
+    ["overlimit diagnostics", "diagnostics", 4],
+  ] as const)("rejects %s at entry", (_name, field, value) => {
+    const meter = new Meter({ work: 5, depth: 1, diagnostics: 3 });
+    meter[field] = value;
+    const result = admitPhase({ ...admissionProbe("host{1}TAIL"), meter });
+    expect(result.outcome.status).toBe("budget");
+    expect(result.outcome.ranges).toEqual([]);
+    expect(result.counters).toEqual(zero);
+    expect(meter[field]).toBe(value);
+  });
+
+  it.each([
+    ["negative", -1000],
+    ["NaN", NaN],
+    ["overlimit", 1001],
+    ["plausible forged count", 1],
+  ])("rejects %s work mutation after the guest callback", (_name, value) => {
+    const meter = new Meter({ work: 512, depth: 1, diagnostics: 3 });
+    const result = admitPhase({
+      ...admissionProbe("host{1}TAIL"),
+      meter,
+      onReturn: (guest) => {
+        meter.work = value;
+        return guest;
+      },
+    });
+    expect(result.outcome.status).toBe("budget");
+    expect(result.outcome.ranges).toEqual([]);
+    expect(result.counters).toEqual(zero);
+  });
+
+  it.each(["depth", "diagnostics", "exhausted", "active", "limit"] as const)(
+    "rejects callback mutation of %s",
+    (field) => {
+      const meter = new Meter({ work: 512, depth: 1, diagnostics: 3 });
+      const result = admitPhase({
+        ...admissionProbe("host{1}TAIL"),
+        meter,
+        onReturn: (guest) => {
+          if (field === "depth") meter.depth = -1;
+          if (field === "diagnostics") meter.diagnostics = NaN;
+          if (field === "exhausted") meter.exhausted = true;
+          if (field === "active") (meter as unknown as { active: number }).active = -1;
+          if (field === "limit") (meter.limits as { work: number }).work = 1;
+          return guest;
+        },
+      });
+      expect(result.outcome.status).toBe("budget");
+      expect(result.outcome.ranges).toEqual([]);
+      expect(result.counters).toEqual(zero);
+    },
+  );
+
+  it("accepts a valid shared meter without replacing it", () => {
+    const meter = new Meter({ work: 100, depth: 1, diagnostics: 3 });
+    const result = admitPhase({ ...admissionProbe("host{1}TAIL"), meter });
+    expect(result.outcome.status).toBe("valid");
+    expect(meter.work).toBe("host{1}TAIL".length);
+    expect(result.counters).toEqual({ lower: 1, emit: 1, edit: 1 });
   });
 
   it.each([
