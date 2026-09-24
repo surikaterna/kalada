@@ -42,5 +42,13 @@ export type {
   WorkspaceSnapshot,
 } from "./contracts.js";
 export { LanguageServiceError } from "./errors.js";
+export {
+  createExpressionsDiagnosticProvider,
+  type ExpressionsDiagnostic,
+  type ExpressionsDiagnosticProvider,
+  type ExpressionsDocument,
+  type ExpressionsEnvironment,
+  type ExpressionsEnvironmentResolver,
+} from "./expressions-provider.js";
 export { createUtf16LineIndex } from "./line-index.js";
 export { createLanguageService } from "./service.js";

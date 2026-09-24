@@ -5,7 +5,10 @@
 - Authority: [PRD](../prd/composable-language-platform.md) and proposed
   [ADR-0008](../adr/0008-composable-language-platform.md); evidence plan:
   [conformance matrix](./composable-language-conformance.md).
-- No assigned issue. Coordination only: Formbar #92/#93 and Kalada #21/#75/#87 as linked in the PRD.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
+  [PR #126](https://github.com/surikaterna/kalada/pull/126).
+  Formbar #92/#93 and [#175](https://github.com/surikaterna/formbar/issues/175) coordinate domain ownership;
+  no cross-repository approval is implied.
 
 ## Reading and compatibility policy
 
@@ -13,16 +16,73 @@ CLK IDs are stable review contracts. “Must” below describes proposed accepta
 about today's packages. Inputs/results describe behavior, not final names, signatures or wire
 versions. Existing accepted Kalada semantics remain authoritative until a targeted compatibility
 decision approves a change. Domain requirements are not permission to silently extend Kalada.
-P0 reviews feasibility; P1 proves mechanics. Only real-consumer evidence at the ADR pre-freeze
-gate permits consideration of API stability; passing that gate does not automatically freeze APIs.
+P0 reviews a minimum experimental shape; P1 proves mechanics. Only real-consumer evidence
+at the ADR [#123](https://github.com/surikaterna/kalada/issues/123) pre-freeze gate records
+stability evidence, not an automatic public API freeze; the API stays open/unfrozen.
 
 “Kernel contracts” includes boundary obligations on providers/consumers, not kernel ownership of
-every behavior below. The kernel owns shared source/scopes, registration/type identity and generic
-infrastructure contracts; shared language services route requests to providers. Expressions and FSX
-use identical public extension interfaces and service access, with no privileged Expressions hooks.
+every behavior below. P0 owns neutral source/snapshot and composition boundaries; later shared
+scope/type/generic/nominal infrastructure depends on consumer evidence. Shared language services
+eventually route requests to providers. Expressions and FSX use identical public extension
+interfaces and service access, with no privileged Expressions hooks.
 Expressions owns grammar, checker/inference, operators, IR/artifact semantics, compatibility and
 evaluator runtime. The kernel mandates no expression language, universal execution IR or evaluator.
-A minimal domain-only language must use kernel/tooling without installing/registering Expressions.
+A minimal domain-only language must ultimately use kernel/tooling without installing/registering Expressions.
+
+## P0 minimum experimental shape (CLK-01–06; CLP-01, 02, 05; CF01/02/05)
+
+This freezes a **reviewable shape**, not a public API, grammar spelling, package split or
+executable conformance. Kalada architecture owns source/provider boundary review; Formbar
+state/rules and FSX maintainers must review location eligibility versus update authority.
+Decisions and objections remain pending, including Formbar's separate [#175](https://github.com/surikaterna/formbar/issues/175)
+needs-design for reversible codecs/restricted Kalada update handlers. #175 is not a P0 blocker.
+
+| Boundary | Minimum P0 decision | Later conditional evidence |
+| --- | --- | --- |
+| Source | Immutable snapshot/version, owner-tagged half-open UTF-16 ranges and one shared bounded request; no universal CST or execution IR | Separate CF01 executable entry/exit and malformed-source probe in P1, then real FSX evidence before freeze |
+| Embedding | Versioned explicit profile lists **host grammar positions** and allowed guest languages; host chooses entry, owns outer delimiters and validates return; guest lexes interior | Reverse embedding only with a separately declared host position/profile; CF01 two-way fixture is a later goal, not P0 acceptance |
+| Providers/types | Equal opt-in public provider access; initial semantic handoff may carry host-owned opaque expected-type and value-versus-location context | CF02 and real FSX determine whether shared scope/type/generic/nominal machinery is justified; no shared checker or mandatory Expressions |
+| Writes | First FSX edit: direct statically identified non-repeater writable location only; Kalada checks eligibility, Formbar authorizes/resolves at use time | CF05 Stage A: independent executable Formbar #195 proof before #123; repeater writes DISABLED pending #180 stable identity and independently audited #185 Stage B, mandatory for current #187 and P6 if released; #175 codecs/handlers need separate design |
+
+Illustrative source only, **not** a selected `bind` keyword or FSX grammar: in a declared
+FSX attribute expression position, `<Field value={Kalada: item.name} />` may enter Kalada if
+the profile admits it. The host retains `{`/`}`, and Kalada lexes the interior using its
+**currently supported grammar**, returning a bounded consumed range/stop reason; the host
+validates the range and closing delimiter. Comments and brace syntax are not yet supported by
+Kalada's expression lexer/parser: they fail closed, not succeed by host pre-scanning or an
+invented restricted grammar. [Kalada #110](https://github.com/surikaterna/kalada/issues/110)
+prototypes this narrow guest-owned boundary, not a permanent restricted subset or completion
+of [CF01 / #108](https://github.com/surikaterna/kalada/issues/108). As Kalada's supported
+grammar grows, the handoff must support that grammar with corresponding fixtures. An
+Expressions-hosted FSX region works only if a *distinct* Expressions profile declares that
+grammar position and FSX as an allowed guest.
+Undeclared position/guest, overlapping entries, non-progress/invalid exit or unsupported lexical
+handoff return explicit unsupported/invalid/partial results, never an inferred valid program.
+
+An illustrative, **nonfinal authoring spelling** for a static document-wide choice is
+`<Form defaultLanguage="Kalada"><Field value={item.name} /></Form>`: the root Form element
+selects Kalada for eligible expression slots throughout that form, without a
+`@defaultLanguage` directive or runtime Formbar prop. At a declared slot, an optional explicit
+per-expression language selection (such as the `Kalada:` marker above) wins if that guest is
+permitted; when there is no explicit choice, the root default selects only if permitted by that
+slot's profile. A
+forbidden explicit selection or inherited root default is a diagnostic, **not** permission to
+try another parser or bypass the slot's allowed-guest list. With neither selection, the host
+must require an explicit choice rather than infer a guest, even if only one is listed. Nested
+defaults are optional future authoring syntax only if real cases require them; neither spelling
+nor parser API is fixed here.
+Unterminated interior source may yield a bounded partial diagnostic but cannot emit or edit.
+CRLF and non-BMP text keep parent snapshot identity and UTF-16 offsets through both handoffs;
+stale snapshots cannot authorize publication or edits.
+
+For a separately declared editable slot, `item.name` is illustrative direct-location syntax:
+Kalada may certify a static binding/path as location-eligible, but that is **not** permission to
+write. Formbar resolves current identity, revision, permissions and server policy at update time.
+The first supported write is direct and non-repeater. `item.name + suffix`, a read-only path,
+removed target, stale revision, denied permission, conflict or unsupported target must reject
+without mutation. A value-as-location check fails before update;
+a once-eligible location may still fail Formbar's current authorization. No reversible codec,
+restricted handler or computed-value inverse is promised for this first edit.
 
 ### CLK-01 — Representations and phase results
 
@@ -43,16 +103,19 @@ A minimal domain-only language must use kernel/tooling without installing/regist
 
 ### CLK-02 — Context composition and parser handoff
 
-- **Inputs:** immutable, versioned context profiles register eligible child languages, entry
-  markers, lexical modes, delimiter ownership and recovery limits. Composition has deterministic
-  precedence defined by the profile, not registration order or “try every parser.”
+- **Inputs:** immutable, versioned context profiles register host grammar positions, allowed
+  child languages, entry markers, lexical modes, delimiter ownership and recovery limits. Composition has deterministic
+  precedence defined by the profile, not registration order or “try every parser.” Static
+  authoring defaults and explicit selections never expand a slot's permitted guest list.
 - **Results:** an entered child returns an owned range, exit reason, consumed boundary and
   diagnostics; the host validates its expected close boundary and forward progress. Proposed
-  default: host selects an explicit entry marker, retains outer delimiters, and child lexical
-  handling shields strings, comments and balanced nesting from premature exit. Alternative
+  default: host selects entry at a declared position, retains outer delimiters, and child lexing
+  shields delimiters within its **supported** strings, comments and balanced nesting from
+  premature exit; unsupported lexical constructs fail closed. Alternative
   raw-text or child-owned delimiter modes require explicit profile contracts and fixtures.
 - **Ownership:** host chooses the entry context, child owns interior lexical rules, host validates
-  re-entry. Nested islands debit a shared request budget, never a fresh budget per island.
+  re-entry. Reverse entry needs its own declared host position/profile. Nested islands debit a
+  shared request budget, never a fresh budget per island.
 - **Rejection / exclusions:** reject ambiguous registrations, invalid/overlapping ranges and
   non-progress. Recovery stops at profile-approved synchronization boundaries and cannot consume
   unrelated host structure. Unterminated strings/comments, conflicting child/host delimiters and
@@ -61,8 +124,8 @@ A minimal domain-only language must use kernel/tooling without installing/regist
 
 ### CLK-03 — Public provider composition and language-owned semantics
 
-- **Inputs:** language-owned AST expression slots, expected types, lexical facts and explicit
-  value-versus-location context, plus schema/component facts from the domain.
+- **Inputs:** language-owned AST expression slots, host-owned opaque expected-type facts and
+  explicit value-versus-location context, plus schema/component facts from the domain.
 - **Results:** the Expressions provider produces typed expression facts or ranged diagnostics;
   FSX explicitly composes its public interfaces with domain checks. Both register and access shared
   services through identical public interfaces; a domain-only provider need not compose Expressions.
@@ -91,33 +154,43 @@ A minimal domain-only language must use kernel/tooling without installing/regist
 
 ### CLK-05 — Writable locations and update boundaries
 
-- **Inputs:** a checked location requirement, symbol/path facts, stable repeated-item identity and
-  declared codec directions. A writable reference is not inferred from source text or obtained by
-  inverting a computed value.
-- **Results:** data-only reference descriptors identify binding/entity/path and necessary revision
-  or policy requirements. Reorder preserves the intended entity; removal or stale identity yields
-  rejection, not fallback to the former array index. A minimal safe-write probe precedes API review.
+- **Inputs:** a checked location requirement and direct static binding/path facts; Formbar supplies
+  current authorization at use and stable repeated-item identity only if repeater writes are enabled.
+  A writable reference cannot be inferred from text or obtained by inverting a computed value.
+- **Results:** first FSX edit accepts only direct statically identified non-repeater writable locations. Kalada
+  checks eligibility, not permission; data-only descriptors identify binding/entity/path and
+  necessary revision or policy requirements. Independent executable Formbar #195 server-authorized
+  update/rejection evidence precedes #123 review; no public API is frozen by that review.
 - **Ownership:** Formbar owns authorization at use time, conflict/revision policy, updates and
-  scheduling. Domain codecs declare read/write directions and failure behavior; a read codec is
-  not evidence of a reversible write codec.
+  scheduling. Reversible codecs and restricted update handlers are deferred to Formbar #175;
+  a read codec is not evidence of a reversible write codec. Repeater writes stay **DISABLED** until
+  [#180](https://github.com/surikaterna/formbar/issues/180) supplies stable keys and atomic
+  resolve/authorize/update and [#185](https://github.com/surikaterna/formbar/issues/185)
+  independently proves reorder/replacement/removal without retargeting. #180 does not block
+  #123 if repeaters are excluded; current [#187](https://github.com/surikaterna/formbar/issues/187)
+  requires Stage B, and P6 requires it if repeater writes are selected for release. Unsupported
+  writes cannot be marked supported; dropping repeaters from #187 requires an issue amendment.
 - **Rejection / exclusions:** computed/read-only targets, missing write conversion, removed items,
-  stale revisions, denied permissions and conflicts fail under an explicit host policy. No mutation
-  evaluator is added to Kalada. Field spelling, restricted `onChange` and final conflict policy
+  stale revisions, denied permissions, conflicts and unsupported targets fail without mutation
+  under an explicit host policy. Stage B also rejects missing/duplicate stable keys, replacement
+  and index fallback. No mutation evaluator is added to Kalada. Field spelling, restricted `onChange` and final conflict policy
   remain open; neither arbitrary callbacks nor a selected `bind` syntax is implied.
 
 ### CLK-06 — Type infrastructure and language-owned checking policy
 
-- **Inputs:** language-owned type facts, domain schema evidence, nominal registrations and
+- **Inputs:** language-owned type facts and domain schema evidence; later nominal registrations and
   expected slot types. Needed checking capabilities include collection element expectations,
   structural field evidence, nominal identity and finite parameter substitution.
-- **Results:** participating language checks distinguish structural evidence from nominal identity;
-  they never equate nominal types merely because fields match. Proposed initial generic policy
+- **Results:** if real consumers justify shared infrastructure, participating language checks
+  distinguish structural from nominal identity; they never equate nominal types because fields match.
+  Proposed later generic policy
   supports declared finite arity, explicit arguments, element/field lookup and bounded substitution
   in registered constructors. Required collection support must fit existing Kalada collection
   semantics. Record evidence, optional fields and alternatives may be needed in the checker;
   their representation and assignment rules await the compatibility inventory.
 - **Ownership:** languages own assignability, inference and type rules. Kernel contracts provide
-  registration/type identity and generic infrastructure, not a mandatory Expressions type system.
+  registration/type identity and generic infrastructure only when justified beyond P0,
+  not a mandatory Expressions type system.
   The bounded generic policy above guides Expressions/composing consumers, not universal language
   semantics; adapters provide schema evidence. Each executable construct needs a language-owned IR
   mapping, domain lowering or explicit rejection. Expressions compatibility remains package-owned.
@@ -160,17 +233,20 @@ A minimal domain-only language must use kernel/tooling without installing/regist
 ### CLK-09 — Domain lowering and consumers
 
 - **Inputs:** current checked domain facts and checked expressions, plus target compatibility facts.
-- **Results:** FSX emits existing Formbar declarations with deferred expressions and an explicit
-  compatibility adapter where needed, composing Expressions via public APIs. Formbar schedules
-  calls to the Expressions runtime with those artifacts. Projection maps decoded structured EDIFACT data
-  into a command validated by Scheman, or JSON into an email model for a safe domain renderer.
+- **Results:** FSX emits Formbar declarations with deferred expressions via the proposed in-place
+  V1 Kalada slot replacement, subject to Formbar #179 signoff, composing Expressions via public
+  APIs. Formbar schedules calls to the Expressions runtime with those artifacts. Projection maps
+  decoded structured EDIFACT data into a command validated by Scheman, or JSON into an email model
+  for a safe domain renderer.
 - **Ownership:** each domain owns its IR, validation, renderer/decoder and target mapping; Expressions
   owns expression semantics/runtime. Arbitre receives explicit effect requirements and owns orchestration.
   Kuery gets a fit assessment of expression/context needs, not an implementation commitment.
 - **Rejection / exclusions:** unsupported target declarations, unmappable checked types or missing
-  runtime capabilities block lowering/admission. No eager expression evaluation, new reactive
-  engine, universal domain IR or requirement that projection generate FSX. Small decoder/renderer
-  fixtures can prove boundaries without delivering production integrations.
+  runtime capabilities block lowering/admission. Old Kuery slot data is rejected or migrated
+  explicitly, never silently reinterpreted; V2 slots are not required solely for legacy reads.
+  No eager expression evaluation, new reactive engine, universal domain IR or requirement that
+  projection generate FSX. Small decoder/renderer fixtures can prove boundaries without delivering
+  production integrations.
 
 ### CLK-10 — Headless semantic queries and safe rename
 

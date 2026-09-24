@@ -162,6 +162,7 @@ describe("package boundaries", () => {
     for (const filePath of files) {
       const source = await readFile(filePath, "utf8");
       expect(await forbiddenRoutingImport(filePath, source, directory), filePath).toBe(false);
+      expect(source, filePath).not.toMatch(/from\s+["'].*expressions/iu);
     }
   });
 
@@ -283,6 +284,10 @@ describe("package boundaries", () => {
     });
     const hostSource = await readFile(resolve(host, "src/index.ts"), "utf8");
     expect(hostSource).not.toContain("@kalada/language-service");
+    const source = await productionSource(resolve(languageService, "src"));
+    expect(source).not.toMatch(
+      /(?:from|import\s*\(|require\s*\()[\s"']*@kalada\/provider-routing-prototype/iu,
+    );
   });
 
   it("keeps the language-service source graph headless and evaluation-free", async () => {

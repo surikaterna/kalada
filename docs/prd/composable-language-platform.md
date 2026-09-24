@@ -6,7 +6,11 @@
 - Delivery proposal: [ADR-0008](../adr/0008-composable-language-platform.md).
 - Proposed behavioral design: [kernel contracts CLK-01–15](../architecture/composable-language-kernel-contracts.md).
 - Evidence plan: [conformance CF01–14](../architecture/composable-language-conformance.md), all planned, not run.
-- Assignment: no assigned Kalada issue. Coordination: [Formbar #92][f92] and [#93][f93];
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
+  open [PR #126](https://github.com/surikaterna/kalada/pull/126).
+  Coordination: [Formbar #92][f92], [#93][f93], expression-slot decision [#179][f179],
+  non-repeater proof [#195][f195], repeater-write identity [#180][f180] and proof [#185][f185],
+  later supported-surface completion [#187][f187] and codec/handler design [#175][f175];
   related Kalada [#21][k21], [#75][k75], and [#87][k87]. These references are not status updates.
 
 ## Context and outcome
@@ -50,7 +54,7 @@ The target and open choices elsewhere in this PRD are not claims about that base
 | Host artifacts | [Host manifest](../../packages/host/package.json) depends on syntax; [compiled-artifact.ts](../../packages/host/src/compiled-artifact.ts) retains parsed source, functions and private authenticity state | New portable data-only IR and runtime admission/link boundary, not JSON serialization of existing host objects |
 | Schema integration | [Scheman adapter](../../packages/adapter-scheman/README.md) consumes Scheman v2, distinguishes input shape/output semantics and live capabilities | Reuse for data schemas; component contracts and writable locations need additional domain evidence; #75 is related orthogonal Standard Schema work |
 | Authoring | [Language service](../../packages/language-service/README.md) handles versioned Kalada documents, UTF-16, completion/hover and currentness; [CodeMirror](../../packages/codemirror/package.json) exists | Neither a generic mixed-language service nor an LSP server currently exists; browser and VS Code/LSP must share analysis |
-| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | Existing version-1 declarations have expression slots, scoped bindings and computations; FSX must lower to these contracts with an explicit expression compatibility adapter where needed |
+| Formbar target | [Definition][fb-definition], [nodes][fb-nodes], [bindings][fb-bindings], [computations][fb-computations] at clean neighboring checkout `75e69bd0d2a0eed830e2fed3e77211735a628615` | Current V1 node/prop/computation slots use Kuery `ValueExpression<StateRef>` (see [expression contract][fb-expression]); scoped bindings and stored computations exist, but V1 does **not** accept Kalada programs. Owner preference recorded in [#179][f179] and [#107][k107] is an in-place V1 Kalada slot replacement, subject to Formbar engineering signoff under #179 before real FSX lowering; no V2 is required solely for legacy/mixed-engine reads. |
 | Coordination | #92 proposes declarative tooling and still mentions the earlier Kuery core; #93 explicitly requires #92 to consume Kalada syntax | Treat #93 as coordination baseline, not proof FSX exists or this proposal is approved |
 
 ## Requirements and measurable acceptance
@@ -58,9 +62,11 @@ The target and open choices elsewhere in this PRD are not claims about that base
 IDs are stable product requirements. Acceptance fixtures and gates are proposed future evidence,
 not tests delivered by these documents. Numeric resource budgets must follow [#87][k87]
 measurement and calibration rather than invented latency or bundle-size promises.
-CLK contracts specify minimum behavior without freezing signatures; CF scenarios distinguish toy
-mechanics from real consumer evidence. A pre-freeze review requires P1–P4 evidence and a safe
-writable-reference proof, not full P5 delivery, and permits review rather than automatic API freeze.
+CLK contracts distinguish the [P0 minimum experimental shape](../architecture/composable-language-kernel-contracts.md)
+from later goals without freezing signatures; CF scenarios distinguish toy mechanics from real
+consumer evidence. The [#123][k123] pre-freeze review requires P1–P4 evidence and an independently
+audited executable non-repeater direct-write proof (#195), not full P5 delivery. It records
+findings and leaves the public API open/unfrozen; it does not automatically freeze it.
 
 ### CLP-01 — Composition and source fidelity
 
@@ -70,12 +76,19 @@ nodes; mixed trees preserve ownership rather than flattening every node into Kal
 Preserve needed text/trivia/ranges through source ownership; a full lossless CST is not a universal
 requirement. Checked semantic facts may exceed executable IR expressiveness only with explicit
 mapping or rejection. Partial recovered analysis cannot authorize emission.
-Support bidirectional source composition by design: domain syntax can contain Kalada expressions,
-and a registered domain region can appear inside a Kalada-led source context. This does not
-require that the region become a first-class runtime value.
+P0 permits embedding only at explicitly declared host grammar positions for listed guests in a
+versioned profile: host owns outer delimiters and return validation, guest lexes the interior.
+For FSX authoring, a static language default on the root Form element may select the guest
+document-wide for eligible expression slots; no `@defaultLanguage` directive is required.
+Explicit per-expression selection may override it only where that slot permits the guest;
+neither selection can expand the slot's allowed-guest list. Forbidden inherited defaults must
+diagnose rather than trigger parser guessing. Nested defaults remain optional pending real need.
+Reverse embedding needs a separate declared Kalada-host position/profile; bidirectional source
+composition remains a later goal, not automatic support or a runtime fragment value.
 
-**Acceptance:** Kalada plus a tiny second-language fixture compose in both directions, including
-nested delimiters, malformed islands, comments, CRLF and non-BMP characters. Recovery terminates
+**Later P1/CF01 acceptance (not P0 approval):** Kalada plus a tiny second-language fixture
+compose in both declared directions, including nested delimiters, malformed islands, comments,
+CRLF and non-BMP characters. Recovery terminates
 within configured limits; diagnostics and formatting preserve correct parent-document ranges
 and untouched source. The fixture need not execute or capture a fragment.
 Ambiguous registrations, non-progress exits and nested budget resets are rejected; unresolved
@@ -83,9 +96,11 @@ malformed-source lexical boundaries are explicit limitations, not guessed valid 
 
 ### CLP-02 — Language-neutral foundation and optional Expressions
 
-Extract source, scope, registration/type-identity and generic infrastructure contracts, with shared
-language-service routing. Type rules and lowering remain language-owned; generic infrastructure
-must not impose Expressions assignability or execution semantics. Expressions uses the same public
+P0 specifies neutral source/snapshot, opt-in equal provider access and an initial handoff that may
+carry host-owned opaque expected-type and value-versus-writable-location context. Extract shared
+scope, registration/type-identity and generic infrastructure only as real consumers justify it;
+shared language-service routing remains a later goal. Type rules and lowering remain language-owned;
+generic infrastructure must not impose Expressions assignability or execution semantics. Expressions uses the same public
 registration and service access as FSX; projection and FSX compose it rather than fork its engine.
 
 **Acceptance:** existing Kalada conformance fixtures preserve programs, behavior and diagnostics
@@ -93,20 +108,39 @@ under the Expressions package's compatibility policy. A minimal domain-only cons
 and tooling without installing/registering Expressions, Formbar, projection or editor packages.
 Dependency tests reject kernel/shared-service imports of expression syntax, checker, IR or evaluator;
 registration tests prove identical public access without privileged hooks. No duplicate engine is needed.
-Collection/structural/nominal checking needs and bounded generic support are inventoried separately
+Collection/structural/nominal checking needs and bounded generic support are inventoried later
 from pending type design choices; no new null/record/union semantics silently enter canonical Kalada.
 
 ### CLP-03 — FSX lowers to deferred Formbar declarations
 
 FSX is declarative, JSX-like syntax, **not JavaScript or TypeScript**. Formbar owns the proposed
 `@formbar/fsx` compiler and a separate authoring package; final package names are provisional.
+The root Form language default is static compiler input, not a runtime Formbar prop or
+source-authored provider registration; the slot profile still controls allowed guests.
 Explicitly compose Expressions using its public compiler/provider interfaces, making expression
 embedding straightforward without privileged integration. Compile to existing Formbar declarations
 plus embedded, deferred Expressions artifacts with explicit
-references. Do not evaluate expressions at compilation, render components, or describe the
+references. First editable slots accept only direct statically identified writable locations,
+not computed values. Do not evaluate expressions at compilation, render components, or describe the
 whole form as an executable Kalada AST. Formbar retains reactive state, scheduling and rules,
 including server enforcement; it schedules calls to the Expressions runtime. Neither compiler nor
 projection duplicates those responsibilities.
+
+Current Formbar V1 validators compile Kuery slots, extract sorted `StateRef` dependencies for
+computation reference/cycle checks, and report definition **paths**, not FSX source ranges.
+The proposed in-place V1 replacement with Kalada remains gated on Formbar engineering signoff
+in [#179][f179]: define Kalada dependency extraction and cycle equivalence, scoped binding,
+runtime evaluation and path-to-source diagnostic mapping before lowering a real form. Existing
+Kuery-encoded data must be explicitly rejected or migrated, never silently reinterpreted as Kalada;
+do not assume there are no external consumers of published `@formbar/declarative`. An incompatible
+publishable Formbar change needs a major Changeset, not automatically a Kalada package Changeset.
+Future versioned portable artifacts are a separate target, not a reason to require V2 slots now.
+General Kalada programs are not presumed translatable to Kuery AST; parser-only [#108][k108]
+does not resolve this gate.
+[#180][f180] gates repeater-scoped writes separately; first direct non-repeater edits and
+repeated-item **reads** need not wait for stable write identity. Repeater-scoped writes remain
+**DISABLED** until #180 and independent Formbar [#185][f185] proof; #180 does not block [#123][k123]
+when repeaters are excluded from the supported write surface.
 
 **Acceptance:** a field/output/conditional form lowers to declaration fixtures accepted by
 Formbar; changing runtime input changes the result without recompiling source. Compile-time
@@ -127,22 +161,41 @@ the distinction between schema structure, validation, semantic types and explici
 ### CLP-05 — Lexical scopes and writable references
 
 Use explicit lexical aliases with specified shadowing and outer-scope access. A computed value
-is not a writable location. Nested repeated items need stable identity independent of index so
+is not a writable location: Kalada checks direct static location eligibility for the first edit,
+while Formbar resolves identity, authorization, revisions and server policy at update time.
+Nested repeated items need stable identity independent of index so
 reordering cannot retarget a pending update. Formbar owns update authorization and scheduling.
 The write/reference contract must be explored in P0/P1, before read-only FSX hardens an
 incompatible design; complete writable behavior follows in P5.
 
-**Acceptance:** nested-repeater fixtures resolve distinct outer/inner aliases, expose deliberate
-shadowing behavior, reject computed-value writes and stale/removed item targets, and preserve
-item targeting across reorder. A reviewed update policy precedes enabling writes. Surface
-spelling remains open; `bind` is not the chosen syntax.
-Before stability review, a narrow executable proof must reject stale permissions, conflicts and
-unsupported write-codec directions; full P5 write UI/domain completeness is not required for it.
+**Acceptance Stage A ([#195][f195], before [#123][k123]):** an independently audited executable Formbar
+server-authorized direct non-repeater write proves a static Kalada location is only eligible,
+never authorized. At update time reject computed, read-only, denied, stale, removed, conflicting
+and unsupported targets without mutation; reject unsupported write-codec direction if applicable.
+No reversible codec or restricted handler is required for the first direct edit. Full P5 UI/domain
+completion is not required. A reviewed update policy precedes enabling writes; surface spelling
+remains open and `bind` is not selected.
+
+**Acceptance Stage B ([#180][f180]/[#185][f185], required for [#187][f187]):** stable item keys and atomic
+Formbar resolve/authorize/update survive reorder and reject replacement/removal, missing or
+duplicate keys and stale/conflicting writes without mutation or index fallback. Independent
+audited executable #185 proof after #180 is mandatory for #187's current P5 repeater-write scope;
+#123 needs only Stage A with repeater writes disabled. P6 requires Stage B if repeater writes are
+selected for release and cannot claim unsupported writes as supported. Dropping repeaters from
+#187 requires a separate issue amendment, not a docs-only change. Nested read aliases/shadowing
+may be tested without enabling writes. Reversible codecs and restricted handlers remain Formbar
+[#175][f175] needs-design, not a #123 prerequisite for direct writes.
+
+Current repeated runtime/renderer identity is index-derived; this cannot safely address a pending
+repeater-scoped write after reorder/replacement. [#180][f180] requires stable item identity and
+atomic resolve/authorize/update before those writes, independently verified in #185 and distinct
+from [#175][f175] codec/handler design.
 
 ### CLP-06 — Domain-owned nominal types
 
-Trusted domain packages may register nominal types with explicit identity, version, checking
-and permitted operations/encoding. Neither kernel nor Expressions has a built-in `FormFragment` type.
+If consumer evidence warrants it, trusted domain packages may later register nominal types with
+explicit identity, version, checking and permitted operations/encoding. Neither kernel nor
+Expressions has a built-in `FormFragment` type.
 Source composition does not imply executable fragment capture, closures or runtime fragment values.
 
 **Acceptance:** a test domain supplies a nominal type without a Formbar import in kernel or Expressions; unknown
@@ -250,10 +303,14 @@ P6 requires reproducible packed-size/compute evidence and reviewed thresholds de
 
 ## Open decisions and approval gates
 
-P0 must settle parser context/admission boundaries, mixed-node ownership, package naming and
-compatibility strategy. It must explore aliases, outer access, stable item keys and writable
-locations early, including whether widgets require explicit bidirectional codecs or a restricted
-declarative `onChange` model. Neither arbitrary event handlers nor `bind` spelling is approved.
+P0 seeks Kalada architecture and Formbar state/rules/FSX review of the minimum shape, not
+cross-repo approval by publication. Reviewer decisions/objections remain pending. It must
+explore aliases, outer access, stable item keys and direct writable locations early;
+Formbar #175 owns the later reversible codec/restricted update-handler choice. Neither
+arbitrary event handlers nor `bind` spelling is approved. CF01's executable two-direction
+probe, CF02 shared-infra evidence and CF05 Stage A #195 proof are separate later gates.
+[#123][k123] records/reviews those results, not an API freeze; repeater writes remain disabled pending
+#180/#185; current #187 requires Stage B, while P6 requires it if repeater writes are released.
 
 Runtime fragment values/capture and nominal serialization remain optional. If an executable
 domain extension is needed, choose between A (lowered extension operations) and B (common
@@ -267,6 +324,15 @@ their validation is not evidence that any planned conformance scenario has run.
 
 [f92]: https://github.com/surikaterna/formbar/issues/92
 [f93]: https://github.com/surikaterna/formbar/issues/93
+[f175]: https://github.com/surikaterna/formbar/issues/175
+[f179]: https://github.com/surikaterna/formbar/issues/179
+[f180]: https://github.com/surikaterna/formbar/issues/180
+[f185]: https://github.com/surikaterna/formbar/issues/185
+[f187]: https://github.com/surikaterna/formbar/issues/187
+[f195]: https://github.com/surikaterna/formbar/issues/195
+[k107]: https://github.com/surikaterna/kalada/issues/107
+[k108]: https://github.com/surikaterna/kalada/issues/108
+[k123]: https://github.com/surikaterna/kalada/issues/123
 [k21]: https://github.com/surikaterna/kalada/issues/21
 [k75]: https://github.com/surikaterna/kalada/issues/75
 [k87]: https://github.com/surikaterna/kalada/issues/87
@@ -274,3 +340,4 @@ their validation is not evidence that any planned conformance scenario has run.
 [fb-nodes]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/nodes.ts
 [fb-bindings]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/bindings.ts
 [fb-computations]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/declarative/src/computations.ts
+[fb-expression]: https://github.com/surikaterna/formbar/blob/75e69bd0d2a0eed830e2fed3e77211735a628615/packages/expressions/src/contracts.ts

@@ -5,7 +5,9 @@
 - Product requirements: [PRD CLP-01–12](../prd/composable-language-platform.md).
 - Behavioral contracts: [kernel CLK-01–15](./composable-language-kernel-contracts.md).
 - Delivery and authority: [ADR-0008](../adr/0008-composable-language-platform.md).
-- No assigned issue or tracker update; Formbar #92/#93 and Kalada #21/#75/#87 are coordination only.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
+  [PR #126](https://github.com/surikaterna/kalada/pull/126);
+  Formbar #92/#93 and deferred [#175](https://github.com/surikaterna/formbar/issues/175) are coordination, not approval.
 
 ## Evidence policy and gate vocabulary
 
@@ -15,12 +17,17 @@ domains proposed for review, not assignments. Each result must record source/art
 environment/version/profile identities, expected and actual output, negative diagnostics,
 dependency evidence where relevant, and reproducible harness commands before becoming evidence.
 
-P0 reviews contract feasibility. P1 proves Kalada regression parity and tiny bidirectional
-composition mechanics, including a bounded framework comparison. It cannot establish real
-consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
+P0 reviews only the [minimum experimental shape](./composable-language-kernel-contracts.md):
+declared host positions/guests, source snapshots, equal opt-in providers and direct locations.
+P0 approval is not CF01 execution, CF02 parity or CF05 safe-write proof. P1 separately proves
+Kalada regression parity and tiny bidirectional composition in *separately declared* profiles,
+including a bounded framework comparison. P1 may defer CF03 only with a reviewed, recorded gap
+when nominal infrastructure has no demonstrated consumer need; deferral is not a passing probe.
+P1 cannot establish real consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
 boundary and Kuery fit reviews. P3 proves portable runtime/effect/cache boundaries; P4 authoring
 runs in parallel with P3. The **pre-freeze review** follows P1–P4 evidence and a safe writable
-reference proof, not full P5 completion. It permits a stability review, never automatic freezing.
+reference proof, not full P5 completion. [#123](https://github.com/surikaterna/kalada/issues/123)
+records/reviews evidence; it leaves the public API open/unfrozen, never automatically freezing it.
 P5 completes supported domains/writes; P6 gates measured release readiness. Unsupported cases
 must be explicit failures/limitations, not silently omitted fixtures. Optional fragments/A/B do
 not gate ordinary declarations with deferred expressions.
@@ -34,9 +41,9 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 | --- | --- | --- | --- | --- |
 | CF01 Mixed parser | CLP-01, 12; CLK-01, 02, 15 | Kalada source | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF02 Provider parity / Expressions | CLP-02, 04; CLK-03, 06, 08 | Kernel / Expressions / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
-| CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 → pre-freeze | PLANNED — NOT RUN |
+| CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 if justified; reviewed deferral otherwise → pre-freeze if needed | PLANNED — NOT RUN |
 | CF04 Real FSX | CLP-03, 04, 05; CLK-03, 04, 08, 09 | Formbar / Kalada / Scheman | P2 → pre-freeze | PLANNED — NOT RUN |
-| CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility, P2 proof → pre-freeze; P5 completion | PLANNED — NOT RUN |
+| CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility; P2 Stage A #195 → #123; Stage B #180/#185 → current #187, P6 if repeater writes released | PLANNED — NOT RUN |
 | CF06 EDIFACT projection | CLP-07; CLK-09, 11, 15 | Projection / decoder / Scheman | P2 → pre-freeze; P5 completion | PLANNED — NOT RUN |
 | CF07 Email projection | CLP-07, 12; CLK-08, 09, 15 | Projection / email renderer | P2 → pre-freeze; P5 completion | PLANNED — NOT RUN |
 | CF08 Arbitre handoff | CLP-03, 09, 12; CLK-08, 09, 12 | Arbitre / Kalada runtime | P2 assessment, P3 probe → pre-freeze | PLANNED — NOT RUN |
@@ -49,29 +56,43 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ## Targeted scenarios and required evidence
 
-### CF01 — Mixed parser and phase lifecycle
+### CF01 — Mixed parser and phase lifecycle (separate P1 executable probe)
 
-- **Positive:** Kalada and a tiny independent language nest in both directions. Explicit profiles
-  shield quoted delimiters, comments and nested regions; CRLF/non-BMP ranges remain half-open
-  UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
+- **Positive:** Kalada and a tiny independent language nest in both directions only where each
+  host profile explicitly declares the grammar position and permitted guest. Host owns outer
+  delimiters/return validation; guest lexes interior and returns a bounded range/stop reason.
+  In a tiny host fixture (not FSX), show deterministic parser selection for an eligible slot:
+  permitted explicit choice precedes a permitted static root default; without either, require
+  explicit selection rather than guessing even when one guest is listed.
+  First fixtures succeed for **currently supported Kalada grammar** (e.g. quoted delimiter,
+  parentheses, host continuation), not an invented scanner subset. Versioned profiles eventually
+  shield quoted delimiters, supported comments and nested regions; CRLF/non-BMP ranges remain
+  half-open UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
   a full lossless CST. Child exit and host validation advance predictably.
-- **Negative:** reject ambiguous registration and invalid/non-progress exit ranges. Unterminated
+- **Negative:** reject undeclared position/guest, ambiguous registration, overlapping entries
+  and invalid/non-progress exit ranges. A forbidden explicit choice or inherited root default
+  diagnoses the slot instead of falling back to another parser; neither overrides its guest list.
+  Unsupported Kalada comments/braces currently fail closed
+  (see [#110](https://github.com/surikaterna/kalada/issues/110)); add positive and malformed
+  cases as each construct enters supported grammar. Unterminated
   strings/comments and malformed islands stop at approved boundaries without swallowing sibling
   host structure. Deep alternating islands consume one shared budget. Invalid/partial, stale,
   unsupported, cancelled and exhausted results cannot emit; deserialized CST without admission
-  cannot borrow current `WeakMap` provenance.
-- **Evidence:** range/ownership goldens, phase-state table, shared-budget counters and bounded
-  recovery comparison with a representative integrated framework slice. Record unresolved lexical
+  cannot borrow current `WeakMap` provenance. Stale snapshot/version or unsupported lexical
+  handoff cannot authorize publication, edits or an inferred valid parse.
+- **Evidence:** future executable range/ownership goldens, phase-state table, shared-budget
+  counters and bounded recovery comparison with a representative integrated framework slice. Record unresolved lexical
   pairs as unsupported, not successes. Harness command: TBD during implementation.
 
 ### CF02 — Equal providers and Expressions compatibility
 
 - **Positive:** run existing Kalada conformance before/after extraction, including canonical
   operators/diagnostics and admitted profiles; trace Expressions' use of neutral scope/type-identity
-  infrastructure. Expressions and a minimal domain language register through identical public
-  interfaces with equal service access. Run the domain language and its headless tooling without
+  infrastructure if real consumers justify it. Expressions and a minimal domain language
+  register through identical public interfaces with equal service access. Run domain tooling without
   installing/registering Expressions; its own type rules must work without Expressions semantics.
-  Separately opt into composition: expected-type slots reuse the public Expressions checker. Demonstrate richer
+  Separately opt into composition: host-owned opaque expected-type and value/location contexts
+  hand off to the public Expressions checker. Demonstrate richer
   schema facts mapping to existing executable semantics or remaining domain-only facts.
 - **Negative:** incompatible expected types and value-as-location fail without a copied checker.
   Attempted implicit coercion, unbounded type substitution and unsupported executable use of
@@ -87,43 +108,76 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ### CF03 — Nominal registration without domain coupling
 
-- **Positive:** a trusted test package registers versioned nominal IDs, finite arguments and an
-  explicitly portable codec; equal registration generations yield equal checking decisions.
+- **Positive (later conditional infrastructure, not P0):** a trusted test package registers
+  versioned nominal IDs, finite arguments and a portable codec; equal registry generations
+  yield equal checking decisions.
   Demonstrate language-owned structural versus nominal assignment without kernel/Expressions Formbar imports.
 - **Negative:** reject equal-shaped but different nominal identities, bad argument arity,
   conflicting versions, unknown operations/codecs and source-supplied registration callbacks.
   A valid local-only nominal value fails portable admission; no built-in fragment type is added.
 - **Evidence:** registry/assignability goldens, immutable-generation tests and portable/local-only
-  admission pair. This does not require runtime fragment capture. Command: TBD during implementation.
+  admission pair if a real consumer needs nominal registration. Otherwise record the reviewed P1
+  deferral and why consumer need is unproven; do not report CF03 as passed. Before public API
+  stability, real FSX or projection need requires executable CF03 proof. This does not require runtime fragment capture.
+  Command: TBD during implementation.
 
 ### CF04 — Real FSX consumer, not a toy substitute
 
 - **Positive:** compile a minimal field/output/conditional form with nested explicit aliases,
-  component and Scheman facts into existing Formbar declarations and deferred Kalada programs.
-  Use the real declaration validator/runtime integration with a documented expression adapter;
-  changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
+  component and Scheman facts into Formbar declarations and deferred Kalada programs **after**
+  [Formbar #179](https://github.com/surikaterna/formbar/issues/179) signs off on the owner-preferred
+  in-place V1 Kalada slot replacement. Exercise a static root Form language default across
+  eligible expression slots, plus a permitted per-expression override if a real case needs one,
+  without treating the default as a runtime Formbar prop or source-authored plugin registration.
+  Prove Kalada dependency extraction, computation-cycle and
+  scoped-reference checks. Explicitly reject or migrate old Kuery data, without assuming published
+  `@formbar/declarative` has no external consumers. Use the real declaration validator/runtime
+  integration; changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
   FSX explicitly composes the public Expressions provider/compiler; trace Formbar scheduling calls
   to the Expressions runtime with deferred artifacts, not kernel evaluation of a whole form.
 - **Negative:** reject invalid children, attribute types, unknown components/capabilities, duplicate
-  aliases and unresolved references. Spies detect any compile-time evaluation, rendering or
-  capability invocation. A browser authorization claim cannot bypass server checks.
+  aliases and unresolved references, a slot that forbids the inherited root language (with a
+  diagnostic, not a fallback parse), old Kuery slot data without explicit migration, missing
+  dependencies and cycles.
+  No implicit Kalada-to-Kuery AST translation or pretending parser-only
+  [#108](https://github.com/surikaterna/kalada/issues/108) resolves Formbar's slot/runtime gate.
+  Spies detect any compile-time evaluation, rendering or capability invocation. A browser
+  authorization claim cannot bypass server checks.
   Reject reliance on private compiler hooks, privileged provider registration or a kernel evaluator.
-- **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution and
-  compatibility report. Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
+- **Evidence:** source/declaration goldens, actual consuming runtime output, scope resolution,
+  old-data rejection/migration tests and definition-diagnostic **path-to-FSX-source-range** map goldens.
+  Incompatible publishable Formbar changes need a major Changeset; future versioned portable
+  artifacts are a separate target, not a requirement for V2 slots here.
+  Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
 
-### CF05 — Writable reference proof before freeze review
+### CF05 — Staged writable reference proof (all PLANNED — NOT RUN)
 
-- **Positive:** nested repeated records expose distinct inner/outer aliases. A checked, data-only
-  location descriptor updates the same stable item after reorder, under a minimal reviewed host
-  update policy with explicit read/write codec directions. Full scope recomputation clears removed
-  references; any optional incremental index equals that baseline after edits.
-- **Negative:** reject computed-value writes, index-retargeting, removed/stale items, denied writes,
-  revision conflicts and read-only codecs. Test duplicate declarations and capture/shadowing errors;
-  names/runtime slots cannot stand in for stable entity identity.
-- **Evidence:** location descriptor traces and authorized update/rejection outcomes using a narrow
-  Formbar integration or reviewed host-policy probe, not a production write UI. P1 sketches alone
-  are insufficient; executable safe identity/update proof is required before pre-freeze review.
-  Field syntax and complete P5 write behavior remain open. Command: TBD during implementation.
+- **Stage A positive (P2 / [Formbar #195](https://github.com/surikaterna/formbar/issues/195)
+  before #123):** a real Formbar server-authorized direct **non-repeater** update uses a checked
+  static location descriptor; Kalada certifies eligibility, not permission. Formbar resolves
+  identity, revision, permissions and server policy at update time, then commits atomically.
+  Independent audit of executable results is required, not a sketch or browser-only validation.
+- **Stage A negative:** computed/read-only, denied, stale, removed, conflicting and unsupported
+  targets reject without mutation; where a write codec direction is required, reject its absence.
+  Reversible codecs/restricted update handlers remain Formbar #175 needs-design, not prerequisites
+  for this direct edit. Record server-side before/after state and callback counters for rejection.
+- **Stage B positive (conditional):** nested repeater read aliases expose distinct inner/outer
+  access and shadowing without enabling writes. Repeater-scoped writes remain **DISABLED** until
+  [Formbar #180](https://github.com/surikaterna/formbar/issues/180) replaces index-derived
+  identity with stable item keys and atomic resolve/authorize/update, and independent executable
+  [Formbar #185](https://github.com/surikaterna/formbar/issues/185) proof shows a pending update
+  follows the same item after reorder. #180 is not a #123 blocker when repeater writes are excluded.
+- **Stage B negative:** replacement/removal, missing/duplicate keys, stale revision, denial and
+  conflict reject without mutation or index fallback. Full scope recomputation clears removed
+  references; optional incremental indexes equal it after edits. Reject duplicate declarations
+  and capture/shadowing errors; names/runtime slots are not stable entity identities.
+- **Evidence:** separate executable Stage A and Stage B location/authority traces, acceptance and
+  rejection state assertions and independent audit; no production write UI required for #123.
+  Current [Formbar #187](https://github.com/surikaterna/formbar/issues/187) includes repeater writes
+  and requires #180 plus independently audited #185 Stage B for completion; dropping them requires
+  a separate issue amendment. P6 requires Stage B if repeater writes are selected for release;
+  unsupported writes cannot be claimed supported. Field syntax and full P5 behavior remain open.
+  Commands: TBD during implementation.
 
 ### CF06 — EDIFACT projection and three kinds of provenance
 
@@ -238,11 +292,16 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ## Review record required before stability decisions
 
-Reviewers must attach CF01–14 outcomes or explicit blocking gaps, including real CF04 consumption,
-both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05 safe
-write proof. P5 completion cannot be a prerequisite for deciding the contracts P5 needs. Review
+Kalada architecture and Formbar state/rules/FSX reviewers must record decisions or explicit
+objections for #107; those decisions are pending, not inferred from this matrix. Before API
+stability review, reviewers must attach CF01–14 outcomes or blocking gaps (or a reviewed CF03
+deferral if real consumers do not need nominal registration), including real CF04 consumption,
+both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05
+independently audited executable Stage A #195 proof. Stage B #180/#185 is not required if
+repeater writes remain disabled/excluded; P5 completion cannot be a prerequisite. Review
 also requires CF02/04/13 provider parity, Expressions-free tooling, neutral dependency graphs,
 public FSX composition and standalone Expressions runtime evidence, not merely a parser-free bundle.
-The gate may reject or revise the design; it does not choose optional fragments, final spellings or versions.
+The gate may reject or revise the design; it does not freeze the public API or choose optional
+fragments, final spellings or versions.
 These planned scenarios are risk-based future tests; validating these four documentation files
 does not execute them or change any issue status.

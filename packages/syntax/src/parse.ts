@@ -1,4 +1,4 @@
-import type { KaladaCstDocument } from "./cst-types.js";
+import type { KaladaCstDocument, KaladaToken } from "./cst-types.js";
 import { diagnostic } from "./diagnostics.js";
 import { deepFreeze, freezeRange } from "./freeze.js";
 import { lex } from "./lexer.js";
@@ -21,10 +21,20 @@ export function parseKaladaV1Expression(
   }
   if (limits === null) return invalidParseResult(source);
   const scanned = lex(source, limits);
-  const parser = new Parser(scanned.tokens, limits, scanned.diagnostics);
+  return parseTokens(source, scanned.tokens, limits, scanned.diagnostics);
+}
+
+// Internal provenance path shared by whole-document and bounded guest parsing.
+export function parseTokens(
+  source: string,
+  tokens: readonly KaladaToken[],
+  limits: KaladaSyntaxLimits,
+  diagnostics: KaladaParseResult["diagnostics"],
+): KaladaParseResult {
+  const parser = new Parser(tokens, limits, diagnostics);
   const document: KaladaCstDocument = {
     source,
-    tokens: scanned.tokens,
+    tokens,
     expression: parser.parse(),
   };
   const result = deepFreeze({ document, diagnostics: parser.sink.diagnostics });

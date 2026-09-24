@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-BBcbKOEi.js",
-      "sha256": "f268644da7f38595b3b01babb6b4b4863299d8813c515fdffecddee017e00eea",
+      "file": "assets/environment-D5ZeTiwX.js",
+      "sha256": "60c579ec14e07527417e6c91a7ac4ff33db06d9a232e5e5ff698bb5e60fb25ed",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-D_y5Df_N.js",
+          "name": "static:./index-B7Q92mqa.js",
           "count": 1
         }
       ],
@@ -90,21 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-DVZWFT5h.css",
-      "sha256": "ece7753164992d9517f7fc3cbe226fd5484c28ef6ecc12347c0c6c58cb455b01",
-      "closure": "entry-static",
-      "imports": [],
-      "capabilities": [],
-      "urlLiterals": [],
-      "contributors": []
-    },
-    {
-      "file": "assets/index-D_y5Df_N.js",
-      "sha256": "60fa4452824c400f5d56fe50523a8db2c6d2139b71a11f991011a0db299b8da2",
+      "file": "assets/index-B7Q92mqa.js",
+      "sha256": "1c92bc28fa37628e6fe6c7830eed654bd94865a9f1c01b54c8b7bea045873dd3",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-BBcbKOEi.js",
+          "name": "dynamic:./environment-D5ZeTiwX.js",
           "count": 1
         }
       ],
@@ -292,6 +283,7 @@
         "packages/syntax/src/dispatch.ts",
         "packages/syntax/src/format.ts",
         "packages/syntax/src/freeze.ts",
+        "packages/syntax/src/lex-literals.ts",
         "packages/syntax/src/lexer.ts",
         "packages/syntax/src/limits.ts",
         "packages/syntax/src/lower.ts",
@@ -309,8 +301,17 @@
       ]
     },
     {
+      "file": "assets/index-DVZWFT5h.css",
+      "sha256": "ece7753164992d9517f7fc3cbe226fd5484c28ef6ecc12347c0c6c58cb455b01",
+      "closure": "entry-static",
+      "imports": [],
+      "capabilities": [],
+      "urlLiterals": [],
+      "contributors": []
+    },
+    {
       "file": "index.html",
-      "sha256": "d9b3e92aa95c4cd660c0bb6b761a695a16f54541a372625806ede0d5a2f63060",
+      "sha256": "8fe3490b9d702a8368ba1cee4f0983a93cfc5fc3ed79b8723820e4489ff85643",
       "closure": "shell",
       "imports": [],
       "capabilities": [],
