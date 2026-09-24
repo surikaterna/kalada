@@ -78,6 +78,11 @@ requirement. Checked semantic facts may exceed executable IR expressiveness only
 mapping or rejection. Partial recovered analysis cannot authorize emission.
 P0 permits embedding only at explicitly declared host grammar positions for listed guests in a
 versioned profile: host owns outer delimiters and return validation, guest lexes the interior.
+For FSX authoring, a static language default on the root Form element may select the guest
+document-wide for eligible expression slots; no `@defaultLanguage` directive is required.
+Explicit per-expression selection may override it only where that slot permits the guest;
+neither selection can expand the slot's allowed-guest list. Forbidden inherited defaults must
+diagnose rather than trigger parser guessing. Nested defaults remain optional pending real need.
 Reverse embedding needs a separate declared Kalada-host position/profile; bidirectional source
 composition remains a later goal, not automatic support or a runtime fragment value.
 
@@ -110,6 +115,8 @@ from pending type design choices; no new null/record/union semantics silently en
 
 FSX is declarative, JSX-like syntax, **not JavaScript or TypeScript**. Formbar owns the proposed
 `@formbar/fsx` compiler and a separate authoring package; final package names are provisional.
+The root Form language default is static compiler input, not a runtime Formbar prop or
+source-authored provider registration; the slot profile still controls allowed guests.
 Explicitly compose Expressions using its public compiler/provider interfaces, making expression
 embedding straightforward without privileged integration. Compile to existing Formbar declarations
 plus embedded, deferred Expressions artifacts with explicit

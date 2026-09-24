@@ -58,6 +58,19 @@ Expressions-hosted FSX region works only if a *distinct* Expressions profile dec
 grammar position and FSX as an allowed guest.
 Undeclared position/guest, overlapping entries, non-progress/invalid exit or unsupported lexical
 handoff return explicit unsupported/invalid/partial results, never an inferred valid program.
+
+An illustrative, **nonfinal authoring spelling** for a static document-wide choice is
+`<Form defaultLanguage="Kalada"><Field value={item.name} /></Form>`: the root Form element
+selects Kalada for eligible expression slots throughout that form, without a
+`@defaultLanguage` directive or runtime Formbar prop. At a declared slot, an optional explicit
+per-expression language selection (such as the `Kalada:` marker above) wins if that guest is
+permitted; when there is no explicit choice, the root default selects only if permitted by that
+slot's profile. A
+forbidden explicit selection or inherited root default is a diagnostic, **not** permission to
+try another parser or bypass the slot's allowed-guest list. With neither selection, the host
+must require an explicit choice rather than infer a guest, even if only one is listed. Nested
+defaults are optional future authoring syntax only if real cases require them; neither spelling
+nor parser API is fixed here.
 Unterminated interior source may yield a bounded partial diagnostic but cannot emit or edit.
 CRLF and non-BMP text keep parent snapshot identity and UTF-16 offsets through both handoffs;
 stale snapshots cannot authorize publication or edits.
@@ -92,7 +105,8 @@ restricted handler or computed-value inverse is promised for this first edit.
 
 - **Inputs:** immutable, versioned context profiles register host grammar positions, allowed
   child languages, entry markers, lexical modes, delimiter ownership and recovery limits. Composition has deterministic
-  precedence defined by the profile, not registration order or “try every parser.”
+  precedence defined by the profile, not registration order or “try every parser.” Static
+  authoring defaults and explicit selections never expand a slot's permitted guest list.
 - **Results:** an entered child returns an owned range, exit reason, consumed boundary and
   diagnostics; the host validates its expected close boundary and forward progress. Proposed
   default: host selects entry at a declared position, retains outer delimiters, and child lexing

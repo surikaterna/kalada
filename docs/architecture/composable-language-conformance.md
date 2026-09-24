@@ -61,13 +61,18 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 - **Positive:** Kalada and a tiny independent language nest in both directions only where each
   host profile explicitly declares the grammar position and permitted guest. Host owns outer
   delimiters/return validation; guest lexes interior and returns a bounded range/stop reason.
+  In a tiny host fixture (not FSX), show deterministic parser selection for an eligible slot:
+  permitted explicit choice precedes a permitted static root default; without either, require
+  explicit selection rather than guessing even when one guest is listed.
   First fixtures succeed for **currently supported Kalada grammar** (e.g. quoted delimiter,
   parentheses, host continuation), not an invented scanner subset. Versioned profiles eventually
   shield quoted delimiters, supported comments and nested regions; CRLF/non-BMP ranges remain
   half-open UTF-16. Demonstrate owned source/trivia preservation without requiring every language to build
   a full lossless CST. Child exit and host validation advance predictably.
 - **Negative:** reject undeclared position/guest, ambiguous registration, overlapping entries
-  and invalid/non-progress exit ranges. Unsupported Kalada comments/braces currently fail closed
+  and invalid/non-progress exit ranges. A forbidden explicit choice or inherited root default
+  diagnoses the slot instead of falling back to another parser; neither overrides its guest list.
+  Unsupported Kalada comments/braces currently fail closed
   (see [#110](https://github.com/surikaterna/kalada/issues/110)); add positive and malformed
   cases as each construct enters supported grammar. Unterminated
   strings/comments and malformed islands stop at approved boundaries without swallowing sibling
@@ -121,14 +126,18 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 - **Positive:** compile a minimal field/output/conditional form with nested explicit aliases,
   component and Scheman facts into Formbar declarations and deferred Kalada programs **after**
   [Formbar #179](https://github.com/surikaterna/formbar/issues/179) signs off on the owner-preferred
-  in-place V1 Kalada slot replacement. Prove Kalada dependency extraction, computation-cycle and
+  in-place V1 Kalada slot replacement. Exercise a static root Form language default across
+  eligible expression slots, plus a permitted per-expression override if a real case needs one,
+  without treating the default as a runtime Formbar prop or source-authored plugin registration.
+  Prove Kalada dependency extraction, computation-cycle and
   scoped-reference checks. Explicitly reject or migrate old Kuery data, without assuming published
   `@formbar/declarative` has no external consumers. Use the real declaration validator/runtime
   integration; changing input changes output without recompiling. Equivalent client/server rule fixtures agree.
   FSX explicitly composes the public Expressions provider/compiler; trace Formbar scheduling calls
   to the Expressions runtime with deferred artifacts, not kernel evaluation of a whole form.
 - **Negative:** reject invalid children, attribute types, unknown components/capabilities, duplicate
-  aliases and unresolved references, old Kuery slot data without explicit migration, missing
+  aliases and unresolved references, a slot that forbids the inherited root language (with a
+  diagnostic, not a fallback parse), old Kuery slot data without explicit migration, missing
   dependencies and cycles.
   No implicit Kalada-to-Kuery AST translation or pretending parser-only
   [#108](https://github.com/surikaterna/kalada/issues/108) resolves Formbar's slot/runtime gate.
