@@ -44,7 +44,7 @@ kernel/shared language services, without privileged hooks. Expressions owns its 
 checker/inference, operators, IR/artifact semantics and evaluator runtime. Its canonical semantics
 and compatibility stay in the Expressions package, not the kernel; a form is not an expression AST.
 
-P0 freezes only the [minimum experimental shape](../architecture/composable-language-kernel-contracts.md):
+P0 records only the [minimum experimental shape](../architecture/composable-language-kernel-contracts.md):
 neutral immutable source/snapshot with UTF-16 ownership, versioned declared embedding positions,
 equal opt-in provider access and direct-location eligibility distinct from Formbar update authority.
 Later scope/reference, type-identity, generic infrastructure, source maps and shared service routing
@@ -128,8 +128,11 @@ resolves stable identity, permissions, revisions, conflicts and server policy at
 Component metadata says which is required. Explicit lexical aliases need nested outer access and
 deliberate shadowing rules. Current repeated instances and row keys derive identity from indexes:
 first direct non-repeater writes and repeated-item reads are separate from repeater-scoped writes.
-[Formbar #180](https://github.com/surikaterna/formbar/issues/180) gates the latter on stable
-item identity and atomic resolve/authorize/update so reorder/replacement cannot retarget a write.
+Those writes remain **DISABLED** until [Formbar #180](https://github.com/surikaterna/formbar/issues/180)
+delivers stable keys/atomic resolve-authorize-update and independent executable
+[#185](https://github.com/surikaterna/formbar/issues/185) proves reorder/replacement/removal
+cannot retarget. #180 does not block [Kalada #123](https://github.com/surikaterna/kalada/issues/123)
+when repeater writes are excluded.
 Codec directionality, restricted declarative `onChange` and surface naming remain open under
 [Formbar #175](https://github.com/surikaterna/formbar/issues/175) needs-design; `bind` is not selected.
 Full writes wait for a Formbar update-policy gate, not for a new Kalada mutation evaluator.
@@ -271,12 +274,13 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
   Add minimal EDIFACT → structured data → projection → Scheman and JSON → email model → safe
   renderer probes; fixtures need not deliver a production decoder/renderer. Review Arbitre effect
   ownership and Kuery fit/gaps without requiring a Kuery implementation. Prove safe writable
-  identity/update mechanics under a narrow reviewed host policy before API stability review.
+  direct non-repeater update mechanics under a narrow reviewed Formbar server policy in
+  [#195](https://github.com/surikaterna/formbar/issues/195), independently audited before #123.
 - **Acceptance evidence:** declaration validation/golden fixtures, nested read aliases,
   invalid attribute/child/type diagnostics, compile-time non-invocation and changing-input
-  runtime tests without source recompilation; CF04–09 evidence includes both projection probes,
-  stable-item reorder/removal/conflict/codec rejection (#180 before repeater writes), Arbitre
-  boundary and Kuery fit assessment.
+  runtime tests without source recompilation; CF04–09 include both projection probes, Arbitre
+  boundary, Kuery fit and CF05 Stage A computed/read-only/denied/stale/removed/conflict/unsupported
+  rejection without mutation (including unsupported write-codec direction if applicable).
 - **Exit gate:** Formbar executes the compiled declarations through its existing runtime path;
   compatibility gaps are resolved or explicitly block stability/release review. Tiny P1 fixtures
   cannot substitute for real consumption. Trace: CLP-02–07, 08, 11, 12.
@@ -313,13 +317,16 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Required evidence:** CF01–14 outcomes or explicit blocking gaps: Kalada regressions and tiny
   composition, real FSX, both projection probes, Arbitre ownership/handoff, Kuery fit assessment,
   portable/packed runtime, currentness and authoring. Require an executable CF05 safe-write proof
-  with stable identity, stale/denied/conflicting updates and codec-direction rejection.
+  for direct non-repeater writes from Formbar #195, independently audited: computed/read-only,
+  denied/stale/removed/conflicting/unsupported targets reject without mutation and unsupported
+  write-codec direction rejects where applicable. #180/#185 do not block #123 when repeater
+  writes are disabled/excluded; current #187 requires Stage B, P6 if repeater writes are released.
   A reviewed CF03 deferral is allowed only if real FSX/projection consumers do not need nominal
   registration; if they do, executable CF03 proof is required before public API stability.
   CF02/04/13 must prove provider parity, Expressions-free minimal tooling, public FSX composition,
   neutral dependency graphs and standalone precompiled Expressions runtime independence.
-- **Decision:** review and revise minimum contracts against actual consumer needs. Passing permits
-  a stability review, not automatic API freeze or resolution of spellings, versions or fragments.
+- **Decision:** [#123](https://github.com/surikaterna/kalada/issues/123) records/reviews minimum
+  contracts against real consumers; the public API stays open/unfrozen, even on passing evidence.
   P0 sketches/P1 toy mechanics alone are insufficient. Do not depend on full P5 completion: that
   would make the contracts P5 needs depend cyclically on P5. Qualitative safety precedes review;
   calibrated resource budgets remain the P6/#87 release gate.
@@ -329,11 +336,11 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Owner:** Formbar state/rules maintainers; projection and domain decoder/renderer owners.
 - **Dependencies:** P0/P1 reference findings, P2 compiler, P3 artifacts and P4 analysis contracts.
 - **Scope:** complete agreed domain contracts and nominal-type registration, nested writable
-  scopes and stable item identity; exercise EDIFACT → data → mapping → Scheman command and
-  JSON → email model → safe renderer beyond the P2 probes, retaining separate source/data
-  provenance. Complete supported behavior rather than discovering first-consumer fit here.
+  repeater scopes and stable item identity in current Formbar #187; exercise EDIFACT → data →
+  mapping → Scheman command and JSON → email model → safe renderer beyond the P2 probes.
 - **Acceptance evidence:** reorder/removal/shadowing/stale-write tests, codec/update-policy
-  rejection tests, server/client rule parity, bounded projection and renderer security tests.
+  rejection tests; [Formbar #187](https://github.com/surikaterna/formbar/issues/187) requires #180
+  identity and independently audited #185 Stage B proof; server/client parity and renderer security tests.
 - **Exit gate:** Formbar approves update policy before enabling writes; server enforcement
   remains authoritative. Optional executable fragments/A/B require a separate decision only
   if justified; they do not retroactively gate P2. Trace: CLP-03–07, 09, 11, 12.
@@ -344,7 +351,8 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Dependencies:** P3–P5 supported surfaces; authoritative measurement follows #87 prerequisites
   and final package policy, including the work currently in PR #82.
 - **Scope:** calibrated bundle/compute thresholds, hostile-input admission bounds, tenancy,
-  producer/consumer compatibility and migration/rollback guidance for supported deployments.
+  producer/consumer compatibility and migration/rollback guidance for supported deployments;
+  repeater writes require Stage B if selected for release; unsupported writes cannot be marked supported.
 - **Acceptance evidence:** pinned packed artifacts, module graphs, initial/lazy/total sizes,
   reproducible raw performance samples and reviewed threshold derivation; capability revocation,
   tenant-isolation and old/new artifact compatibility matrices.
@@ -377,14 +385,10 @@ migration evidence and targeted ADR updates. #21 owns modules/imports and is not
 FSX blocker; #75 owns orthogonal Standard Schema capabilities, not component registries.
 An incompatible publishable Formbar V1 replacement requires a major Formbar Changeset, not
 automatically a Kalada package change. Future versioned portable artifacts remain a separate target.
-These four draft documents change no publishable surface and require no Changeset.
-
 ## Review and validation of this proposal
 
-Review all CLP acceptance criteria against phase evidence, particularly deferred expressions,
-early writable-reference feasibility, source versus runtime composition, nominal type ownership,
-portable admission and parser-free deployment. Remaining decisions are captured in P0–P6 and
-the PRD and kernel note, not represented as completed implementation or newly assigned issues.
+Review CLP acceptance against phase evidence; remaining decisions in P0–P6, PRD and kernel note
+are not completed implementation or newly assigned issues.
 The conformance matrix gives targeted positive/negative evidence for every CLP/CLK contract;
 every scenario remains PLANNED — NOT RUN until future implementation records results.
 

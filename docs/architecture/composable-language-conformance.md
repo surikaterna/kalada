@@ -26,7 +26,8 @@ when nominal infrastructure has no demonstrated consumer need; deferral is not a
 P1 cannot establish real consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
 boundary and Kuery fit reviews. P3 proves portable runtime/effect/cache boundaries; P4 authoring
 runs in parallel with P3. The **pre-freeze review** follows P1–P4 evidence and a safe writable
-reference proof, not full P5 completion. It permits a stability review, never automatic freezing.
+reference proof, not full P5 completion. [#123](https://github.com/surikaterna/kalada/issues/123)
+records/reviews evidence; it leaves the public API open/unfrozen, never automatically freezing it.
 P5 completes supported domains/writes; P6 gates measured release readiness. Unsupported cases
 must be explicit failures/limitations, not silently omitted fixtures. Optional fragments/A/B do
 not gate ordinary declarations with deferred expressions.
@@ -42,7 +43,7 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 | CF02 Provider parity / Expressions | CLP-02, 04; CLK-03, 06, 08 | Kernel / Expressions / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 if justified; reviewed deferral otherwise → pre-freeze if needed | PLANNED — NOT RUN |
 | CF04 Real FSX | CLP-03, 04, 05; CLK-03, 04, 08, 09 | Formbar / Kalada / Scheman | P2 → pre-freeze | PLANNED — NOT RUN |
-| CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility, P2 proof → pre-freeze; P5 completion | PLANNED — NOT RUN |
+| CF05 Writable identity | CLP-05, 04; CLK-04, 05 | Formbar state/rules | P1 feasibility; P2 Stage A #195 → #123; Stage B #180/#185 → current #187, P6 if repeater writes released | PLANNED — NOT RUN |
 | CF06 EDIFACT projection | CLP-07; CLK-09, 11, 15 | Projection / decoder / Scheman | P2 → pre-freeze; P5 completion | PLANNED — NOT RUN |
 | CF07 Email projection | CLP-07, 12; CLK-08, 09, 15 | Projection / email renderer | P2 → pre-freeze; P5 completion | PLANNED — NOT RUN |
 | CF08 Arbitre handoff | CLP-03, 09, 12; CLK-08, 09, 12 | Arbitre / Kalada runtime | P2 assessment, P3 probe → pre-freeze | PLANNED — NOT RUN |
@@ -140,28 +141,34 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
   artifacts are a separate target, not a requirement for V2 slots here.
   Tiny CF01 mechanics cannot satisfy this row. Command: TBD during implementation.
 
-### CF05 — Writable reference proof before freeze review
+### CF05 — Staged writable reference proof (all PLANNED — NOT RUN)
 
-- **Positive:** nested repeated records expose distinct inner/outer aliases. First editable
-  slot accepts only a direct statically identified writable location: Kalada checks eligibility.
-  Direct non-repeater writes and repeated-item reads are distinct from repeater-scoped writes:
-  before the latter, [Formbar #180](https://github.com/surikaterna/formbar/issues/180) must replace
-  index-derived instance/row identity with stable item identity. Formbar then resolves identity,
-  permissions, revision and server policy at use time.
-  A checked, data-only location descriptor updates the same item after reorder under a minimal
-  reviewed host policy. Full scope recomputation clears removed
-  references; any optional incremental index equals that baseline after edits.
-- **Negative:** reject computed-value/read-only writes, index-retargeting, removed/stale items,
-  replaced items, duplicate/missing stable keys, denied writes and revision conflicts without
-  mutation or fallback to an array index. Where codecs are required, reject missing
-  write direction; reversible codecs/restricted update handlers are Formbar #175 needs-design, not
-  required for the first direct edit. Test duplicate declarations and capture/shadowing errors;
-  names/runtime slots cannot stand in for stable entity identity.
-- **Evidence:** location descriptor traces and authorized update/rejection outcomes using a narrow
-  Formbar integration or reviewed host-policy probe, including nested reorder/deletion/replacement
-  and atomic resolve/authorize/update, not a production write UI. P1 sketches alone
-  are insufficient; executable safe identity/update proof is required before pre-freeze review.
-  Field syntax and complete P5 write behavior remain open. Command: TBD during implementation.
+- **Stage A positive (P2 / [Formbar #195](https://github.com/surikaterna/formbar/issues/195)
+  before #123):** a real Formbar server-authorized direct **non-repeater** update uses a checked
+  static location descriptor; Kalada certifies eligibility, not permission. Formbar resolves
+  identity, revision, permissions and server policy at update time, then commits atomically.
+  Independent audit of executable results is required, not a sketch or browser-only validation.
+- **Stage A negative:** computed/read-only, denied, stale, removed, conflicting and unsupported
+  targets reject without mutation; where a write codec direction is required, reject its absence.
+  Reversible codecs/restricted update handlers remain Formbar #175 needs-design, not prerequisites
+  for this direct edit. Record server-side before/after state and callback counters for rejection.
+- **Stage B positive (conditional):** nested repeater read aliases expose distinct inner/outer
+  access and shadowing without enabling writes. Repeater-scoped writes remain **DISABLED** until
+  [Formbar #180](https://github.com/surikaterna/formbar/issues/180) replaces index-derived
+  identity with stable item keys and atomic resolve/authorize/update, and independent executable
+  [Formbar #185](https://github.com/surikaterna/formbar/issues/185) proof shows a pending update
+  follows the same item after reorder. #180 is not a #123 blocker when repeater writes are excluded.
+- **Stage B negative:** replacement/removal, missing/duplicate keys, stale revision, denial and
+  conflict reject without mutation or index fallback. Full scope recomputation clears removed
+  references; optional incremental indexes equal it after edits. Reject duplicate declarations
+  and capture/shadowing errors; names/runtime slots are not stable entity identities.
+- **Evidence:** separate executable Stage A and Stage B location/authority traces, acceptance and
+  rejection state assertions and independent audit; no production write UI required for #123.
+  Current [Formbar #187](https://github.com/surikaterna/formbar/issues/187) includes repeater writes
+  and requires #180 plus independently audited #185 Stage B for completion; dropping them requires
+  a separate issue amendment. P6 requires Stage B if repeater writes are selected for release;
+  unsupported writes cannot be claimed supported. Field syntax and full P5 behavior remain open.
+  Commands: TBD during implementation.
 
 ### CF06 — EDIFACT projection and three kinds of provenance
 
@@ -280,10 +287,12 @@ Kalada architecture and Formbar state/rules/FSX reviewers must record decisions 
 objections for #107; those decisions are pending, not inferred from this matrix. Before API
 stability review, reviewers must attach CF01–14 outcomes or blocking gaps (or a reviewed CF03
 deferral if real consumers do not need nominal registration), including real CF04 consumption,
-both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05 safe
-write proof. P5 completion cannot be a prerequisite for deciding the contracts P5 needs. Review
+both projection probes, CF08 ownership, CF09 fit, portable/packed execution, authoring and CF05
+independently audited executable Stage A #195 proof. Stage B #180/#185 is not required if
+repeater writes remain disabled/excluded; P5 completion cannot be a prerequisite. Review
 also requires CF02/04/13 provider parity, Expressions-free tooling, neutral dependency graphs,
 public FSX composition and standalone Expressions runtime evidence, not merely a parser-free bundle.
-The gate may reject or revise the design; it does not choose optional fragments, final spellings or versions.
+The gate may reject or revise the design; it does not freeze the public API or choose optional
+fragments, final spellings or versions.
 These planned scenarios are risk-based future tests; validating these four documentation files
 does not execute them or change any issue status.

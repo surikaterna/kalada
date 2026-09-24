@@ -9,7 +9,8 @@
 - Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
   open [PR #126](https://github.com/surikaterna/kalada/pull/126).
   Coordination: [Formbar #92][f92], [#93][f93], expression-slot decision [#179][f179],
-  repeater-write gate [#180][f180] and later [#175][f175];
+  non-repeater proof [#195][f195], repeater-write identity [#180][f180] and proof [#185][f185],
+  later supported-surface completion [#187][f187] and codec/handler design [#175][f175];
   related Kalada [#21][k21], [#75][k75], and [#87][k87]. These references are not status updates.
 
 ## Context and outcome
@@ -63,8 +64,9 @@ not tests delivered by these documents. Numeric resource budgets must follow [#8
 measurement and calibration rather than invented latency or bundle-size promises.
 CLK contracts distinguish the [P0 minimum experimental shape](../architecture/composable-language-kernel-contracts.md)
 from later goals without freezing signatures; CF scenarios distinguish toy mechanics from real
-consumer evidence. A pre-freeze review requires P1–P4 evidence and a safe
-writable-reference proof, not full P5 delivery, and permits review rather than automatic API freeze.
+consumer evidence. The [#123][k123] pre-freeze review requires P1–P4 evidence and an independently
+audited executable non-repeater direct-write proof (#195), not full P5 delivery. It records
+findings and leaves the public API open/unfrozen; it does not automatically freeze it.
 
 ### CLP-01 — Composition and source fidelity
 
@@ -129,7 +131,9 @@ Future versioned portable artifacts are a separate target, not a reason to requi
 General Kalada programs are not presumed translatable to Kuery AST; parser-only [#108][k108]
 does not resolve this gate.
 [#180][f180] gates repeater-scoped writes separately; first direct non-repeater edits and
-repeated-item **reads** need not wait for stable write identity.
+repeated-item **reads** need not wait for stable write identity. Repeater-scoped writes remain
+**DISABLED** until #180 and independent Formbar [#185][f185] proof; #180 does not block [#123][k123]
+when repeaters are excluded from the supported write surface.
 
 **Acceptance:** a field/output/conditional form lowers to declaration fixtures accepted by
 Formbar; changing runtime input changes the result without recompiling source. Compile-time
@@ -157,18 +161,28 @@ reordering cannot retarget a pending update. Formbar owns update authorization a
 The write/reference contract must be explored in P0/P1, before read-only FSX hardens an
 incompatible design; complete writable behavior follows in P5.
 
-**Acceptance:** nested-repeater fixtures resolve distinct outer/inner aliases, expose deliberate
-shadowing behavior, reject computed-value writes and stale/removed item targets, and preserve
-item targeting across reorder. A reviewed update policy precedes enabling writes. Surface
-spelling remains open; `bind` is not the chosen syntax.
-Before stability review, a narrow executable proof must reject stale permissions, conflicts and
-unsupported write-codec directions where applicable; full P5 write UI/domain completeness is not
-required for it. Reversible codecs and restricted Kalada update handlers remain Formbar [#175][f175]
-needs-design, not a P0 prerequisite.
+**Acceptance Stage A ([#195][f195], before [#123][k123]):** an independently audited executable Formbar
+server-authorized direct non-repeater write proves a static Kalada location is only eligible,
+never authorized. At update time reject computed, read-only, denied, stale, removed, conflicting
+and unsupported targets without mutation; reject unsupported write-codec direction if applicable.
+No reversible codec or restricted handler is required for the first direct edit. Full P5 UI/domain
+completion is not required. A reviewed update policy precedes enabling writes; surface spelling
+remains open and `bind` is not selected.
+
+**Acceptance Stage B ([#180][f180]/[#185][f185], required for [#187][f187]):** stable item keys and atomic
+Formbar resolve/authorize/update survive reorder and reject replacement/removal, missing or
+duplicate keys and stale/conflicting writes without mutation or index fallback. Independent
+audited executable #185 proof after #180 is mandatory for #187's current P5 repeater-write scope;
+#123 needs only Stage A with repeater writes disabled. P6 requires Stage B if repeater writes are
+selected for release and cannot claim unsupported writes as supported. Dropping repeaters from
+#187 requires a separate issue amendment, not a docs-only change. Nested read aliases/shadowing
+may be tested without enabling writes. Reversible codecs and restricted handlers remain Formbar
+[#175][f175] needs-design, not a #123 prerequisite for direct writes.
 
 Current repeated runtime/renderer identity is index-derived; this cannot safely address a pending
 repeater-scoped write after reorder/replacement. [#180][f180] requires stable item identity and
-atomic resolve/authorize/update before those writes, distinct from [#175][f175] codec/handler design.
+atomic resolve/authorize/update before those writes, independently verified in #185 and distinct
+from [#175][f175] codec/handler design.
 
 ### CLP-06 — Domain-owned nominal types
 
@@ -287,7 +301,9 @@ cross-repo approval by publication. Reviewer decisions/objections remain pending
 explore aliases, outer access, stable item keys and direct writable locations early;
 Formbar #175 owns the later reversible codec/restricted update-handler choice. Neither
 arbitrary event handlers nor `bind` spelling is approved. CF01's executable two-direction
-probe, CF02 shared-infra evidence and CF05 safe-write proof are separate later gates.
+probe, CF02 shared-infra evidence and CF05 Stage A #195 proof are separate later gates.
+[#123][k123] records/reviews those results, not an API freeze; repeater writes remain disabled pending
+#180/#185; current #187 requires Stage B, while P6 requires it if repeater writes are released.
 
 Runtime fragment values/capture and nominal serialization remain optional. If an executable
 domain extension is needed, choose between A (lowered extension operations) and B (common
@@ -304,8 +320,12 @@ their validation is not evidence that any planned conformance scenario has run.
 [f175]: https://github.com/surikaterna/formbar/issues/175
 [f179]: https://github.com/surikaterna/formbar/issues/179
 [f180]: https://github.com/surikaterna/formbar/issues/180
+[f185]: https://github.com/surikaterna/formbar/issues/185
+[f187]: https://github.com/surikaterna/formbar/issues/187
+[f195]: https://github.com/surikaterna/formbar/issues/195
 [k107]: https://github.com/surikaterna/kalada/issues/107
 [k108]: https://github.com/surikaterna/kalada/issues/108
+[k123]: https://github.com/surikaterna/kalada/issues/123
 [k21]: https://github.com/surikaterna/kalada/issues/21
 [k75]: https://github.com/surikaterna/kalada/issues/75
 [k87]: https://github.com/surikaterna/kalada/issues/87

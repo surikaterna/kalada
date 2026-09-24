@@ -17,7 +17,8 @@ about today's packages. Inputs/results describe behavior, not final names, signa
 versions. Existing accepted Kalada semantics remain authoritative until a targeted compatibility
 decision approves a change. Domain requirements are not permission to silently extend Kalada.
 P0 reviews a minimum experimental shape; P1 proves mechanics. Only real-consumer evidence
-at the ADR pre-freeze gate permits API stability review, not automatic API freeze.
+at the ADR [#123](https://github.com/surikaterna/kalada/issues/123) pre-freeze gate records
+stability evidence, not an automatic public API freeze; the API stays open/unfrozen.
 
 “Kernel contracts” includes boundary obligations on providers/consumers, not kernel ownership of
 every behavior below. P0 owns neutral source/snapshot and composition boundaries; later shared
@@ -41,7 +42,7 @@ needs-design for reversible codecs/restricted Kalada update handlers. #175 is no
 | Source | Immutable snapshot/version, owner-tagged half-open UTF-16 ranges and one shared bounded request; no universal CST or execution IR | Separate CF01 executable entry/exit and malformed-source probe in P1, then real FSX evidence before freeze |
 | Embedding | Versioned explicit profile lists **host grammar positions** and allowed guest languages; host chooses entry, owns outer delimiters and validates return; guest lexes interior | Reverse embedding only with a separately declared host position/profile; CF01 two-way fixture is a later goal, not P0 acceptance |
 | Providers/types | Equal opt-in public provider access; initial semantic handoff may carry host-owned opaque expected-type and value-versus-location context | CF02 and real FSX determine whether shared scope/type/generic/nominal machinery is justified; no shared checker or mandatory Expressions |
-| Writes | First FSX edit: direct statically identified writable location only; Kalada checks eligibility, Formbar authorizes/resolves at use time | CF05 executable safe-write proof before pre-freeze; #175 codecs/handlers and full write policy need separate Formbar design |
+| Writes | First FSX edit: direct statically identified non-repeater writable location only; Kalada checks eligibility, Formbar authorizes/resolves at use time | CF05 Stage A: independent executable Formbar #195 proof before #123; repeater writes DISABLED pending #180 stable identity and independently audited #185 Stage B, mandatory for current #187 and P6 if released; #175 codecs/handlers need separate design |
 
 Illustrative source only, **not** a selected `bind` keyword or FSX grammar: in a declared
 FSX attribute expression position, `<Field value={Kalada: item.name} />` may enter Kalada if
@@ -63,10 +64,10 @@ stale snapshots cannot authorize publication or edits.
 
 For a separately declared editable slot, `item.name` is illustrative direct-location syntax:
 Kalada may certify a static binding/path as location-eligible, but that is **not** permission to
-write. Formbar resolves stable item identity (not array index), current revision, permissions
-and server policy at update time; reorder preserves the target. `item.name + suffix`, a
-read-only path, removed item, stale revision, denied permission or conflicting update must
-reject without mutation or index retargeting. A value-as-location check fails before update;
+write. Formbar resolves current identity, revision, permissions and server policy at update time.
+The first supported write is direct and non-repeater. `item.name + suffix`, a read-only path,
+removed target, stale revision, denied permission, conflict or unsupported target must reject
+without mutation. A value-as-location check fails before update;
 a once-eligible location may still fail Formbar's current authorization. No reversible codec,
 restricted handler or computed-value inverse is promised for this first edit.
 
@@ -140,18 +141,25 @@ restricted handler or computed-value inverse is promised for this first edit.
 ### CLK-05 — Writable locations and update boundaries
 
 - **Inputs:** a checked location requirement and direct static binding/path facts; Formbar supplies
-  stable repeated-item identity and current authorization at use. A writable reference cannot
-  be inferred from text or obtained by inverting a computed value.
-- **Results:** first FSX edit accepts only direct statically identified writable locations. Kalada
+  current authorization at use and stable repeated-item identity only if repeater writes are enabled.
+  A writable reference cannot be inferred from text or obtained by inverting a computed value.
+- **Results:** first FSX edit accepts only direct statically identified non-repeater writable locations. Kalada
   checks eligibility, not permission; data-only descriptors identify binding/entity/path and
-  necessary revision or policy requirements. Reorder preserves the entity; removal or stale identity yields
-  rejection, not fallback to the former array index. A minimal safe-write probe precedes API review.
+  necessary revision or policy requirements. Independent executable Formbar #195 server-authorized
+  update/rejection evidence precedes #123 review; no public API is frozen by that review.
 - **Ownership:** Formbar owns authorization at use time, conflict/revision policy, updates and
   scheduling. Reversible codecs and restricted update handlers are deferred to Formbar #175;
-  a read codec is not evidence of a reversible write codec.
+  a read codec is not evidence of a reversible write codec. Repeater writes stay **DISABLED** until
+  [#180](https://github.com/surikaterna/formbar/issues/180) supplies stable keys and atomic
+  resolve/authorize/update and [#185](https://github.com/surikaterna/formbar/issues/185)
+  independently proves reorder/replacement/removal without retargeting. #180 does not block
+  #123 if repeaters are excluded; current [#187](https://github.com/surikaterna/formbar/issues/187)
+  requires Stage B, and P6 requires it if repeater writes are selected for release. Unsupported
+  writes cannot be marked supported; dropping repeaters from #187 requires an issue amendment.
 - **Rejection / exclusions:** computed/read-only targets, missing write conversion, removed items,
-  stale revisions, denied permissions and conflicts fail under an explicit host policy. No mutation
-  evaluator is added to Kalada. Field spelling, restricted `onChange` and final conflict policy
+  stale revisions, denied permissions, conflicts and unsupported targets fail without mutation
+  under an explicit host policy. Stage B also rejects missing/duplicate stable keys, replacement
+  and index fallback. No mutation evaluator is added to Kalada. Field spelling, restricted `onChange` and final conflict policy
   remain open; neither arbitrary callbacks nor a selected `bind` syntax is implied.
 
 ### CLK-06 — Type infrastructure and language-owned checking policy
