@@ -12,6 +12,7 @@ export interface GuestLexResult extends LexResult {
   readonly stop: number | null;
   readonly unmatchedParentheses: boolean;
   readonly unsupportedComment: boolean;
+  readonly unsupportedQuote: boolean;
 }
 
 const VALID_OPERATORS = [
@@ -85,6 +86,7 @@ export function lexGuest(
     stop: scanned.stop === null ? null : start + scanned.stop,
     unmatchedParentheses: scanned.unmatchedParentheses,
     unsupportedComment: scanned.unsupportedComment,
+    unsupportedQuote: scanned.unsupportedQuote,
     tokens: scanned.tokens.map((item) =>
       token(item.kind, item.text, start + item.range.start, start + item.range.end),
     ),
@@ -107,6 +109,7 @@ function scanGuest(source: string, limits: KaladaSyntaxLimits): GuestLexResult {
   let depth = 0;
   let unmatchedParentheses = false;
   let unsupportedComment = false;
+  let unsupportedQuote = false;
   let stop: number | null = null;
   while (offset < source.length) {
     if (source[offset] === "}") {
@@ -114,19 +117,17 @@ function scanGuest(source: string, limits: KaladaSyntaxLimits): GuestLexResult {
       unmatchedParentheses ||= depth !== 0;
       break;
     }
-    if (offset >= limits.maxSourceLength) {
+    if (offset >= limits.maxSourceLength || tokens.length >= limits.maxTokens) {
       sink.limit("lex", freezeRange(offset, offset));
       break;
     }
-    if (tokens.length >= limits.maxTokens) {
-      sink.limit("lex", freezeRange(offset, offset));
-      break;
-    }
-    if (source.startsWith("//", offset) || source.startsWith("/*", offset)) {
-      // Comment ownership is ambiguous at this seam; never scan its body for a host brace.
+    const opener = ambiguousGuestOpener(source, offset);
+    if (opener !== null) {
+      // Ownership is ambiguous at this seam; never scan the body for a host brace.
       sink.add("lex", "KALADA_SYNTAX_UNSUPPORTED_FORM", freezeRange(offset, offset));
       stop = offset;
-      unsupportedComment = true;
+      unsupportedComment = opener === "comment";
+      unsupportedQuote = opener === "quote";
       break;
     }
     const next = scanToken(source, offset, limits, sink);
@@ -140,14 +141,35 @@ function scanGuest(source: string, limits: KaladaSyntaxLimits): GuestLexResult {
   if (stop === null && source.length > limits.maxSourceLength) {
     sink.limit("lex", freezeRange(limits.maxSourceLength, limits.maxSourceLength));
   }
+  return finishGuest(tokens, sink, offset, {
+    stop,
+    unmatchedParentheses,
+    unsupportedComment,
+    unsupportedQuote,
+  });
+}
+
+function finishGuest(
+  tokens: KaladaToken[],
+  sink: DiagnosticSink,
+  offset: number,
+  state: Pick<
+    GuestLexResult,
+    "stop" | "unmatchedParentheses" | "unsupportedComment" | "unsupportedQuote"
+  >,
+): GuestLexResult {
   tokens.push(token("eof", "", offset, offset));
   return deepFreeze({
     tokens,
     diagnostics: sink.diagnostics,
-    stop,
-    unmatchedParentheses,
-    unsupportedComment,
+    ...state,
   });
+}
+
+function ambiguousGuestOpener(source: string, offset: number): "comment" | "quote" | null {
+  if (source.startsWith("//", offset) || source.startsWith("/*", offset)) return "comment";
+  if (source[offset] === "'" || source[offset] === "`") return "quote";
+  return null;
 }
 
 function parenthesisDelta(found: KaladaToken): number {
