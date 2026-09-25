@@ -28,7 +28,7 @@ export interface GuestBoundaryResult {
 }
 
 /**
- * Experimental internal syntax seam, not a package export or a host grammar contract.
+ * Experimental opt-in syntax seam, not a host grammar contract.
  * The host declares start and independently checks/consumes source[stop] === "}".
  * Only current supported Kalada expressions succeed; future grammar belongs to the guest lexer.
  * An unterminated supported double-quoted string is ambiguous: scanning remains bounded by
