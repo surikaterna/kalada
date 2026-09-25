@@ -16,6 +16,8 @@ export type {
 } from "./cst-types.js";
 export { KALADA_SYNTAX_DIAGNOSTIC_MESSAGES } from "./diagnostics.js";
 export { formatKaladaV1Expression } from "./format.js";
+export type { GuestBoundaryResult as ExperimentalKaladaV1GuestPrefixResult } from "./guest-boundary.js";
+export { parseGuestExpressionPrefix as experimentalParseKaladaV1GuestExpressionPrefix } from "./guest-boundary.js";
 export { DEFAULT_KALADA_SYNTAX_LIMITS, MAXIMUM_KALADA_SYNTAX_LIMITS } from "./limits.js";
 export { lowerKaladaV1Expression } from "./lower.js";
 export { parseKaladaV1Expression } from "./parse.js";

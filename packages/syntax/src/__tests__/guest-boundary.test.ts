@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseGuestExpressionPrefix } from "../guest-boundary.js";
-import { lowerKaladaV1Expression, parseKaladaV1Expression } from "../index.js";
+import {
+  lowerKaladaV1Expression,
+  experimentalParseKaladaV1GuestExpressionPrefix as parseGuestExpressionPrefix,
+  parseKaladaV1Expression,
+} from "../index.js";
 
 // Test-only host declares the slot; it never searches the guest interior for a brace.
 function host(
