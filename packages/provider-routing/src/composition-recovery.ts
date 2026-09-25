@@ -122,7 +122,7 @@ export function connector(
     next.start > document.text.length
   )
     return false;
-  if (!meter.charge(profile.close.length) || !meter.enter()) return false;
+  if (!meter.enter()) return false;
   let value: ReturnType<typeof continuation.validate>;
   const before = meter.work;
   try {

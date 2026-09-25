@@ -205,6 +205,7 @@ type Accepted = {
   guest: string;
   subtree: unknown;
 };
+type Previous = NonNullable<Failure["safe"]> & { closeCharged: boolean };
 function resumeSlot(
   request: CompositionRequest,
   document: CompositionSnapshot,
@@ -212,7 +213,7 @@ function resumeSlot(
   profiles: readonly CompositionProfile[],
   guests: ReadonlyMap<string, CompositionGuest>,
   slot: CompositionSlot | undefined,
-  previous: NonNullable<Failure["safe"]>,
+  previous: Previous,
 ): Accepted | Failure {
   const state = checkpoint(request, document);
   if (state) return { outcome: outcome(state, state, document) };
@@ -220,6 +221,8 @@ function resumeSlot(
   const entry = select(slot, request.hostLanguageId, profiles, guests);
   if (!entry || !document.text.startsWith(entry.profile.open, slot.start))
     return { outcome: outcome("invalid", "MISSING_NEXT_OPEN", document) };
+  if (!previous.closeCharged && !meter.charge(previous.profile.close.length))
+    return { outcome: outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document) };
   if (!connector(request, document, meter, previous.stop, previous.profile, slot))
     return {
       outcome: outcome(meter.exhausted ? "budget" : "invalid", "CONNECTOR_REJECTED", document),
@@ -239,7 +242,10 @@ function recover(
 ): CompositionOutcome {
   const attempts = [failed.attempt as CompositionAttempt];
   const candidates: CompositionNode[] = [];
-  let previous = failed.safe as NonNullable<Failure["safe"]>;
+  let previous: Previous = {
+    ...(failed.safe as NonNullable<Failure["safe"]>),
+    closeCharged: false,
+  };
   for (let i = index + 1; i < request.slots.length; i++) {
     const slot = request.slots[i];
     const processed = resumeSlot(request, document, meter, profiles, guests, slot, previous);
@@ -254,13 +260,13 @@ function recover(
         failed.outcome.reason,
       );
       if (decision.outcome) return decision.outcome;
-      previous = decision.safe as NonNullable<Failure["safe"]>;
+      previous = { ...(decision.safe as NonNullable<Failure["safe"]>), closeCharged: false };
       continue;
     }
     if (!clearBoundary(request, document, i, processed.stop + processed.close.length))
       return outcome("invalid", "OVERLAPPING_SLOT", document);
     candidates.push(node(processed.guest, processed.start, processed.stop, [], processed.subtree));
-    previous = { stop: processed.stop, profile: processed.profile };
+    previous = { stop: processed.stop, profile: processed.profile, closeCharged: true };
   }
   if (meter.exhausted) return outcome("budget", "WORK_LIMIT", document);
   const state = checkpoint(request, document);

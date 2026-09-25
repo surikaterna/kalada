@@ -110,6 +110,56 @@ describe("non-authoritative partial recovery", () => {
     },
     ...override,
   });
+  it("charges a partial close once and does not re-charge an admitted valid sibling close", () => {
+    const source = "{x}n{y}n{z}";
+    const starts = [0, 4, 8];
+    const parsed = createCompositionRouter(
+      [profile],
+      [
+        {
+          languageId: "tiny",
+          parse({ start, meter }) {
+            meter.charge(1);
+            const partial = start === 1;
+            return {
+              owner: "tiny",
+              status: partial ? "partial" : "valid",
+              range: { start, end: start + 1 },
+              stop: start + 1,
+              reason: partial ? "safe-host-close" : "host-close",
+              diagnostics: partial
+                ? [{ owner: "tiny", code: "BAD", range: { start, end: start + 1 } }]
+                : [],
+              subtree: partial ? undefined : { kind: "valid" },
+            };
+          },
+        },
+      ],
+    );
+    const input = (work: number) =>
+      tripleRequest({
+        snapshot: { ...snapshot, text: source },
+        slots: starts.map((start) => ({ position: "expr", start })),
+        limits: { work, depth: 4, diagnostics: 10 },
+      });
+    const result = parsed.compose(input(11));
+    expect(result).toMatchObject({
+      status: "partial",
+      attempts: [{ owner: "tiny", range: { start: 1, end: 2 }, status: "partial" }],
+      candidates: [
+        { owner: "tiny", range: { start: 5, end: 6 } },
+        { owner: "tiny", range: { start: 9, end: 10 } },
+      ],
+    });
+    expect(result.attempts).toHaveLength(1);
+    expect(result.candidates).toHaveLength(2);
+    expect(result.tree).toBeUndefined();
+    const exhausted = parsed.compose(input(10));
+    expect(exhausted.status).toBe("budget");
+    expect(exhausted.attempts).toBeUndefined();
+    expect(exhausted.candidates).toBeUndefined();
+    expect(exhausted.tree).toBeUndefined();
+  });
   it("continues across two proven partials to the valid third candidate with cumulative evidence", () => {
     const result = tripleGuest.compose(tripleRequest());
     expect(result).toMatchObject({
