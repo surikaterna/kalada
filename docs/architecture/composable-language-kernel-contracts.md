@@ -5,12 +5,25 @@
 - Authority: [PRD](../prd/composable-language-platform.md) and proposed
   [ADR-0008](../adr/0008-composable-language-platform.md); evidence plan:
   [conformance matrix](./composable-language-conformance.md).
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
-  [PR #126](https://github.com/surikaterna/kalada/pull/126).
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
+  [PR #126](https://github.com/surikaterna/kalada/pull/126) merged.
   Formbar #92/#93 and [#175](https://github.com/surikaterna/formbar/issues/175) coordinate domain ownership;
   no cross-repository approval is implied.
 
 ## Reading and compatibility policy
+
+Forward FSX-host → Kalada-guest public parser-profile evidence [#146 / PR #155](https://github.com/surikaterna/kalada/pull/155)
+merged at `4ce54b44` after independent audit (11 focused / 1040 full tests, packed consumers).
+It demonstrates original UTF-16 ranges, bounded recovery and non-authoritative partial results
+with the **full currently supported Kalada grammar**, not an invented restricted guest subset.
+It does not implement real FSX. Actual Kalada Expressions-host → FSX-guest grammar is
+[#153](https://github.com/surikaterna/kalada/issues/153), DEFERRED — NOT PASS; full
+[#108](https://github.com/surikaterna/kalada/issues/108) remains open. First read-only
+[#142](https://github.com/surikaterna/kalada/issues/142)/[Formbar #184](https://github.com/surikaterna/formbar/issues/184)
+does not depend on reverse #153 or EDIFACT #112. #184 still needs Formbar
+[#179](https://github.com/surikaterna/formbar/issues/179) engineering signoff and
+[#183](https://github.com/surikaterna/formbar/issues/183) trusted component/scope approval;
+current V1 has no Kalada slots. No API freeze or full CF pass is implied.
 
 CLK IDs are stable review contracts. “Must” below describes proposed acceptance, not a claim
 about today's packages. Inputs/results describe behavior, not final names, signatures or wire
@@ -39,8 +52,8 @@ needs-design for reversible codecs/restricted Kalada update handlers. #175 is no
 
 | Boundary | Minimum P0 decision | Later conditional evidence |
 | --- | --- | --- |
-| Source | Immutable snapshot/version, owner-tagged half-open UTF-16 ranges and one shared bounded request; no universal CST or execution IR | Separate CF01 executable entry/exit and malformed-source probe in P1, then real FSX evidence before freeze |
-| Embedding | Versioned explicit profile lists **host grammar positions** and allowed guest languages; host chooses entry, owns outer delimiters and validates return; guest lexes interior | Reverse embedding only with a separately declared host position/profile; CF01 two-way fixture is a later goal, not P0 acceptance |
+| Source | Immutable snapshot/version, owner-tagged half-open UTF-16 ranges and one shared bounded request; no universal CST or execution IR | #146 bounded public forward evidence merged; reverse #153 deferred; real FSX still needed |
+| Embedding | Versioned explicit profile lists **host grammar positions** and allowed guest languages; host chooses entry, owns outer delimiters and validates return; guest lexes interior | Reverse embedding only with a separately declared Expressions host grammar position/profile in #153; CF01 two-way remains open, not a first-form prerequisite |
 | Providers/types | Equal opt-in public provider access; initial semantic handoff may carry host-owned opaque expected-type and value-versus-location context | CF02 and real FSX determine whether shared scope/type/generic/nominal machinery is justified; no shared checker or mandatory Expressions |
 | Writes | First FSX edit: direct statically identified non-repeater writable location only; Kalada checks eligibility, Formbar authorizes/resolves at use time | CF05 Stage A: independent executable Formbar #195 proof before #123; repeater writes DISABLED pending #180 stable identity and independently audited #185 Stage B, mandatory for current #187 and P6 if released; #175 codecs/handlers need separate design |
 
@@ -52,10 +65,11 @@ validates the range and closing delimiter. Comments and brace syntax are not yet
 Kalada's expression lexer/parser: they fail closed, not succeed by host pre-scanning or an
 invented restricted grammar. [Kalada #110](https://github.com/surikaterna/kalada/issues/110)
 prototypes this narrow guest-owned boundary, not a permanent restricted subset or completion
-of [CF01 / #108](https://github.com/surikaterna/kalada/issues/108). As Kalada's supported
+of [CF01 / #108](https://github.com/surikaterna/kalada/issues/108). Merged #146 supplies bounded
+public forward proof, not a full pass. As Kalada's supported
 grammar grows, the handoff must support that grammar with corresponding fixtures. An
-Expressions-hosted FSX region works only if a *distinct* Expressions profile declares that
-grammar position and FSX as an allowed guest.
+Expressions-hosted FSX region requires #153's *distinct* actual Expressions grammar
+position/profile admitting FSX; a neutral toy host is not reverse evidence.
 Undeclared position/guest, overlapping entries, non-progress/invalid exit or unsupported lexical
 handoff return explicit unsupported/invalid/partial results, never an inferred valid program.
 
