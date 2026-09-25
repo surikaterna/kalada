@@ -1,5 +1,18 @@
 # @kalada/core
 
+## 0.6.0
+
+### Minor Changes
+
+- efa9802: **BREAKING (pre-stable):** expand `kalada-v1` in place with strict `field-access` and Option-preserving `optional-field-access` expression nodes. Existing programs remain valid, but public expression unions and schemas gain variants, so exhaustive TypeScript consumers must handle them and old strict consumers cannot accept new programs.
+- 1eaeca5: **BREAKING (pre-stable):** expand `kalada-v1` in place with canonical finite numeric arithmetic and strict boolean expression variants. Existing programs retain their behavior, but exhaustive TypeScript and strict schema consumers must add the new closed union members before accepting programs that use them.
+- bf7b6e5: **BREAKING (pre-stable):** expand the public `kalada-v1` expression union and strict program schemas with canonical `conditional` and `option-coalesce` variants. Existing programs retain their behavior, but exhaustive TypeScript consumers and captured strict decoders must add both closed node forms before accepting programs that use them.
+- ef577f0: **BREAKING (pre-stable):** expand `kalada-v1` in place with canonical strict equality, explicit number/string ordered comparison, and array-only deep membership expression variants. Existing programs retain their behavior, but exhaustive TypeScript and strict schema consumers must add the new closed union members before accepting programs that use them.
+
+### Patch Changes
+
+- ed9c53f: Allow canonical ordered comparisons with an explicit number or string domain to compile dynamic operands, which are checked against that domain at runtime as documented.
+
 ## 0.5.0
 
 ### Minor Changes

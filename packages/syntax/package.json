@@ -1,6 +1,6 @@
 {
   "name": "@kalada/syntax",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Lossless source tooling for the Kalada expression language",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kalada/core": "^0.5.0"
+    "@kalada/core": "^0.6.0"
   },
   "publishConfig": {
     "access": "public"
