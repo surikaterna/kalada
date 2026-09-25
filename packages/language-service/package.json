@@ -1,6 +1,6 @@
 {
   "name": "@kalada/language-service",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Headless document analysis and formatting for Kalada",
   "license": "MIT",
   "repository": {
@@ -36,9 +36,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kalada/core": "^0.5.0",
-    "@kalada/host": "^0.0.0",
-    "@kalada/syntax": "^0.0.0"
+    "@kalada/core": "^0.6.0",
+    "@kalada/host": "^0.1.0",
+    "@kalada/syntax": "^0.1.0"
   },
   "publishConfig": {
     "access": "public"

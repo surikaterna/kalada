@@ -1,5 +1,16 @@
 # @kalada/projection
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [efa9802]
+- Updated dependencies [1eaeca5]
+- Updated dependencies [ed9c53f]
+- Updated dependencies [bf7b6e5]
+- Updated dependencies [ef577f0]
+  - @kalada/core@0.6.0
+
 ## 0.1.0
 
 ### Minor Changes

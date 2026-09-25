@@ -1,6 +1,6 @@
 {
   "name": "@kalada/provider-routing",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Experimental neutral whole-document diagnostic routing for Kalada consumers",
   "license": "MIT",
   "repository": {
