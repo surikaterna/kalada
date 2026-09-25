@@ -29,6 +29,7 @@
     "package:smoke": "bun run build && bun scripts/package-smoke.ts && bun scripts/provider-routing-package-smoke.ts",
     "projection:smoke": "bun run build && bun scripts/projection-package-smoke.ts",
     "provider-routing:smoke": "bun run --filter @kalada/provider-routing build && bun scripts/provider-routing-package-smoke.ts",
+    "provider-routing:packed-consumers": "bun run build && bun scripts/provider-routing-packed-consumers.ts",
     "release": "changeset publish",
     "syntax:browser-smoke": "bun run build && bun scripts/syntax-package-smoke.ts --browser-only",
     "syntax:smoke": "bun run build && bun scripts/syntax-package-smoke.ts",
