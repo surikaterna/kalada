@@ -54,22 +54,22 @@ async function writeConsumer(directory: string): Promise<void> {
     join(directory, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
   );
-  const sample = `const provider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst snapshot = { uri: "file:///a", text: "🚀", version: 1, environmentGeneration: "one" };\nconst result = createDiagnosticRouter([provider]).diagnose("domain", snapshot);\nif (result.status !== "supported" || result.document.text !== "🚀" || DIAGNOSTIC_CONTRACT_VERSION !== 1) throw new Error("Routing failed");\n`;
+  const sample = `const provider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst snapshot = { uri: "file:///a", text: "🚀", version: 1, environmentGeneration: "one" };\nconst result = createDiagnosticRouter([provider]).diagnose("domain", snapshot);\nif (result.status !== "supported" || result.document.text !== "🚀" || DIAGNOSTIC_CONTRACT_VERSION !== 1) throw new Error("Routing failed");\nconst composition = createCompositionRouter([{ version: 1, hostLanguageId: "host", position: "expression", allowedGuests: ["tiny"], open: "{", close: "}" }], [{ languageId: "tiny", parse: ({ start, meter }) => { meter.charge(1); return { owner: "tiny", status: "valid", stop: start + 1, range: { start, end: start + 1 }, reason: "host-close", diagnostics: [], subtree: {} }; } }]);\nconst composed = composition.compose({ snapshot: { ...snapshot, text: "{x}" }, hostLanguageId: "host", slots: [{ position: "expression", start: 0, maxStop: 2, explicitGuest: "tiny" }], isCurrent: () => true, limits: { work: 3, depth: 3, diagnostics: 2 } });\nif (composed.status !== "valid" || COMPOSITION_CONTRACT_VERSION !== 1) throw new Error("Composition failed");\n`;
   await writeFile(
     join(directory, "esm.mjs"),
-    `import { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION } from "@kalada/provider-routing";\n${sample}`,
+    `import { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } from "@kalada/provider-routing";\n${sample}`,
   );
   await writeFile(
     join(directory, "cjs.cjs"),
-    `const { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION } = require("@kalada/provider-routing");\n${sample}`,
+    `const { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } = require("@kalada/provider-routing");\n${sample}`,
   );
   await writeFile(
     join(directory, "types.mts"),
-    'import { createDiagnosticRouter, type DiagnosticProvider, DIAGNOSTIC_CONTRACT_VERSION } from "@kalada/provider-routing";\nconst provider: DiagnosticProvider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst result = createDiagnosticRouter([provider]).diagnose("domain", { uri: "file:///a", text: "", version: 1, environmentGeneration: "one" });\nvoid result; void DIAGNOSTIC_CONTRACT_VERSION;\n',
+    'import { createDiagnosticRouter, createCompositionRouter, type CompositionProfile, type CompositionGuest, type CompositionSlot, type DiagnosticProvider, DIAGNOSTIC_CONTRACT_VERSION } from "@kalada/provider-routing";\nconst provider: DiagnosticProvider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst result = createDiagnosticRouter([provider]).diagnose("domain", { uri: "file:///a", text: "", version: 1, environmentGeneration: "one" });\nconst profile: CompositionProfile = { version: 1, hostLanguageId: "host", position: "slot", allowedGuests: ["tiny"], open: "{", close: "}" };\nconst slot: CompositionSlot = { position: "slot", start: 0, maxStop: 2 };\nconst guest: CompositionGuest = { languageId: "tiny", parse: ({ start, meter }) => { meter.charge(1); return { owner: "tiny", status: "valid", range: { start, end: start + 1 }, stop: start + 1, reason: "host-close", diagnostics: [], subtree: {} }; } };\nvoid createCompositionRouter([profile], [guest]); void slot; void result; void DIAGNOSTIC_CONTRACT_VERSION;\n',
   );
   await writeFile(
     join(directory, "types.cts"),
-    'import routing = require("@kalada/provider-routing");\nconst provider: routing.DiagnosticProvider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nvoid routing.createDiagnosticRouter([provider]);\n',
+    'import routing = require("@kalada/provider-routing");\nconst provider: routing.DiagnosticProvider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst profile: routing.CompositionProfile = { version: 1, hostLanguageId: "host", position: "slot", allowedGuests: ["tiny"], open: "{", close: "}" };\nvoid routing.createCompositionRouter([profile], []); void routing.createDiagnosticRouter([provider]);\n',
   );
 }
 

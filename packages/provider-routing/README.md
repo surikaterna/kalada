@@ -1,6 +1,7 @@
 # @kalada/provider-routing (experimental)
 
-Opt-in, dependency-free whole-document diagnostic routing. Contract version
+Two separate opt-in, dependency-free experimental capabilities: whole-document diagnostic
+routing and host-owned parser composition. Contract version
 `DIAGNOSTIC_CONTRACT_VERSION === 1` identifies this provisional diagnostic shape;
 the package is not a stable language kernel API. Changes to the experimental contract
 may require consumer updates. There is no implicit Expressions provider: install
@@ -42,6 +43,53 @@ are accepted; code length is at most 128, and URI/environment identity length at
 2,048 code units. These limits are provisional, not calibrated platform budgets.
 Returned diagnostics and snapshots are frozen copies, not live provider values.
 
-This package does **not** parse or check source, compose grammars or types, run
-expressions, expose editor/LSP services, or supply a public parser handoff (#108).
+`COMPOSITION_CONTRACT_VERSION === 1` identifies the separate provisional host-composition
+contract. A trusted host parser supplies **declared** slot offsets (not discovered by the
+router), a versioned host-language/grammar-position profile, allowlisted guest IDs and
+host-owned opening/closing markers. An explicit guest choice overrides the static profile
+default; neither may bypass the allowlist, and no selection means unsupported (no fallback).
+For reverse embedding, register a *separate* reverse host profile. The host keeps delimiters;
+the selected guest lexes its interior and returns its own opaque subtree, UTF-16 range,
+consumed stop, reason and diagnostics. Success requires `status: "valid"`,
+`reason: "host-close"`, a complete claimed interior, no diagnostics and a subtree;
+`reason: "eof"` cannot authorize a tree. The router validates progress, local bounds, closing marker,
+ownership (including diagnostic codes/ranges), selection, currentness and cancellation before returning a navigable host/guest
+tree. It does not parse the host or know how to skip guest strings/comments: guests must
+implement their language's supported lexical boundary themselves and report the **first**
+applicable close in their grammar. A host may supply an independently known slot `maxStop`
+to reject a later return; this optional safe UTF-16 offset must follow the opening marker
+and leave room for the close. The router does not scan guest text for earlier `}` (which
+might be quoted), nor can it detect a dishonest trusted provider's earlier neutral close
+without such a bound. Unsupported, partial,
+invalid, stale, cancelled and budget outcomes have no tree and confer no emission/edit authority.
+
+```ts
+import { createCompositionRouter } from "@kalada/provider-routing";
+const router = createCompositionRouter([{
+  version: 1, hostLanguageId: "host", position: "expression",
+  open: "{", close: "}", allowedGuests: ["tiny"], defaultGuest: "tiny",
+}], [{ languageId: "tiny", parse({ start, meter }) {
+  meter.charge(3); // cooperative guest work, including nested calls
+  return { owner: "tiny", status: "valid", range: { start, end: start + 3 },
+    stop: start + 3, reason: "host-close", diagnostics: [], subtree: { kind: "tiny" } };
+} }]);
+const input = { uri: "file:///a", text: "{abc}", version: 1, environmentGeneration: "env" };
+const result = router.compose({ snapshot: input, hostLanguageId: "host",
+  slots: [{ position: "expression", start: 0 }], isCurrent: () => true,
+  limits: { work: 100, depth: 4, diagnostics: 10 } });
+```
+
+The router copies/freezes source identity and profile declarations; `isCurrent` must check
+the caller's live document **and environment** both before and after callbacks, and consumers
+must recheck before publishing. Optional `context` carries host-owned opaque expected-type
+and location facts, not type checking or permission to write. Nested compositions must pass
+the same meter. Host charges its own text and opening/closing markers once; guests charge
+actual interior work (at least one unit for nonempty successful interior), including nested
+calls, via that meter. Work/depth/diagnostic bounds are cooperative and qualitative, not a CPU or
+memory sandbox: never register untrusted executable providers. Guest subtrees and opaque
+context values are language/host-owned references, not deep-frozen or admitted artifacts.
+
+This package does **not** implement a host parser, generic AST/CST, type composition,
+expression evaluator, editor/LSP services, or CF01 completion (#108). The real Kalada
+adapter and independent packed two-guest proof belong to #145.
 Packed independent domain and Expressions opt-in cross-consumer proof is tracked by #137.

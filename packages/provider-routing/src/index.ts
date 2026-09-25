@@ -1,4 +1,19 @@
 /** Experimental diagnostic contract v1; not a parser, checker, or runtime API. */
+export { createCompositionRouter } from "./composition.js";
+export type {
+  CompositionDiagnostic,
+  CompositionGuest,
+  CompositionMeter,
+  CompositionNode,
+  CompositionOutcome,
+  CompositionProfile,
+  CompositionRange,
+  CompositionRequest,
+  CompositionSlot,
+  CompositionSnapshot,
+  GuestCompositionResult,
+} from "./contracts.js";
+export { COMPOSITION_CONTRACT_VERSION } from "./contracts.js";
 export const DIAGNOSTIC_CONTRACT_VERSION = 1;
 export interface DocumentSnapshot {
   readonly uri: string;
