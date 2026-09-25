@@ -1,5 +1,6 @@
 import { compileKaladaV1Program, Option } from "@kalada/core";
 import {
+  experimentalParseKaladaV1GuestExpressionPrefix,
   formatKaladaV1Expression,
   lowerKaladaV1Expression,
   parseKaladaV1Expression,
@@ -10,6 +11,7 @@ const expected = [
   "DEFAULT_KALADA_SYNTAX_LIMITS",
   "KALADA_SYNTAX_DIAGNOSTIC_MESSAGES",
   "MAXIMUM_KALADA_SYNTAX_LIMITS",
+  "experimentalParseKaladaV1GuestExpressionPrefix",
   "formatKaladaV1Expression",
   "lowerKaladaV1Expression",
   "parseKaladaV1Expression",
@@ -38,4 +40,30 @@ if (!outcome.ok || outcome.value !== 0 || !Option.none || semantics.nodes.length
 const formatted = formatKaladaV1Expression(" value?.field??fallback ");
 if (!formatted.ok || formatted.text !== "value?.field ?? fallback") {
   throw new Error("ESM formatting failed");
+}
+
+const source = "🚀\r\n$" + '{("}" == "}" ? (1 + 2) * 3 : 0)}TAIL';
+const start = source.indexOf("{") + 1;
+const guest = experimentalParseKaladaV1GuestExpressionPrefix(source, start);
+if (
+  !guest.ok ||
+  guest.reason !== "outer-brace" ||
+  source[guest.stop] !== "}" ||
+  source.slice(guest.stop + 1) !== "TAIL" ||
+  guest.range.start !== start ||
+  guest.range.end !== guest.stop ||
+  guest.parsed?.document.source !== source
+) {
+  throw new Error("ESM guest boundary failed");
+}
+const guestLowered = lowerKaladaV1Expression(guest.parsed);
+if (
+  !guestLowered.ok ||
+  guestLowered.sourceMap.some(({ range }) => range.start < start || range.end > guest.stop)
+) {
+  throw new Error("ESM guest lowering provenance failed");
+}
+for (const text of ["{a // }TAIL", "{(a}TAIL", "{a b}TAIL", "{a + 1"]) {
+  if (experimentalParseKaladaV1GuestExpressionPrefix(text, 1).ok)
+    throw new Error("Partial guest accepted");
 }

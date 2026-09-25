@@ -1,6 +1,9 @@
 import syntax = require("@kalada/syntax");
 
 const parsed: syntax.KaladaParseResult = syntax.parseKaladaV1Expression("true");
+const guest: syntax.ExperimentalKaladaV1GuestPrefixResult =
+  syntax.experimentalParseKaladaV1GuestExpressionPrefix("{true}", 1);
+void guest.stop;
 const formatted: syntax.KaladaFormatOutcome = syntax.formatKaladaV1Expression(
   parsed.document.source,
 );
