@@ -263,20 +263,26 @@ async function release(directory: string): Promise<string> {
   return location;
 }
 
+async function packPlannedRouter(directory: string, location: string): Promise<string> {
+  const planned = await manifest(join(location, "packages/provider-routing/package.json"));
+  if (planned.version !== "0.1.0")
+    throw Error(`Unexpected planned router version: ${planned.version}`);
+  const router = await pack(directory, join(location, "packages/provider-routing"));
+  const packed = JSON.parse(run(["tar", "-xOf", router, "package/package.json"], root));
+  if (packed.name !== planned.name || packed.version !== planned.version)
+    throw Error("Router archive does not match release plan");
+  if (packed.dependencies || packed.peerDependencies || packed.optionalDependencies)
+    throw Error("Router is not neutral");
+  console.log(`Domain-only router: ${packed.version}, no dependencies`);
+  return router;
+}
+
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-packed-router-"));
   try {
-    const router = await pack(directory, join(root, "packages/provider-routing"));
-    const routerManifest = JSON.parse(run(["tar", "-xOf", router, "package/package.json"], root));
-    if (
-      routerManifest.dependencies ||
-      routerManifest.peerDependencies ||
-      routerManifest.optionalDependencies
-    )
-      throw Error("Router is not neutral");
-    console.log(`Domain-only router: ${routerManifest.version}, no dependencies`);
-    await consume(directory, [router], bare, false);
     const location = await release(directory);
+    const router = await packPlannedRouter(directory, location);
+    await consume(directory, [router], bare, false);
     const archives = await Promise.all(
       names.map((name) =>
         name === "provider-routing"
