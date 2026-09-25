@@ -1,27 +1,39 @@
 # Composable language conformance plan
 
-- Status: Draft / Proposed — every scenario is **PLANNED — NOT RUN**.
+- Status: Draft / Proposed — bounded CF01-forward evidence verified; full CF01 and CF02–14 not passed.
 - Date: 2026-09-23
 - Product requirements: [PRD CLP-01–12](../prd/composable-language-platform.md).
 - Behavioral contracts: [kernel CLK-01–15](./composable-language-kernel-contracts.md).
 - Delivery and authority: [ADR-0008](../adr/0008-composable-language-platform.md).
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
-  [PR #126](https://github.com/surikaterna/kalada/pull/126);
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
+  [PR #126](https://github.com/surikaterna/kalada/pull/126) merged;
   Formbar #92/#93 and deferred [#175](https://github.com/surikaterna/formbar/issues/175) are coordination, not approval.
 
 ## Evidence policy and gate vocabulary
 
-This is a future harness/evidence plan, not runnable tests or passing conformance. All commands
-are **TBD during implementation**; no command below is implied to exist. Owners are accountable
+This is a future full-conformance plan, not a claim that all scenarios pass. Bounded public forward
+evidence is runnable: [#146 evidence ledger](../../tests/fixtures/cf01-public-evidence.md),
+[test](../../tests/cf01-public-reconciliation.test.ts), merged in
+[PR #155](https://github.com/surikaterna/kalada/pull/155) at
+`4ce54b44cb18dc5cfcd6b3dfbcd4309b0c2d2b50`. Independent audit recorded 11 focused
+and 1040 full tests, lint/typecheck/build and public packed consumers. Merged
+[#127/#128/#131/#132/#140/#144/#145/#148/#151](https://github.com/surikaterna/kalada/issues/146)
+contribute earlier test-local and public contract evidence; none proves reverse grammar.
+[#137 / PR #139](https://github.com/surikaterna/kalada/pull/139) is independent partial
+whole-document diagnostic evidence, not CF02/CF13 PASS;
+[#111](https://github.com/surikaterna/kalada/issues/111) stays open. Commands for *other*
+scenarios are **TBD during implementation**. Owners are accountable
 domains proposed for review, not assignments. Each result must record source/artifact fixtures,
 environment/version/profile identities, expected and actual output, negative diagnostics,
 dependency evidence where relevant, and reproducible harness commands before becoming evidence.
 
 P0 reviews only the [minimum experimental shape](./composable-language-kernel-contracts.md):
 declared host positions/guests, source snapshots, equal opt-in providers and direct locations.
-P0 approval is not CF01 execution, CF02 parity or CF05 safe-write proof. P1 separately proves
-Kalada regression parity and tiny bidirectional composition in *separately declared* profiles,
-including a bounded framework comparison. P1 may defer CF03 only with a reviewed, recorded gap
+P0 approval is not full CF01 execution, CF02 parity or CF05 safe-write proof. P1 separately proves
+Kalada regression parity and forward composition; actual Expressions-hosted FSX reverse grammar
+belongs to [#153](https://github.com/surikaterna/kalada/issues/153), deferred beyond first
+read-only [#142](https://github.com/surikaterna/kalada/issues/142)/[Formbar #184](https://github.com/surikaterna/formbar/issues/184), not a toy-host substitute.
+P1 also compares a bounded framework slice. P1 may defer CF03 only with a reviewed, recorded gap
 when nominal infrastructure has no demonstrated consumer need; deferral is not a passing probe.
 P1 cannot establish real consumer fit or freeze an API. P2 exercises real FSX and minimal projection probes, with Arbitre
 boundary and Kuery fit reviews. P3 proves portable runtime/effect/cache boundaries; P4 authoring
@@ -35,11 +47,13 @@ not gate ordinary declarations with deferred expressions.
 ## Matrix
 
 Each row includes positive and negative scenarios targeted to its listed contracts. Detail below
-is part of the row's evidence obligation, not an optional appendix. Status applies to every probe.
+is part of the row's evidence obligation. CF01 directions are split; no partial row closes full CF01.
 
 | ID / probe | Product / kernel coverage | Proposed owner | First phase → required gate | Status |
 | --- | --- | --- | --- | --- |
-| CF01 Mixed parser | CLP-01, 12; CLK-01, 02, 15 | Kalada source | P1 → pre-freeze | PLANNED — NOT RUN |
+| CF01-forward prospective FSX host → Kalada guest | CLP-01, 12; CLK-01, 02, 15 | Kalada source | P1 → #142 first form | BOUNDED EVIDENCE VERIFIED: #146 / PR #155 neutral host only, not real FSX or full CF01 |
+| CF01-reverse actual Expressions host → FSX guest | CLP-01, 12; CLK-01, 02, 15 | Kalada + Formbar | #153 → later full #108 | DEFERRED — NOT PASS; explicit Expressions grammar position/profile needed |
+| CF01 full two-direction | CLP-01, 12; CLK-01, 02, 15 | Kalada source | #108 → later review | OPEN — NOT PASS |
 | CF02 Provider parity / Expressions | CLP-02, 04; CLK-03, 06, 08 | Kernel / Expressions / Scheman adapter | P1 → pre-freeze | PLANNED — NOT RUN |
 | CF03 Nominal registration | CLP-06; CLK-06, 07 | Kalada + test domain | P1 if justified; reviewed deferral otherwise → pre-freeze if needed | PLANNED — NOT RUN |
 | CF04 Real FSX | CLP-03, 04, 05; CLK-03, 04, 08, 09 | Formbar / Kalada / Scheman | P2 → pre-freeze | PLANNED — NOT RUN |
@@ -56,9 +70,18 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 
 ## Targeted scenarios and required evidence
 
-### CF01 — Mixed parser and phase lifecycle (separate P1 executable probe)
+### CF01 — Mixed parser and phase lifecycle (per-direction evidence)
 
-- **Positive:** Kalada and a tiny independent language nest in both directions only where each
+Forward #146 uses public composition exports with a neutral tiny host's declared positions,
+host-owned delimiters and guest-owned **full currently supported** Kalada Expressions grammar;
+seven integrated/delegated comparisons, UTF-16 CRLF/astral, valid lowering/provenance, partial
+sibling recovery and fail-closed unsupported lexical, stale/cancelled/budget and forged results
+are bounded evidence, not production FSX. [#108](https://github.com/surikaterna/kalada/issues/108)
+stays open. Reverse #153 needs *actual* Expressions host syntax and Formbar #183 trusted FSX
+guest contract; neither neutral-host simulation nor automatic profile inversion passes it.
+Full two-direction acceptance below is later work, not a #142/#184 dependency.
+
+- **Positive (full later gate):** Kalada and a tiny independent language nest in both directions only where each
   host profile explicitly declares the grammar position and permitted guest. Host owns outer
   delimiters/return validation; guest lexes interior and returns a bounded range/stop reason.
   In a tiny host fixture (not FSX), show deterministic parser selection for an eligible slot:
@@ -126,7 +149,10 @@ is part of the row's evidence obligation, not an optional appendix. Status appli
 - **Positive:** compile a minimal field/output/conditional form with nested explicit aliases,
   component and Scheman facts into Formbar declarations and deferred Kalada programs **after**
   [Formbar #179](https://github.com/surikaterna/formbar/issues/179) signs off on the owner-preferred
-  in-place V1 Kalada slot replacement. Exercise a static root Form language default across
+  in-place V1 Kalada slot replacement and [#183](https://github.com/surikaterna/formbar/issues/183)
+  approves trusted component/scope contracts. First [#184](https://github.com/surikaterna/formbar/issues/184)
+  working form is read-only; reverse #153 and EDIFACT #112 are not prerequisites. Exercise a
+  static root Form language default across
   eligible expression slots, plus a permitted per-expression override if a real case needs one,
   without treating the default as a runtime Formbar prop or source-authored plugin registration.
   Prove Kalada dependency extraction, computation-cycle and
@@ -303,5 +329,5 @@ also requires CF02/04/13 provider parity, Expressions-free tooling, neutral depe
 public FSX composition and standalone Expressions runtime evidence, not merely a parser-free bundle.
 The gate may reject or revise the design; it does not freeze the public API or choose optional
 fragments, final spellings or versions.
-These planned scenarios are risk-based future tests; validating these four documentation files
-does not execute them or change any issue status.
+Future scenarios are risk-based tests; validating these docs does not execute CF04 or convert
+bounded forward evidence into full CF01/CF02/CF13 PASS.

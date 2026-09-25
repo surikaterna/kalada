@@ -4,20 +4,28 @@
 - Date: 2026-09-23
 - Product authority for this proposal: [Composable language platform PRD](../prd/composable-language-platform.md).
 - Minimum behavioral design: [kernel CLK-01–15](../architecture/composable-language-kernel-contracts.md).
-- Planned evidence: [conformance CF01–14](../architecture/composable-language-conformance.md), none run.
+- Evidence ledger: [conformance CF01–14](../architecture/composable-language-conformance.md); bounded forward and partial diagnostic evidence, no full CF pass.
 - Researched baseline: `b694fa654938392d7f01367f7ac3d31278ce2d51`.
-- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107), open
-  [PR #126](https://github.com/surikaterna/kalada/pull/126); no cross-repo approval implied.
+- Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
+  [PR #126](https://github.com/surikaterna/kalada/pull/126) merged; no cross-repo approval implied.
 - Coordination: [Formbar #92](https://github.com/surikaterna/formbar/issues/92) and
   [#93](https://github.com/surikaterna/formbar/issues/93); related Kalada
   [#21](https://github.com/surikaterna/kalada/issues/21),
   [#75](https://github.com/surikaterna/kalada/issues/75), and
   [#87](https://github.com/surikaterna/kalada/issues/87).
-- Numbering: baseline contains ADR-0001–0006. Open [PR #82](https://github.com/surikaterna/kalada/pull/82)
-  adds `docs/adr/0007-package-runtime-and-browser-policy.md`; 0008 avoids that unmerged allocation.
-  Recheck numbering at merge time.
+- Numbering: ADR-0007 remains in open [PR #82](https://github.com/surikaterna/kalada/pull/82); 0008 avoids its allocation.
 
 ## Context and current constraints
+
+First [#142](https://github.com/surikaterna/kalada/issues/142) milestone: read-only Formbar FSX
+hosts full currently supported Kalada Expressions. Public forward [#146 / PR #155](https://github.com/surikaterna/kalada/pull/155)
+merged at `4ce54b44` after independent audit (11 focused / 1040 full tests, public packed
+consumers). This is bounded parser-profile evidence, not real FSX or full CF01. Actual
+Expressions-hosted FSX grammar is [#153](https://github.com/surikaterna/kalada/issues/153),
+DEFERRED — NOT PASS; [#108](https://github.com/surikaterna/kalada/issues/108) stays open.
+Merged [#137 / PR #139](https://github.com/surikaterna/kalada/pull/139) is partial whole-document
+diagnostic proof, not CF02/CF13 completion; [#111](https://github.com/surikaterna/kalada/issues/111)
+remains open. Neither proof freezes APIs or grants cross-repo Formbar approval.
 
 The PRD records platform-consumer authoring workflows and evidence distinguishing implementation
 from targets. Current syntax provides a Kalada-specific lossless CST, recovery and lowering;
@@ -111,12 +119,17 @@ EDIFACT -> domain decoder -> structured data -> projection -> Scheman command va
 JSON --------------------------------------> projection -> email model -> safe domain renderer
 ```
 
-FSX is JSX-like declarative syntax, not JS/TS. It explicitly composes Expressions through public
+FSX is JSX-like declarative syntax, not JS/TS. First real read-only
+[Formbar #184](https://github.com/surikaterna/formbar/issues/184) lowering awaits
+[#179](https://github.com/surikaterna/formbar/issues/179) engineering signoff and trusted
+component/scope [#183](https://github.com/surikaterna/formbar/issues/183) approval.
+It explicitly composes Expressions through public
 APIs; proposed slots lower to deferred expression artifacts, not eager values. Formbar schedules
 runtime calls. #179 gates real FSX lowering: approve V1 replacement, Kalada dependency extraction,
 cycle checks, scoped bindings, source ranges and runtime evaluation; reject or migrate old Kuery
 data explicitly. Parser-only [Kalada #108](https://github.com/surikaterna/kalada/issues/108)
-is independent. No renderer or capability callback runs during checking/compilation.
+does not resolve this Formbar gate. Reverse #153 and EDIFACT #112 are not #142/#184
+prerequisites. No renderer or capability callback runs during checking/compilation.
 Every phase carries document/environment identity and explicit validity/currentness; partial
 recovery supports limited tooling, never emission. Context profiles define lexical/delimiter
 ownership, declared host positions/guests, deterministic handoff and shared budgets;
@@ -146,11 +159,8 @@ A parser can compose a domain region without executing it or making it an Expres
 
 ### Executable extension alternatives A and B
 
-These are contingent alternatives only if future use cases require domain operations *inside*
-an executable program. **Neither is required for ordinary FSX → Formbar declarations plus
-embedded deferred Kalada programs.** Nominal type registration alone does not authorize effects.
-Any A/B decision is scoped to the relevant Expressions or domain runtime, not a kernel execution
-model. “Common” below means common within that runtime's selected profile, not mandatory for languages.
+These are contingent alternatives only for executable domain operations; neither gates ordinary
+FSX with deferred Expressions. A/B decisions belong to a specific runtime, not the kernel.
 
 | | A: executable/lowered extension operations | B: common operations and capabilities |
 | --- | --- | --- |
@@ -218,16 +228,13 @@ validation never replaces server authorization or Formbar server rule enforcemen
 | Integrated language framework | Potentially accelerates grammar/LSP work, but may couple AST ownership, runtime dependencies or editor lifecycle; evaluate a bounded spike, not assume incompatibility |
 | Composed foundation | Proposed: preserves existing Kalada contracts and domain ownership, with independently deployable surfaces; costs explicit composition/provenance and conformance work |
 
-P1 must compare the composed approach against a representative framework slice using the same
-recovery, browser, mixed-source and dependency fixtures. Stop and revise if reuse is only nominal
-or if extraction regresses Kalada. No framework/vendor selection is made by this draft.
+P1 compares a representative framework slice on recovery, browser, mixed-source and dependency
+fixtures. Stop if reuse is nominal or extraction regresses Kalada; no vendor is selected.
 
 ## Proposed phases and exit gates
 
-Owners below are proposed accountable domains, not assignments or tracker status. All phases
-require review of the relevant PRD acceptance fixtures and code-principles checks. Future work
-is recorded here without creating issues. Dependency order permits authoring to run parallel
-to artifact work; it does not make executable fragments an initial FSX blocker.
+Owners are proposed domains, not assignments or tracker status. Review PRD fixtures and
+code principles at each phase; authoring may run parallel to artifacts. Fragments do not gate FSX.
 
 ### P0 — Contracts and open decisions
 
@@ -252,20 +259,23 @@ to artifact work; it does not make executable fragments an initial FSX blocker.
 - **Owner:** Kalada foundation/syntax maintainers; Formbar reviews scope/reference fit.
 - **Dependencies:** P0 contracts.
 - **Scope:** prove neutral source/context/recovery and equal public registration with a tiny
-  domain-only language without Expressions. Try separately declared reverse embedding in CF01;
+  domain-only language without Expressions. #146 proves bounded forward evidence; actual
+  Expressions-hosted FSX reverse #153 is deferred beyond #142/#184; full CF01/#108 stays open;
   extract shared scope/type-identity services only when evidence demonstrates the need.
   Exercise reference/location distinctions without enabling domain writes.
 - **Acceptance evidence:** existing Kalada conformance parity, malformed mixed-source/UTF-16
   fixtures, dependency graphs, and bounded comparison with an integrated framework slice.
 - **Exit gate:** real reuse, equal provider access and preserved Expressions behavior are demonstrated;
-  kernel/shared services have no expression imports. CF01/02 prove mechanics, not stable APIs or domain fit.
+  kernel/shared services have no expression imports. Bounded CF01-forward/#146 and partial
+  diagnostic proof do not pass full CF01/02 or establish stable APIs/domain fit.
   CF03 may be deferred only as an explicit reviewed gap if nominal registration has no demonstrated
   consumer need; do not claim it passed. Revisit extraction if either fails. Trace: CLP-01, 02, 05, 06, 08, 12.
 
 ### P2 — Real FSX and minimum consumer probes
 
 - **Owner:** Formbar compiler maintainers, with Kalada and Scheman integration reviewers.
-- **Dependencies:** P1 and P0 declaration/component/reference contracts.
+- **Dependencies:** forward P1 evidence and P0 declaration/component/reference contracts;
+  #179/#183 decisions before real #184 lowering, not reverse #153 or EDIFACT #112.
 - **Scope:** provisional FSX compiler supports a small form, scoped read expressions, schema
   and component checking, deferred Kalada programs and source maps **after #179 decides**
   V1 replacement, dependency/cycle validation, old-data handling, runtime evaluation and
@@ -376,8 +386,7 @@ This proposal does not blanket-replace accepted ADRs:
 - [ADR-0006](./0006-prepared-execution-schema-tooling.md) retains schema/semantic separation,
   host orchestration and currentness. P3 proposes an additional portable runtime boundary;
   it does not claim its current prepared objects are portable or remove public APIs.
-- ADR-0007 in PR #82 is unmerged work at this baseline, not local accepted authority. Respect
-  its package-policy coordination and rebase to the actual decision before release claims.
+- ADR-0007 remains unmerged in PR #82; respect its eventual package-policy decision before release.
 
 Preserve existing APIs and conformance while extracting internally. Introduce new contracts
 additively where possible; unavoidable semantic/package breaks require explicit versions,
@@ -387,13 +396,5 @@ An incompatible publishable Formbar V1 replacement requires a major Formbar Chan
 automatically a Kalada package change. Future versioned portable artifacts remain a separate target.
 ## Review and validation of this proposal
 
-Review CLP acceptance against phase evidence; remaining decisions in P0–P6, PRD and kernel note
-are not completed implementation or newly assigned issues.
-The conformance matrix gives targeted positive/negative evidence for every CLP/CLK contract;
-every scenario remains PLANNED — NOT RUN until future implementation records results.
-
-For this documentation-only change, validate local links, numbering/open-PR coordination,
-source evidence, exactly four documentation paths, CLP/CLK/CF coverage and whitespace using
-`git diff --check` for tracked edits. No runtime
-test additions are warranted: no executable behavior changes. Lint/test execution results
-belong in the handoff; future phase acceptance fixtures above are not claimed as passing now.
+Review CLP acceptance against the per-direction conformance ledger; full CF01 and CF02–14
+remain unpassed. This docs-only change implements no runtime behavior or cross-repo approval.

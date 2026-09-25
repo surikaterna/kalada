@@ -2,18 +2,29 @@
 
 - Status: Draft — user-requested product direction, not accepted or implemented platform behavior.
 - Date: 2026-09-23
-- Evidence baseline: Kalada `b694fa654938392d7f01367f7ac3d31278ce2d51` (`b694fa6`).
+- Researched baseline: `b694fa6`; forward evidence updated through merge `4ce54b44cb18dc5cfcd6b3dfbcd4309b0c2d2b50`.
 - Delivery proposal: [ADR-0008](../adr/0008-composable-language-platform.md).
 - Proposed behavioral design: [kernel contracts CLK-01–15](../architecture/composable-language-kernel-contracts.md).
-- Evidence plan: [conformance CF01–14](../architecture/composable-language-conformance.md), all planned, not run.
+- Evidence ledger: [conformance CF01–14](../architecture/composable-language-conformance.md); bounded forward and partial diagnostic evidence only, no full CF pass.
 - Review scope: [Kalada #107](https://github.com/surikaterna/kalada/issues/107),
-  open [PR #126](https://github.com/surikaterna/kalada/pull/126).
+  [PR #126](https://github.com/surikaterna/kalada/pull/126) merged.
   Coordination: [Formbar #92][f92], [#93][f93], expression-slot decision [#179][f179],
   non-repeater proof [#195][f195], repeater-write identity [#180][f180] and proof [#185][f185],
   later supported-surface completion [#187][f187] and codec/handler design [#175][f175];
   related Kalada [#21][k21], [#75][k75], and [#87][k87]. These references are not status updates.
 
 ## Context and outcome
+
+First [core + FSX milestone #142](https://github.com/surikaterna/kalada/issues/142) targets a
+read-only Formbar form hosting **full currently supported** Kalada Expressions in declared FSX
+slots. Public forward parser evidence [#146](https://github.com/surikaterna/kalada/issues/146)
+merged in [PR #155](https://github.com/surikaterna/kalada/pull/155) at `4ce54b44`:
+independently audited 11 focused / 1040 full tests with public packed consumers, original
+UTF-16 ranges, bounded recovery and non-authoritative partial results. This is bounded evidence,
+not an implemented FSX form, full CF01 PASS or frozen API. Actual Kalada Expressions grammar
+hosting FSX is [reverse #153](https://github.com/surikaterna/kalada/issues/153), **DEFERRED — NOT PASS**;
+full [CF01/#108][k108] stays open. Reverse grammar and [EDIFACT #112](https://github.com/surikaterna/kalada/issues/112)
+do not block #142 or first real read-only [Formbar #184](https://github.com/surikaterna/formbar/issues/184).
 
 Open-source platform consumers need maintainable, configurable forms, calculations,
 data transformations, rules, and domain documents. Developers, integrators, application administrators,
@@ -86,8 +97,8 @@ diagnose rather than trigger parser guessing. Nested defaults remain optional pe
 Reverse embedding needs a separate declared Kalada-host position/profile; bidirectional source
 composition remains a later goal, not automatic support or a runtime fragment value.
 
-**Later P1/CF01 acceptance (not P0 approval):** Kalada plus a tiny second-language fixture
-compose in both declared directions, including nested delimiters, malformed islands, comments,
+**Later full P1/CF01 acceptance (not P0 approval or a #142 prerequisite):** Kalada plus a tiny second-language fixture
+compose in both declared directions, including nested delimiters, malformed islands, supported comments,
 CRLF and non-BMP characters. Recovery terminates
 within configured limits; diagnostics and formatting preserve correct parent-document ranges
 and untouched source. The fixture need not execute or capture a fragment.
@@ -126,7 +137,13 @@ whole form as an executable Kalada AST. Formbar retains reactive state, scheduli
 including server enforcement; it schedules calls to the Expressions runtime. Neither compiler nor
 projection duplicates those responsibilities.
 
-Current Formbar V1 validators compile Kuery slots, extract sorted `StateRef` dependencies for
+First #142/#184 form is **read-only**: fields, nested read aliases, form-wide condition and
+computed output; changing input updates output without recompilation. Trusted component/scope
+contracts [#183](https://github.com/surikaterna/formbar/issues/183) and #179 engineering signoff
+are still required. Neutral whole-document diagnostic peer [Kalada #111](https://github.com/surikaterna/kalada/issues/111)
+remains open; merged [#137 PR #139](https://github.com/surikaterna/kalada/pull/139)
+is partial diagnostic evidence, not complete CF02/CF13. Neither reverse #153 nor EDIFACT #112
+is a first-form prerequisite. Current Formbar V1 validators compile Kuery slots, extract sorted `StateRef` dependencies for
 computation reference/cycle checks, and report definition **paths**, not FSX source ranges.
 The proposed in-place V1 replacement with Kalada remains gated on Formbar engineering signoff
 in [#179][f179]: define Kalada dependency extraction and cycle equivalence, scoped binding,
