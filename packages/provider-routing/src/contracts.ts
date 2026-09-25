@@ -76,6 +76,29 @@ export interface CompositionNode {
   /** Opaque language-owned parsed subtree. Never interpreted by the host router. */
   readonly subtree?: unknown;
 }
+/** Attempt metadata is diagnostic only; it never authenticates a failed subtree. */
+export interface CompositionAttempt {
+  readonly owner: string;
+  readonly range: CompositionRange;
+  readonly reason: string;
+  readonly status: GuestCompositionResult["status"];
+  readonly diagnostics: readonly CompositionDiagnostic[];
+}
+export interface HostConnector {
+  readonly owner: string;
+  /** Host-owned original-source range from just after the safe close to the next opening. */
+  readonly range: CompositionRange;
+}
+export interface HostContinuation {
+  validate(
+    input: Readonly<{
+      snapshot: CompositionSnapshot;
+      close: CompositionRange;
+      nextSlot: Readonly<CompositionSlot>;
+      meter: CompositionMeter;
+    }>,
+  ): HostConnector;
+}
 export interface CompositionOutcome {
   readonly status:
     | "valid"
@@ -89,6 +112,9 @@ export interface CompositionOutcome {
   readonly snapshot: CompositionSnapshot;
   readonly diagnostics: readonly CompositionDiagnostic[];
   readonly tree?: CompositionNode;
+  /** Only on partial recovery; never equivalent to the authoritative tree. */
+  readonly attempts?: readonly CompositionAttempt[];
+  readonly candidates?: readonly CompositionNode[];
 }
 export interface CompositionRequest {
   readonly snapshot: CompositionSnapshot;
@@ -100,4 +126,6 @@ export interface CompositionRequest {
   readonly limits: Readonly<{ work: number; depth: number; diagnostics: number }>;
   /** For a nested request, pass the parent's meter rather than allocating a fresh budget. */
   readonly meter?: CompositionMeter;
+  /** Trusted host grammar, not a guest scanner; absent means no recovery continuation. */
+  readonly hostContinuation?: HostContinuation;
 }

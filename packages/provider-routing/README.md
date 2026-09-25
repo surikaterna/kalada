@@ -97,3 +97,28 @@ This package does **not** implement a host parser, generic AST/CST, type composi
 expression evaluator, editor/LSP services, or CF01 completion (#108). The real Kalada
 adapter and independent packed two-guest proof belong to #145.
 Packed independent domain and Expressions opt-in cross-consumer proof is tracked by #137.
+
+### Experimental partial recovery (#151)
+
+Optionally pass `hostContinuation: { validate(input) { ... } }` to `compose` for a trusted
+host grammar to certify a connector to the **next predeclared slot**. The frozen input
+contains the copied snapshot, the guest-reported host `close` range, a frozen copy of the
+next slot and the same cooperative meter. After independently validating its own grammar
+between `close.end` and `nextSlot.start`, the host charges at least the connector's UTF-16
+length and returns `{ owner: hostLanguageId, range: { start: close.end,
+end: nextSlot.start } }`. A Boolean, a guessed slot, or scanning a guest interior is not
+proof. The router checks the original source's closing/opening markers, profile selection,
+bounded offsets, ordering, meter and live snapshot identity before invoking the next guest.
+
+Only a bounded, progressing `status: "partial", reason: "safe-host-close"` guest exit
+whose lexed stop points at the actual close can initiate recovery. The guest must account
+for its interior work on the shared meter; `invalid`, `unsupported`, EOF or ambiguous
+exits cannot resume. On a recovered `partial` outcome, `attempts` contain only failed
+guest exits as frozen owner-tagged bounded ranges/reasons/copied diagnostics;
+`candidates` contain only opaque language-owned nodes from independently valid siblings.
+A fully valid document has a `tree` instead of `attempts` or `candidates`. The failed
+subtree is never read. Neither `attempts` nor `candidates` is an authenticated host CST
+or the authoritative `tree`;
+they grant no lowering, emission, editing or publication authority. Consumers must recheck
+source/version/environment identity before displaying even diagnostic recovery data.
+No Formbar runtime or CF01 pass is implied; this is trusted cooperative code, not a sandbox.
