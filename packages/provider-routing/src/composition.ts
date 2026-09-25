@@ -1,12 +1,32 @@
 import { Meter } from "./composition-meter.js";
+import {
+  attempt,
+  clearBoundary,
+  clearFailure,
+  connector,
+  type Failure,
+  partial,
+  recoveryFailure,
+} from "./composition-recovery.js";
+import {
+  boundedExit,
+  checkpoint,
+  diagnosticCopy,
+  id,
+  offset,
+  outcome,
+  profileCopy,
+  range,
+  snapshot,
+} from "./composition-validation.js";
 import type {
+  CompositionAttempt,
   CompositionDiagnostic,
   CompositionGuest,
   CompositionMeter,
   CompositionNode,
   CompositionOutcome,
   CompositionProfile,
-  CompositionRange,
   CompositionRequest,
   CompositionSlot,
   CompositionSnapshot,
@@ -14,110 +34,9 @@ import type {
 } from "./contracts.js";
 
 const MAX_TEXT = 100_000;
-const MAX_ID = 2048;
 const MAX_WORK = 1_000_000;
 const MAX_DEPTH = 32;
 const MAX_DIAGNOSTICS = 100;
-const id = (s: unknown): s is string => typeof s === "string" && !!s.trim() && s.length <= MAX_ID;
-const range = (start: number, end: number): CompositionRange => Object.freeze({ start, end });
-const offset = (n: number, length: number) => Number.isSafeInteger(n) && n >= 0 && n <= length;
-
-function snapshot(input: CompositionSnapshot): CompositionSnapshot {
-  const copy = Object.freeze({
-    uri: input?.uri,
-    text: input?.text,
-    version: input?.version,
-    environmentGeneration: input?.environmentGeneration,
-  });
-  if (
-    !id(copy.uri) ||
-    typeof copy.text !== "string" ||
-    !Number.isSafeInteger(copy.version) ||
-    copy.version < 0 ||
-    !id(copy.environmentGeneration)
-  )
-    throw new Error("Invalid snapshot");
-  return copy;
-}
-function profileCopy(p: CompositionProfile): CompositionProfile {
-  const allowedGuests = [...p.allowedGuests];
-  if (
-    p.version !== 1 ||
-    !id(p.hostLanguageId) ||
-    !id(p.position) ||
-    !id(p.open) ||
-    !id(p.close) ||
-    !allowedGuests.length ||
-    allowedGuests.some((guest) => !id(guest)) ||
-    new Set(allowedGuests).size !== allowedGuests.length ||
-    (p.defaultGuest !== undefined && !allowedGuests.includes(p.defaultGuest))
-  )
-    throw new Error("Invalid or ambiguous composition profile");
-  return Object.freeze({
-    version: 1,
-    hostLanguageId: p.hostLanguageId,
-    position: p.position,
-    open: p.open,
-    close: p.close,
-    defaultGuest: p.defaultGuest,
-    allowedGuests: Object.freeze(allowedGuests),
-  });
-}
-function outcome(
-  status: CompositionOutcome["status"],
-  reason: string,
-  document: CompositionSnapshot,
-  diagnostics: readonly CompositionDiagnostic[] = [],
-): CompositionOutcome {
-  return Object.freeze({
-    status,
-    reason,
-    snapshot: document,
-    diagnostics: Object.freeze([...diagnostics]),
-  });
-}
-function checkpoint(
-  request: CompositionRequest,
-  document: CompositionSnapshot,
-): "stale" | "cancelled" | undefined {
-  if (request.isCancelled?.()) return "cancelled";
-  const original = request.snapshot;
-  if (
-    original.uri !== document.uri ||
-    original.text !== document.text ||
-    original.version !== document.version ||
-    original.environmentGeneration !== document.environmentGeneration
-  )
-    return "stale";
-  if (!request.isCurrent(document)) return "stale";
-}
-function diagnosticCopy(
-  items: readonly CompositionDiagnostic[],
-  regionStart: number,
-  stop: number,
-  owner: string,
-): readonly CompositionDiagnostic[] | undefined {
-  if (!Array.isArray(items) || items.length > MAX_DIAGNOSTICS) return;
-  const result: CompositionDiagnostic[] = [];
-  for (const item of items) {
-    const code = item?.code,
-      start = item?.range?.start,
-      end = item?.range?.end;
-    if (
-      typeof code !== "string" ||
-      code.length > 128 ||
-      !/^[A-Z][A-Z0-9_]*$/u.test(code) ||
-      item?.owner !== owner ||
-      !offset(start, stop) ||
-      !offset(end, stop) ||
-      start < regionStart ||
-      end < start
-    )
-      return;
-    result.push(Object.freeze({ owner, code, range: range(start, end) }));
-  }
-  return Object.freeze(result);
-}
 type Entry = Readonly<{ profile: CompositionProfile; guest: CompositionGuest }>;
 function select(
   slot: CompositionSlot,
@@ -222,20 +141,47 @@ function walk(
 ): CompositionOutcome {
   const children: CompositionNode[] = [];
   let cursor = 0;
-  for (const slot of request.slots) {
+  for (const [index, slot] of request.slots.entries()) {
     const state = checkpoint(request, document);
     if (state) return outcome(state, state, document);
     if (!offset(slot?.start, document.text.length) || slot.start < cursor)
       return outcome("invalid", "OVERLAPPING_SLOT", document);
     const processed = processSlot(request, document, meter, profiles, guests, slot, cursor);
-    if ("status" in processed) return processed;
+    if ("outcome" in processed)
+      return walkFailure(request, document, meter, profiles, guests, index, processed);
     const { start, stop, close, guest, subtree } = processed;
+    if (!clearBoundary(request, document, index, stop + close.length))
+      return outcome("invalid", "OVERLAPPING_SLOT", document);
     if (slot.start > cursor) children.push(node(request.hostLanguageId, cursor, slot.start));
     children.push(node(request.hostLanguageId, slot.start, start));
     children.push(node(guest, start, stop, [], subtree));
     cursor = stop + close.length;
     children.push(node(request.hostLanguageId, stop, cursor));
   }
+  return finishWalk(request, document, meter, children, cursor);
+}
+function walkFailure(
+  request: CompositionRequest,
+  document: CompositionSnapshot,
+  meter: CompositionMeter,
+  profiles: readonly CompositionProfile[],
+  guests: ReadonlyMap<string, CompositionGuest>,
+  index: number,
+  failed: Failure,
+): CompositionOutcome {
+  if (!clearFailure(request, document, index, failed))
+    return outcome("invalid", "OVERLAPPING_SLOT", document);
+  return failed.safe && request.hostContinuation && index + 1 < request.slots.length
+    ? recover(request, document, meter, profiles, guests, index, failed)
+    : failed.outcome;
+}
+function finishWalk(
+  request: CompositionRequest,
+  document: CompositionSnapshot,
+  meter: CompositionMeter,
+  children: CompositionNode[],
+  cursor: number,
+): CompositionOutcome {
   if (!meter.charge(document.text.length - cursor) || meter.exhausted)
     return outcome("budget", "WORK_LIMIT", document);
   const state = checkpoint(request, document);
@@ -251,29 +197,76 @@ function walk(
   });
 }
 
-type Accepted = { start: number; stop: number; close: string; guest: string; subtree: unknown };
-function boundedExit(
-  result: GuestCompositionResult,
-  entry: Entry,
-  start: number,
-  length: number,
-  maxStop: number | undefined,
-): boolean {
-  const stop = result?.stop;
-  return (
-    result?.owner === entry.guest.languageId &&
-    offset(stop, length) &&
-    stop >= start &&
-    (maxStop === undefined || stop <= maxStop) &&
-    result.range?.start === start &&
-    result.range?.end === stop &&
-    typeof result.reason === "string" &&
-    !!result.reason &&
-    (result.status === "valid" ||
-      result.status === "invalid" ||
-      result.status === "partial" ||
-      result.status === "unsupported")
-  );
+type Accepted = {
+  start: number;
+  stop: number;
+  close: string;
+  profile: CompositionProfile;
+  guest: string;
+  subtree: unknown;
+};
+function resumeSlot(
+  request: CompositionRequest,
+  document: CompositionSnapshot,
+  meter: CompositionMeter,
+  profiles: readonly CompositionProfile[],
+  guests: ReadonlyMap<string, CompositionGuest>,
+  slot: CompositionSlot | undefined,
+  previous: NonNullable<Failure["safe"]>,
+): Accepted | Failure {
+  const state = checkpoint(request, document);
+  if (state) return { outcome: outcome(state, state, document) };
+  if (!slot) return { outcome: outcome("invalid", "MISSING_SLOT", document) };
+  const entry = select(slot, request.hostLanguageId, profiles, guests);
+  if (!entry || !document.text.startsWith(entry.profile.open, slot.start))
+    return { outcome: outcome("invalid", "MISSING_NEXT_OPEN", document) };
+  if (!connector(request, document, meter, previous.stop, previous.profile, slot))
+    return {
+      outcome: outcome(meter.exhausted ? "budget" : "invalid", "CONNECTOR_REJECTED", document),
+    };
+  const after = checkpoint(request, document);
+  if (after) return { outcome: outcome(after, after, document) };
+  return processSlot(request, document, meter, profiles, guests, slot, slot.start);
+}
+function recover(
+  request: CompositionRequest,
+  document: CompositionSnapshot,
+  meter: CompositionMeter,
+  profiles: readonly CompositionProfile[],
+  guests: ReadonlyMap<string, CompositionGuest>,
+  index: number,
+  failed: Failure,
+): CompositionOutcome {
+  const attempts = [failed.attempt as CompositionAttempt];
+  const candidates: CompositionNode[] = [];
+  let previous = failed.safe as NonNullable<Failure["safe"]>;
+  for (let i = index + 1; i < request.slots.length; i++) {
+    const slot = request.slots[i];
+    const processed = resumeSlot(request, document, meter, profiles, guests, slot, previous);
+    if ("outcome" in processed) {
+      const decision = recoveryFailure(
+        request,
+        document,
+        i,
+        processed,
+        attempts,
+        candidates,
+        failed.outcome.reason,
+      );
+      if (decision.outcome) return decision.outcome;
+      previous = decision.safe as NonNullable<Failure["safe"]>;
+      continue;
+    }
+    if (!clearBoundary(request, document, i, processed.stop + processed.close.length))
+      return outcome("invalid", "OVERLAPPING_SLOT", document);
+    candidates.push(node(processed.guest, processed.start, processed.stop, [], processed.subtree));
+    previous = { stop: processed.stop, profile: processed.profile };
+  }
+  if (meter.exhausted) return outcome("budget", "WORK_LIMIT", document);
+  const state = checkpoint(request, document);
+  return state
+    ? outcome(state, state, document)
+    : partial(document, failed.outcome.reason, attempts, candidates);
 }
 function admit(
   result: GuestCompositionResult,
@@ -283,7 +276,7 @@ function admit(
   meter: CompositionMeter,
   maxStop: number | undefined,
   guestWork: number,
-): Accepted | CompositionOutcome {
+): Accepted | Failure {
   // Read callback-owned fields once: accessors must not change the validated exit later.
   const guestRange = result.range;
   const value: GuestCompositionResult = {
@@ -294,13 +287,37 @@ function admit(
     status: result.status,
     diagnostics: result.diagnostics,
   };
-  if (!boundedExit(value, entry, start, document.text.length, maxStop))
-    return outcome("invalid", "INVALID_GUEST_EXIT", document);
+  if (!boundedExit(value, entry.guest.languageId, start, document.text.length, maxStop))
+    return { outcome: outcome("invalid", "INVALID_GUEST_EXIT", document) };
   const copied = diagnosticCopy(value.diagnostics, start, value.stop, entry.guest.languageId);
-  if (!copied) return outcome("invalid", "INVALID_GUEST_DIAGNOSTIC", document);
+  if (!copied) return { outcome: outcome("invalid", "INVALID_GUEST_DIAGNOSTIC", document) };
   if (!meter.report(copied.length) || meter.exhausted)
-    return outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document);
-  if (value.status !== "valid") return outcome(value.status, value.reason, document, copied);
+    return { outcome: outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document) };
+  if (value.status !== "valid")
+    return {
+      outcome: outcome(value.status, value.reason, document, copied),
+      attempt: attempt(value, copied),
+      safe:
+        value.status === "partial" &&
+        value.reason === "safe-host-close" &&
+        value.stop > start &&
+        guestWork >= value.stop - start &&
+        document.text.startsWith(entry.profile.close, value.stop)
+          ? { stop: value.stop, profile: entry.profile }
+          : undefined,
+    };
+  return admitValid(result, value, copied, entry, start, document, meter, guestWork);
+}
+function admitValid(
+  result: GuestCompositionResult,
+  value: GuestCompositionResult,
+  copied: readonly CompositionDiagnostic[],
+  entry: Entry,
+  start: number,
+  document: CompositionSnapshot,
+  meter: CompositionMeter,
+  guestWork: number,
+): Accepted | Failure {
   if (
     value.stop <= start ||
     !document.text.startsWith(entry.profile.close, value.stop) ||
@@ -309,15 +326,17 @@ function admit(
     !Number.isSafeInteger(guestWork) ||
     guestWork < 1
   )
-    return outcome("invalid", "INVALID_GUEST_EXIT", document);
+    return { outcome: outcome("invalid", "INVALID_GUEST_EXIT", document) };
   const subtree = result.subtree;
-  if (subtree === undefined) return outcome("invalid", "MISSING_GUEST_SUBTREE", document);
+  if (subtree === undefined)
+    return { outcome: outcome("invalid", "MISSING_GUEST_SUBTREE", document) };
   if (!meter.charge(entry.profile.close.length))
-    return outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document);
+    return { outcome: outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document) };
   return {
     start,
     stop: value.stop,
     close: entry.profile.close,
+    profile: entry.profile,
     guest: entry.guest.languageId,
     subtree,
   };
@@ -330,19 +349,19 @@ function processSlot(
   guests: ReadonlyMap<string, CompositionGuest>,
   slot: CompositionSlot,
   cursor: number,
-): Accepted | CompositionOutcome {
+): Accepted | Failure {
   const entry = select(slot, request.hostLanguageId, profiles, guests);
-  if (!entry) return outcome("unsupported", "UNDECLARED_GUEST_OR_POSITION", document);
+  if (!entry) return { outcome: outcome("unsupported", "UNDECLARED_GUEST_OR_POSITION", document) };
   if (!document.text.startsWith(entry.profile.open, slot.start))
-    return outcome("invalid", "MISSING_OPEN", document);
+    return { outcome: outcome("invalid", "MISSING_OPEN", document) };
   const start = slot.start + entry.profile.open.length;
   if (
     slot.maxStop !== undefined &&
     (!offset(slot.maxStop, document.text.length) || slot.maxStop < start)
   )
-    return outcome("invalid", "INVALID_MAX_STOP", document);
+    return { outcome: outcome("invalid", "INVALID_MAX_STOP", document) };
   if (!meter.charge(start - cursor) || !meter.enter())
-    return outcome("budget", "WORK_OR_DEPTH_LIMIT", document);
+    return { outcome: outcome("budget", "WORK_OR_DEPTH_LIMIT", document) };
   const workBefore = meter.work;
   let result: GuestCompositionResult;
   try {
@@ -364,10 +383,10 @@ function processSlot(
     meter.leave();
   }
   const state = checkpoint(request, document);
-  if (state) return outcome(state, state, document);
-  if (meter.exhausted) return outcome("budget", "GUEST_BUDGET", document);
+  if (state) return { outcome: outcome(state, state, document) };
+  if (meter.exhausted) return { outcome: outcome("budget", "GUEST_BUDGET", document) };
   const work = meter.work - workBefore;
   const admitted = admit(result, entry, start, document, meter, slot.maxStop, work);
   const afterAdmission = checkpoint(request, document);
-  return afterAdmission ? outcome(afterAdmission, afterAdmission, document) : admitted;
+  return afterAdmission ? { outcome: outcome(afterAdmission, afterAdmission, document) } : admitted;
 }
