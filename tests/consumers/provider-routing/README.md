@@ -5,8 +5,9 @@ Implementation and evidence source: `scripts/provider-routing-packed-consumers.t
 (isolated command runner, artifact contents, lockfile/recursive physical install/npm ls
 graph checks, consumer commands and Changesets plan); `domain.mjs` owns the independent
 rule; `../provider-routing-optin/esm.mjs` owns pinned results, parity and registration.
-The script versions a temporary Changesets release workspace and packs
-`@kalada/provider-routing@0.1.0` from that plan, then performs **two**
+The script versions a temporary Changesets release workspace, verifies that the planned
+router version advances beyond the source manifest, and packs that planned version
+(for example, `@kalada/provider-routing@0.1.0` when the source is `0.0.0`). It performs **two**
 fresh `/tmp/kalada-packed-router-*` npm installs with `--offline --ignore-scripts --no-audit
 --no-fund --cache <fresh directory>` and a deliberately unreachable registry. It inspects each
 `package-lock.json` (`file:../*.tgz`, integrity, no links), recursive physical `node_modules`
@@ -16,7 +17,7 @@ edges, allowing npm's abbreviated deduplicated transitive nodes). It rejects ext
 No fixture imports repository paths. TypeScript is invoked from the build workspace only as
 a compiler; its NodeNext resolution is from each independent consumer directory.
 
-Domain-only graph: `@kalada/provider-routing@0.1.0` with **no** dependencies (no core,
+Domain-only graph: planned `@kalada/provider-routing` with **no** dependencies (no core,
 syntax, host, language-service, or editor). `esm.mjs`, `cjs.cjs`, strict NodeNext `types.mts`
 and `types.cts` exercise public exports. The consumer's own `domain.mjs` resolves a name
 against explicit `names-v1` allowed names `alpha`/`beta` and `names-v2` names `beta`/`gamma`:
@@ -26,16 +27,20 @@ Valid, unsupported third generation,
 malformed result, throwing provider, source bound, duplicate/unknown registration, invalid
 document and caller-owned snapshot identity are checked.
 
-Opt-in graph after `copyChangesetReleaseWorkspace` + local `changeset version`:
+Example opt-in graph after `copyChangesetReleaseWorkspace` + local `changeset version`
+(versions depend on source manifests and pending Changesets):
 `@kalada/provider-routing@0.1.0` (no deps), `@kalada/core@0.6.0` (no deps),
 `@kalada/syntax@0.1.0` (core `^0.6.0`), `@kalada/host@0.1.0` (core `^0.6.0`,
 syntax `^0.1.0`), `@kalada/language-service@0.1.0` (core `^0.6.0`, host `^0.1.0`,
 syntax `^0.1.0`). Only these five locally packed archives may appear in the lockfile;
-the script also rejects incompatible release-plan dependency lines. The *source* manifests
-are currently core `0.5.0`, router/host/syntax/language-service `0.0.0`; packing them
-without the local Changesets plan would not prove the intended release graph.
-The script asserts the planned router version and matches its packed manifest; both
-isolated installs use that same versioned archive, not an unversioned source package.
+the script also rejects incompatible release-plan dependency lines. For this example,
+the *source* manifests are core `0.5.0`, router/host/syntax/language-service `0.0.0`;
+packing source manifests without the local Changesets plan would not prove the intended
+release graph.
+The script checks the planned router name, valid numeric release version and advance
+over the source version, then matches its packed manifest; both isolated installs use
+that same versioned archive, not an unversioned source package. Multiple pending minor
+Changesets do not imply an additional minor bump before release.
 
 Opt-in `esm.mjs` registers the **real** public `createExpressionsDiagnosticProvider`
 beside the domain provider in one public router. It checks missing/mismatched generation,

@@ -9,6 +9,27 @@ const fixtures = resolve(root, "tests/consumers");
 const names = ["provider-routing", "core", "syntax", "host", "language-service"];
 const bare = ["provider-routing"];
 
+function numericVersion(version: string): bigint[] {
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version))
+    throw Error(`Invalid numeric release version: ${version}`);
+  return version.split(".").map(BigInt);
+}
+
+function assertPlannedRouter(
+  source: { name: string; version: string },
+  planned: { name: string; version: string },
+): void {
+  if (source.name !== "@kalada/provider-routing" || planned.name !== source.name)
+    throw Error(`Unexpected router package: ${source.name} -> ${planned.name}`);
+  const from = numericVersion(source.version);
+  const to = numericVersion(planned.version);
+  for (let index = 0; index < from.length; index++) {
+    if (to[index] > from[index]) return;
+    if (to[index] < from[index]) break;
+  }
+  throw Error(`Router release plan did not advance: ${source.version} -> ${planned.version}`);
+}
+
 function run(args: string[], cwd: string): string {
   const [command, ...rest] = args;
   if (!command) throw Error("Missing command");
@@ -123,6 +144,7 @@ async function assertInstall(
   consumer: string,
   archives: string[],
   expected: string[],
+  routerVersion: string,
 ): Promise<void> {
   const lock = JSON.parse(await readFile(join(consumer, "package-lock.json"), "utf8"));
   const graph = JSON.parse(run(["npm", "ls", "--all", "--json"], consumer));
@@ -139,10 +161,15 @@ async function assertInstall(
     const entry = lock.packages[key];
     if (!entry.integrity || entry.link)
       throw Error(`${key} did not resolve to a packed local artifact: ${JSON.stringify(entry)}`);
-    archivePath(consumer, entry.resolved, archives);
+    const resolved = archivePath(consumer, entry.resolved, archives);
     const installedManifest = await manifest(join(consumer, key, "package.json"));
     if (installedManifest.version !== entry.version || installedManifest.name !== `@kalada/${name}`)
       throw Error(`${key} manifest mismatch`);
+    if (
+      name === "provider-routing" &&
+      (resolved !== archives[0] || entry.version !== routerVersion)
+    )
+      throw Error("Installed router does not match planned archive and version");
     manifests.set(installedManifest.name, installedManifest);
   }
   checkGraph(
@@ -224,6 +251,7 @@ async function consume(
   archives: string[],
   selected: string[],
   optin: boolean,
+  routerVersion: string,
 ): Promise<void> {
   const consumer = join(directory, optin ? "optin" : "domain-only");
   await cp(join(fixtures, optin ? "provider-routing-optin" : "provider-routing"), consumer, {
@@ -248,7 +276,7 @@ async function consume(
     ],
     consumer,
   );
-  await assertInstall(consumer, archives, selected);
+  await assertInstall(consumer, archives, selected, routerVersion);
   run(["node", "esm.mjs"], consumer);
   run(["node", "cjs.cjs"], consumer);
   runTypes(consumer);
@@ -263,10 +291,13 @@ async function release(directory: string): Promise<string> {
   return location;
 }
 
-async function packPlannedRouter(directory: string, location: string): Promise<string> {
+async function packPlannedRouter(
+  directory: string,
+  location: string,
+): Promise<{ archive: string; version: string }> {
+  const source = await manifest(join(root, "packages/provider-routing/package.json"));
   const planned = await manifest(join(location, "packages/provider-routing/package.json"));
-  if (planned.version !== "0.1.0")
-    throw Error(`Unexpected planned router version: ${planned.version}`);
+  assertPlannedRouter(source, planned);
   const router = await pack(directory, join(location, "packages/provider-routing"));
   const packed = JSON.parse(run(["tar", "-xOf", router, "package/package.json"], root));
   if (packed.name !== planned.name || packed.version !== planned.version)
@@ -274,15 +305,18 @@ async function packPlannedRouter(directory: string, location: string): Promise<s
   if (packed.dependencies || packed.peerDependencies || packed.optionalDependencies)
     throw Error("Router is not neutral");
   console.log(`Domain-only router: ${packed.version}, no dependencies`);
-  return router;
+  return { archive: router, version: planned.version };
 }
 
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-packed-router-"));
   try {
     const location = await release(directory);
-    const router = await packPlannedRouter(directory, location);
-    await consume(directory, [router], bare, false);
+    const { archive: router, version: routerVersion } = await packPlannedRouter(
+      directory,
+      location,
+    );
+    await consume(directory, [router], bare, false, routerVersion);
     const archives = await Promise.all(
       names.map((name) =>
         name === "provider-routing"
@@ -305,7 +339,7 @@ async function main(): Promise<void> {
           throw Error(`${packed.name} requires ${name}@${range}, not local ${version}`);
       }
     }
-    await consume(directory, archives, names, true);
+    await consume(directory, archives, names, true, routerVersion);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
