@@ -51,17 +51,21 @@ default; neither may bypass the allowlist, and no selection means unsupported (n
 For reverse embedding, register a *separate* reverse host profile. The host keeps delimiters;
 the selected guest lexes its interior and returns its own opaque subtree, UTF-16 range,
 consumed stop, reason and diagnostics. Success requires `status: "valid"`,
-`reason: "host-close"`, a complete claimed interior, no diagnostics and a subtree;
+  `reason: "host-close"`, a progressing claimed interior, an actual host close at stop, no diagnostics and a subtree;
 `reason: "eof"` cannot authorize a tree. The router validates progress, local bounds, closing marker,
 ownership (including diagnostic codes/ranges), selection, currentness and cancellation before returning a navigable host/guest
 tree. It does not parse the host or know how to skip guest strings/comments: guests must
 implement their language's supported lexical boundary themselves and report the **first**
 applicable close in their grammar. A host may supply an independently known slot `maxStop`
-to reject a later return; this optional safe UTF-16 offset must follow the opening marker
-and leave room for the close. The router does not scan guest text for earlier `}` (which
+  to reject a later return; this optional safe UTF-16 offset may equal the interior start
+  for an early failure. The router does not scan guest text for earlier `}` (which
 might be quoted), nor can it detect a dishonest trusted provider's earlier neutral close
-without such a bound. Unsupported, partial,
-invalid, stale, cancelled and budget outcomes have no tree and confer no emission/edit authority.
+  without such a bound. Bounded `unsupported`, `partial`, and `invalid` returns may stop at
+  the opening offset or EOF, even without a closing marker. They retain the guest reason
+  and copied owner-tagged diagnostics within `[start, stop]` (including zero-width at stop),
+  but do not consume a host close or authorize a sibling. Invalid bounds, owner, status or
+  diagnostics fail closed without guest diagnostics. Unsupported, partial, invalid, stale,
+  cancelled and budget outcomes have no tree and confer no emission/edit authority.
 
 ```ts
 import { createCompositionRouter } from "@kalada/provider-routing";
@@ -84,8 +88,8 @@ the caller's live document **and environment** both before and after callbacks, 
 must recheck before publishing. Optional `context` carries host-owned opaque expected-type
 and location facts, not type checking or permission to write. Nested compositions must pass
 the same meter. Host charges its own text and opening/closing markers once; guests charge
-actual interior work (at least one unit for nonempty successful interior), including nested
-calls, via that meter. Work/depth/diagnostic bounds are cooperative and qualitative, not a CPU or
+  actual interior work (at least one unit for nonempty successful interior), including nested
+  calls, via that meter. Work/depth/diagnostic bounds are cooperative and qualitative, not a CPU or
 memory sandbox: never register untrusted executable providers. Guest subtrees and opaque
 context values are language/host-owned references, not deep-frozen or admitted artifacts.
 

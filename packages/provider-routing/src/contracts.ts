@@ -29,7 +29,7 @@ export interface CompositionProfile {
 export interface CompositionSlot {
   readonly position: string;
   readonly start: number; // start of host-owned opening marker
-  /** Optional independent host-known upper bound for guest stop; not inferred by scanning guest text. */
+  /** Optional independent host-known upper bound for guest stop, including early failures; not inferred by scanning guest text. */
   readonly maxStop?: number;
   readonly explicitGuest?: string;
   /** Host-owned opaque facts; neither router nor guest may derive write authority from them. */
@@ -62,9 +62,9 @@ export interface GuestCompositionResult {
   readonly owner: string;
   readonly status: "valid" | "invalid" | "partial" | "unsupported";
   readonly range: CompositionRange;
-  /** First applicable host close in guest grammar; first code unit of marker, equal to range.end. */
+  /** Valid: first applicable host close. Nonvalid: bounded failure stop (possibly start or EOF). Always equals range.end. */
   readonly stop: number;
-  /** Successful complete, diagnostic-free interior requires "host-close" (not "eof"). */
+  /** Success requires "host-close"; nonvalid results retain a nonempty guest reason without granting continuation. */
   readonly reason: string;
   readonly diagnostics: readonly CompositionDiagnostic[];
   readonly subtree?: unknown;
