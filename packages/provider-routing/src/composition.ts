@@ -252,24 +252,27 @@ function walk(
 }
 
 type Accepted = { start: number; stop: number; close: string; guest: string; subtree: unknown };
-function validExit(
+function boundedExit(
   result: GuestCompositionResult,
   entry: Entry,
   start: number,
-  text: string,
+  length: number,
   maxStop: number | undefined,
 ): boolean {
   const stop = result?.stop;
   return (
     result?.owner === entry.guest.languageId &&
-    offset(stop, text.length) &&
-    stop > start &&
+    offset(stop, length) &&
+    stop >= start &&
     (maxStop === undefined || stop <= maxStop) &&
     result.range?.start === start &&
     result.range?.end === stop &&
     typeof result.reason === "string" &&
     !!result.reason &&
-    text.startsWith(entry.profile.close, stop)
+    (result.status === "valid" ||
+      result.status === "invalid" ||
+      result.status === "partial" ||
+      result.status === "unsupported")
   );
 }
 function admit(
@@ -290,30 +293,33 @@ function admit(
     reason: result.reason,
     status: result.status,
     diagnostics: result.diagnostics,
-    subtree: result.subtree,
   };
-  if (!validExit(value, entry, start, document.text, maxStop))
+  if (!boundedExit(value, entry, start, document.text.length, maxStop))
     return outcome("invalid", "INVALID_GUEST_EXIT", document);
   const copied = diagnosticCopy(value.diagnostics, start, value.stop, entry.guest.languageId);
   if (!copied) return outcome("invalid", "INVALID_GUEST_DIAGNOSTIC", document);
-  if (!meter.report(copied.length) || !meter.charge(entry.profile.close.length))
+  if (!meter.report(copied.length) || meter.exhausted)
     return outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document);
-  if (value.status !== "valid" || copied.length)
-    return outcome(
-      value.status === "partial" || value.status === "unsupported" ? value.status : "invalid",
-      value.reason,
-      document,
-      copied,
-    );
-  if (value.reason !== "host-close" || !Number.isSafeInteger(guestWork) || guestWork < 1)
+  if (value.status !== "valid") return outcome(value.status, value.reason, document, copied);
+  if (
+    value.stop <= start ||
+    !document.text.startsWith(entry.profile.close, value.stop) ||
+    copied.length ||
+    value.reason !== "host-close" ||
+    !Number.isSafeInteger(guestWork) ||
+    guestWork < 1
+  )
     return outcome("invalid", "INVALID_GUEST_EXIT", document);
-  if (value.subtree === undefined) return outcome("invalid", "MISSING_GUEST_SUBTREE", document);
+  const subtree = result.subtree;
+  if (subtree === undefined) return outcome("invalid", "MISSING_GUEST_SUBTREE", document);
+  if (!meter.charge(entry.profile.close.length))
+    return outcome("budget", "WORK_OR_DIAGNOSTIC_LIMIT", document);
   return {
     start,
     stop: value.stop,
     close: entry.profile.close,
     guest: entry.guest.languageId,
-    subtree: value.subtree,
+    subtree,
   };
 }
 function processSlot(
@@ -332,8 +338,7 @@ function processSlot(
   const start = slot.start + entry.profile.open.length;
   if (
     slot.maxStop !== undefined &&
-    (!offset(slot.maxStop, document.text.length - entry.profile.close.length) ||
-      slot.maxStop <= start)
+    (!offset(slot.maxStop, document.text.length) || slot.maxStop < start)
   )
     return outcome("invalid", "INVALID_MAX_STOP", document);
   if (!meter.charge(start - cursor) || !meter.enter())
@@ -361,5 +366,8 @@ function processSlot(
   const state = checkpoint(request, document);
   if (state) return outcome(state, state, document);
   if (meter.exhausted) return outcome("budget", "GUEST_BUDGET", document);
-  return admit(result, entry, start, document, meter, slot.maxStop, meter.work - workBefore);
+  const work = meter.work - workBefore;
+  const admitted = admit(result, entry, start, document, meter, slot.maxStop, work);
+  const afterAdmission = checkpoint(request, document);
+  return afterAdmission ? outcome(afterAdmission, afterAdmission, document) : admitted;
 }

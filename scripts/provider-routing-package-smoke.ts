@@ -55,13 +55,17 @@ async function writeConsumer(directory: string): Promise<void> {
     JSON.stringify({ private: true, type: "module" }),
   );
   const sample = `const provider = { languageId: "domain", diagnose: () => ({ status: "supported", diagnostics: [] }) };\nconst snapshot = { uri: "file:///a", text: "🚀", version: 1, environmentGeneration: "one" };\nconst result = createDiagnosticRouter([provider]).diagnose("domain", snapshot);\nif (result.status !== "supported" || result.document.text !== "🚀" || DIAGNOSTIC_CONTRACT_VERSION !== 1) throw new Error("Routing failed");\nconst composition = createCompositionRouter([{ version: 1, hostLanguageId: "host", position: "expression", allowedGuests: ["tiny"], open: "{", close: "}" }], [{ languageId: "tiny", parse: ({ start, meter }) => { meter.charge(1); return { owner: "tiny", status: "valid", stop: start + 1, range: { start, end: start + 1 }, reason: "host-close", diagnostics: [], subtree: {} }; } }]);\nconst composed = composition.compose({ snapshot: { ...snapshot, text: "{x}" }, hostLanguageId: "host", slots: [{ position: "expression", start: 0, maxStop: 2, explicitGuest: "tiny" }], isCurrent: () => true, limits: { work: 3, depth: 3, diagnostics: 2 } });\nif (composed.status !== "valid" || COMPOSITION_CONTRACT_VERSION !== 1) throw new Error("Composition failed");\n`;
+  const earlySample = `const early = createCompositionRouter([{ version: 1, hostLanguageId: "host", position: "expression", allowedGuests: ["tiny"], open: "{", close: "}" }], [{ languageId: "tiny", parse: ({ start, meter }) => { meter.charge(1); return { owner: "tiny", status: "unsupported", stop: start, range: { start, end: start }, reason: "unsupported-quote", diagnostics: [{ owner: "tiny", code: "UNSUPPORTED_QUOTE", range: { start, end: start } }] }; } }]);
+const earlyResult = early.compose({ snapshot: { ...snapshot, text: "{'bad}LATER" }, hostLanguageId: "host", slots: [{ position: "expression", start: 0, maxStop: 1, explicitGuest: "tiny" }], isCurrent: () => true, limits: { work: 2, depth: 3, diagnostics: 1 } });
+if (earlyResult.status !== "unsupported" || earlyResult.reason !== "unsupported-quote" || earlyResult.tree !== undefined || earlyResult.diagnostics[0]?.range.start !== 1) throw new Error("Early diagnostics failed");
+`;
   await writeFile(
     join(directory, "esm.mjs"),
-    `import { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } from "@kalada/provider-routing";\n${sample}`,
+    `import { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } from "@kalada/provider-routing";\n${sample}${earlySample}`,
   );
   await writeFile(
     join(directory, "cjs.cjs"),
-    `const { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } = require("@kalada/provider-routing");\n${sample}`,
+    `const { createDiagnosticRouter, DIAGNOSTIC_CONTRACT_VERSION, createCompositionRouter, COMPOSITION_CONTRACT_VERSION } = require("@kalada/provider-routing");\n${sample}${earlySample}`,
   );
   await writeFile(
     join(directory, "types.mts"),

@@ -188,11 +188,14 @@ describe("experimental composition contract", () => {
     expect(
       late.compose({ ...base, slots: [{ position: "expression", start: 0, maxStop: 2 }] }).status,
     ).toBe("invalid");
-    for (const maxStop of [-1, 1, 8, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    for (const maxStop of [-1, 1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(
         late.compose({ ...base, slots: [{ position: "expression", start: 0, maxStop }] }).status,
       ).toBe("invalid");
     }
+    expect(
+      late.compose({ ...base, slots: [{ position: "expression", start: 0, maxStop: 8 }] }).status,
+    ).toBe("valid");
     expect(
       router.compose(request({ slots: [{ position: "expression", start: 8, maxStop: 12 }] })),
     ).toMatchObject({ status: "valid" });
