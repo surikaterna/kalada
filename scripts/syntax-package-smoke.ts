@@ -137,7 +137,6 @@ function runTypes(directory: string): void {
         resolve(root, "node_modules/.bin/tsc"),
         "--strict",
         "--noEmit",
-        "--skipLibCheck",
         "--target",
         "ES2022",
         "--module",

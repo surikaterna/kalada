@@ -72,3 +72,27 @@ intentionally not source forms in this release.
 
 Ranges are half-open UTF-16 offsets. Supplying `references` closes the source environment; omitted
 names then fail lowering. Structured references require a matching `coreOptions.reference` codec.
+# Direct WRITE-context locations
+
+`checkKaladaV1DirectLocation(source, { bindings })` reparses the **entire** expression and checks a bare bound identifier or a non-optional static dotted chain. For example:
+
+```ts
+import { checkKaladaV1DirectLocation } from "@kalada/syntax";
+
+const result = checkKaladaV1DirectLocation("(line.quantity)", {
+  bindings: {
+    line: {
+      target: { namespace: "data", scope: "line", segments: [] },
+      type: { kind: "primitive-type", name: "json" },
+      writable: true,
+      properties: {
+        quantity: { type: { kind: "primitive-type", name: "number" }, writable: true },
+      },
+    },
+  },
+});
+// On success: { target: { namespace: "data", scope: "line", segments: ["quantity"] },
+//               type: { kind: "primitive-type", name: "number" }, range: { start: 0, end: 15 } }
+```
+
+Bindings and each traversed property's type and writability must be supplied by a trusted host. A read-context reference, `queryKaladaV1Semantics` field type (`dynamic`), spelling, a caller-provided CST, or a lowered value program is **not** WRITE authority. The checker rejects missing or unsafe metadata, optional/dynamic/computed/index/conditional expressions and recovered parse input. The frozen result is static evidence, **not** a serialized write capability or runtime authorization. Formbar #195/#185 must reauthorize namespace, scope, path, type and writability against current host state **at use time**; Kalada does not perform mutation or evaluator writes.

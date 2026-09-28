@@ -77,7 +77,7 @@ function readExactFunction(
 
 function readPrimitive(record: Record<string, unknown>): KaladaType | null {
   const names = ["null", "boolean", "number", "string", "json", "Instant", "Duration"];
-  if (!names.includes(String(record.name))) return null;
+  if (typeof record.name !== "string" || !names.includes(record.name)) return null;
   return primitive(record.name as Extract<KaladaType, { kind: "primitive-type" }>["name"]);
 }
 
@@ -98,8 +98,8 @@ function readFunction(
 ): KaladaType | null {
   if (!Array.isArray(record.parameters)) return null;
   const parameters: KaladaType[] = [];
-  for (const parameter of record.parameters) {
-    const found = readType(parameter, depth + 1, maximum);
+  for (let index = 0; index < record.parameters.length; index++) {
+    const found = readType(record.parameters[index], depth + 1, maximum);
     if (found === null) return null;
     parameters.push(found);
   }

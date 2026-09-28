@@ -22,6 +22,9 @@ export const KALADA_SYNTAX_DIAGNOSTIC_MESSAGES = Object.freeze({
   KALADA_SYNTAX_COALESCE_LOGICAL_MIX:
     "Kalada null coalescing cannot be mixed with && or || without parentheses.",
   KALADA_SYNTAX_UNKNOWN_REFERENCE: "Kalada reference is not present in the lowering environment.",
+  KALADA_SYNTAX_WRITE_INELIGIBLE: "Expression is not a static direct write location.",
+  KALADA_SYNTAX_WRITE_BINDING_INVALID: "Write location binding is missing or invalid.",
+  KALADA_SYNTAX_WRITE_PROPERTY_INVALID: "Write location property is missing or invalid.",
 } satisfies Readonly<Record<KaladaSyntaxDiagnosticCode, string>>);
 
 export class DiagnosticSink {
