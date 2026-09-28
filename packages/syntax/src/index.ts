@@ -15,6 +15,15 @@ export type {
   KaladaUnaryCstNode,
 } from "./cst-types.js";
 export { KALADA_SYNTAX_DIAGNOSTIC_MESSAGES } from "./diagnostics.js";
+export type {
+  KaladaDataStateRef,
+  KaladaDirectLocation,
+  KaladaDirectLocationBinding,
+  KaladaDirectLocationOptions,
+  KaladaDirectLocationOutcome,
+  KaladaDirectLocationProperty,
+} from "./direct-location.js";
+export { checkKaladaV1DirectLocation } from "./direct-location.js";
 export { formatKaladaV1Expression } from "./format.js";
 export type { GuestBoundaryResult as ExperimentalKaladaV1GuestPrefixResult } from "./guest-boundary.js";
 export { parseGuestExpressionPrefix as experimentalParseKaladaV1GuestExpressionPrefix } from "./guest-boundary.js";

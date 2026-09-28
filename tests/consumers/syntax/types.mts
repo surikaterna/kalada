@@ -1,11 +1,13 @@
 import type {
   ExperimentalKaladaV1GuestPrefixResult,
+  KaladaDirectLocationOutcome,
   KaladaParseResult,
   KaladaSemanticQueryResult,
   KaladaSourceMapEntry,
   KaladaSyntaxStaticType,
 } from "@kalada/syntax";
 import {
+  checkKaladaV1DirectLocation,
   experimentalParseKaladaV1GuestExpressionPrefix,
   lowerKaladaV1Expression,
   parseKaladaV1Expression,
@@ -13,6 +15,29 @@ import {
 } from "@kalada/syntax";
 
 const parsed: KaladaParseResult = parseKaladaV1Expression("item");
+const direct: KaladaDirectLocationOutcome = checkKaladaV1DirectLocation("line.quantity", {
+  bindings: {
+    line: {
+      target: { namespace: "data", scope: "line", segments: [] },
+      type: { kind: "primitive-type", name: "json" },
+      writable: true,
+      properties: {
+        quantity: { type: { kind: "primitive-type", name: "number" }, writable: true },
+      },
+    },
+  },
+});
+if (direct.ok) {
+  const scope: string | undefined = direct.location.target.scope;
+  void scope;
+}
+const rejected: KaladaDirectLocationOutcome = checkKaladaV1DirectLocation("line?.quantity", {
+  bindings: {},
+});
+if (!rejected.ok) {
+  const code: string | undefined = rejected.diagnostics[0]?.code;
+  void code;
+}
 const guest: ExperimentalKaladaV1GuestPrefixResult = experimentalParseKaladaV1GuestExpressionPrefix(
   "{item}",
   1,

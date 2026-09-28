@@ -1,5 +1,6 @@
 import { compileKaladaV1Program, Option } from "@kalada/core";
 import {
+  checkKaladaV1DirectLocation,
   experimentalParseKaladaV1GuestExpressionPrefix,
   formatKaladaV1Expression,
   lowerKaladaV1Expression,
@@ -8,6 +9,7 @@ import {
 } from "@kalada/syntax";
 
 const expected = [
+  "checkKaladaV1DirectLocation",
   "DEFAULT_KALADA_SYNTAX_LIMITS",
   "KALADA_SYNTAX_DIAGNOSTIC_MESSAGES",
   "MAXIMUM_KALADA_SYNTAX_LIMITS",
@@ -19,6 +21,55 @@ const expected = [
 ].sort();
 const actual = Object.keys(await import("@kalada/syntax")).sort();
 if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("ESM surface drifted");
+
+const writeOptions = {
+  bindings: {
+    line: {
+      target: { namespace: "data", scope: "line", segments: [] },
+      type: { kind: "primitive-type", name: "json" },
+      writable: true,
+      properties: {
+        quantity: { type: { kind: "primitive-type", name: "number" }, writable: true },
+      },
+    },
+  },
+};
+const direct = checkKaladaV1DirectLocation("(line.quantity)", writeOptions);
+if (
+  !direct.ok ||
+  direct.location.target.scope !== "line" ||
+  direct.location.target.segments.join(".") !== "quantity" ||
+  direct.location.type.name !== "number" ||
+  direct.location.range.end !== 15 ||
+  checkKaladaV1DirectLocation("line?.quantity", writeOptions).ok
+)
+  throw new Error("ESM WRITE check failed");
+let coercions = 0;
+const hostile = {
+  ...writeOptions.bindings.line,
+  type: {
+    kind: "primitive-type",
+    name: {
+      toString() {
+        coercions++;
+        return "json";
+      },
+    },
+  },
+};
+if (checkKaladaV1DirectLocation("line", { bindings: { line: hostile } }).ok || coercions !== 0)
+  throw new Error("ESM WRITE accepted executable type metadata");
+if (
+  checkKaladaV1DirectLocation("line", {
+    bindings: {
+      line: {
+        ...writeOptions.bindings.line,
+        target: { namespace: "data", segments: Object.assign(["a"], { extra: 1 }) },
+      },
+    },
+  }).ok
+)
+  throw new Error("ESM WRITE accepted extra segment metadata");
 
 const parsed = parseKaladaV1Expression("value?.field ?? fallback");
 const lowered = lowerKaladaV1Expression(parsed);
