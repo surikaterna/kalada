@@ -3,7 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   bundle: true,
   clean: true,
-  dts: true,
+  dts: { entry: "src/kalada-v1/index.ts", resolve: true },
   entry: ["src/index.ts"],
   format: ["cjs"],
   outExtension({ format }) {

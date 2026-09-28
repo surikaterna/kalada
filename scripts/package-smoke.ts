@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -100,6 +100,54 @@ function assertPackedRepository(archive: string): void {
   }
 }
 
+function assertCoreArchive(archive: string): void {
+  const files = run(["tar", "-tzf", archive], root).trim().split("\n");
+  if (!files.includes("package/README.md")) throw new Error("Core README missing from archive");
+  for (const path of ["index.js", "index.cjs", "index.d.ts", "index.d.cts"]) {
+    if (!files.includes(`package/dist/${path}`)) throw new Error(`Missing packed ${path}`);
+  }
+  if (files.some((path) => path.startsWith("package/src/"))) {
+    throw new Error("Core pack contains workspace source");
+  }
+  for (const path of ["index.d.ts", "index.d.cts"]) {
+    const declaration = run(["tar", "-xOf", archive, `package/dist/${path}`], root);
+    if (/\bfrom\s*["']\./u.test(declaration)) {
+      throw new Error(`Packed ${path} references an unbundled local declaration`);
+    }
+  }
+}
+
+async function assertCoreInstall(directory: string, archive: string): Promise<void> {
+  const installed = join(directory, "node_modules/@kalada/core");
+  if ((await lstat(installed)).isSymbolicLink()) throw new Error("Core install is a symlink");
+  const lock = JSON.parse(await readFile(join(directory, "package-lock.json"), "utf8"));
+  const entry = lock.packages["node_modules/@kalada/core"];
+  if (!entry?.integrity || entry.link || resolve(directory, entry.resolved.slice(5)) !== archive) {
+    throw new Error("Core install did not resolve to the packed tarball with integrity");
+  }
+  const packed = JSON.parse(run(["tar", "-xOf", archive, "package/package.json"], root));
+  const manifest = JSON.parse(await readFile(join(installed, "package.json"), "utf8"));
+  if (manifest.name !== packed.name || manifest.version !== packed.version) {
+    throw new Error("Installed core manifest differs from archive");
+  }
+  if (
+    packed.name !== "@kalada/core" ||
+    packed.version !== "0.5.0" ||
+    packed.dependencies ||
+    packed.peerDependencies ||
+    packed.optionalDependencies ||
+    packed.exports?.["."]?.import?.types !== "./dist/index.d.ts" ||
+    packed.exports?.["."]?.require?.types !== "./dist/index.d.cts"
+  ) {
+    throw new Error("Core archive has an unexpected version, dependency graph or types entry");
+  }
+  const readme = await readFile(join(installed, "README.md"), "utf8");
+  if (!readme.includes('compileKaladaV1Program } from "@kalada/core"')) {
+    throw new Error("Installed README no longer documents the public compiler entry");
+  }
+  run(["npm", "ls", "--all"], directory);
+}
+
 async function packCoreCandidate(directory: string): Promise<string> {
   const candidate = join(directory, "core-0.5.0");
   await cp(join(root, "packages/core"), candidate, { recursive: true });
@@ -112,71 +160,70 @@ async function packCoreCandidate(directory: string): Promise<string> {
   return join(directory, filename);
 }
 
+function checkConsumer(directory: string): void {
+  run(["node", "index.mjs"], directory);
+  run(["node", "index.cjs"], directory);
+  for (const file of ["types.mts", "types.cts"]) {
+    run(
+      [
+        join(root, "node_modules", ".bin", "tsc"),
+        "--strict",
+        "--noEmit",
+        "--target",
+        "ES2022",
+        "--module",
+        "NodeNext",
+        "--moduleResolution",
+        "NodeNext",
+        "--resolveJsonModule",
+        file,
+      ],
+      directory,
+    );
+  }
+  runFailure(["node", "removed.cjs"], directory, /ERR_PACKAGE_PATH_NOT_EXPORTED/u);
+  runFailure(["node", "dist.cjs"], directory, /ERR_PACKAGE_PATH_NOT_EXPORTED/u);
+  runFailure(
+    [
+      join(root, "node_modules", ".bin", "tsc"),
+      "--noEmit",
+      "--moduleResolution",
+      "NodeNext",
+      "--module",
+      "NodeNext",
+      "removed.mts",
+    ],
+    directory,
+    /TS2307/u,
+  );
+}
+
+async function checkPackages(directory: string): Promise<void> {
+  const archive = await packCoreCandidate(directory);
+  const projectionOutput = run(
+    ["npm", "pack", "--json", "--workspace", "@kalada/projection", "--pack-destination", directory],
+    root,
+  );
+  const [{ filename: projectionFilename }] = JSON.parse(projectionOutput) as [{ filename: string }];
+  const projectionArchive = join(directory, projectionFilename);
+  await Promise.all([readFile(archive), readFile(projectionArchive)]);
+  assertPackedRepository(archive);
+  assertCoreArchive(archive);
+  assertPackedRepository(projectionArchive);
+  await createConsumer(directory);
+  run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", archive], directory);
+  await assertCoreInstall(directory, archive);
+  run(
+    ["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", projectionArchive],
+    directory,
+  );
+  checkConsumer(directory);
+}
+
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-package-smoke-"));
   try {
-    const archive = await packCoreCandidate(directory);
-    const projectionOutput = run(
-      [
-        "npm",
-        "pack",
-        "--json",
-        "--workspace",
-        "@kalada/projection",
-        "--pack-destination",
-        directory,
-      ],
-      root,
-    );
-    const [{ filename: projectionFilename }] = JSON.parse(projectionOutput) as [
-      { filename: string },
-    ];
-    const projectionArchive = join(directory, projectionFilename);
-    await Promise.all([readFile(archive), readFile(projectionArchive)]);
-    assertPackedRepository(archive);
-    assertPackedRepository(projectionArchive);
-    await createConsumer(directory);
-    run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", archive], directory);
-    run(
-      ["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", projectionArchive],
-      directory,
-    );
-    run(["node", "index.mjs"], directory);
-    run(["node", "index.cjs"], directory);
-    for (const file of ["types.mts", "types.cts"]) {
-      run(
-        [
-          join(root, "node_modules", ".bin", "tsc"),
-          "--strict",
-          "--noEmit",
-          "--skipLibCheck",
-          "--target",
-          "ES2022",
-          "--module",
-          "NodeNext",
-          "--moduleResolution",
-          "NodeNext",
-          "--resolveJsonModule",
-          file,
-        ],
-        directory,
-      );
-    }
-    runFailure(["node", "removed.cjs"], directory, /ERR_PACKAGE_PATH_NOT_EXPORTED/u);
-    runFailure(["node", "dist.cjs"], directory, /ERR_PACKAGE_PATH_NOT_EXPORTED/u);
-    runFailure(
-      [
-        join(root, "node_modules", ".bin", "tsc"),
-        "--noEmit",
-        "--moduleResolution",
-        "NodeNext",
-        "--module",
-        "NodeNext",
-        "removed.mts",
-      ],
-      directory,
-      /TS2307/u,
-    );
+    await checkPackages(directory);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
