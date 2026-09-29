@@ -37,7 +37,12 @@ jobs:
       - run: bun run host:browser-smoke
       - run: bun run language-service:smoke
       - run: bun run language-service:browser-smoke
-      - run: bun run projection:smoke
+      - name: Smoke generated release against approved graph
+        if: github.head_ref == 'changeset-release/main' && github.event.pull_request.head.repo.full_name == github.repository
+        run: bun scripts/projection-package-smoke.ts . --release-base origin/main
+      - name: Smoke ordinary PR against base graph
+        if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
+        run: bun scripts/projection-package-smoke.ts . --baseline-base origin/main
       - run: bun run syntax:smoke
       - run: bun run syntax:browser-smoke
       - run: bun run adapter-scheman:smoke

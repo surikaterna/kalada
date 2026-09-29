@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, cp, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { assertApprovedGraph } from "./approved-projection-graph.js";
+import { validateReleaseIntegrity } from "./release-integrity.js";
 
 interface PackedFile {
   readonly path: string;
@@ -12,7 +14,9 @@ interface PackResult {
   readonly files: readonly PackedFile[];
 }
 
-const root = resolve(import.meta.dirname, "..");
+const root = process.argv[2] ? resolve(process.argv[2]) : resolve(import.meta.dirname, "..");
+const mode = process.argv[3] ?? "--baseline-base";
+const base = process.argv[4] ?? (process.argv[3] ? undefined : "HEAD");
 const fixtures = resolve(root, "tests/consumers/projection");
 const forbiddenRuntime = [
   [/\bnode:[a-z][a-z0-9_/-]*/u, "node built-in"],
@@ -49,21 +53,41 @@ function pack(workspace: string, destination: string): PackResult {
   return result;
 }
 
-async function packCoreCandidate(destination: string): Promise<PackResult> {
-  const candidate = join(destination, "core-0.5.0");
-  await cp(join(root, "packages/core"), candidate, { recursive: true });
-  const path = join(candidate, "package.json");
-  const manifest = JSON.parse(await readFile(path, "utf8"));
-  manifest.version = "0.5.0";
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
-  const output = run(["npm", "pack", "--json", candidate, "--pack-destination", destination], root);
-  const [result] = JSON.parse(output) as PackResult[];
-  if (!result) throw new Error("npm pack returned no core candidate");
-  return result;
+function approvedGraph(): Map<string, string> {
+  if (!base || (mode !== "--baseline-base" && mode !== "--release-base")) {
+    throw new Error(
+      "Usage: projection-package-smoke.ts <repository> <--baseline-base|--release-base> <trusted-base>",
+    );
+  }
+  if (mode === "--release-base") {
+    const release = validateReleaseIntegrity(root, base);
+    const approved = new Map<string, string>();
+    for (const name of ["@kalada/core", "@kalada/projection"]) {
+      approved.set(name, release.get(name) ?? baseVersion(name));
+    }
+    return approved;
+  }
+  console.log(
+    `Baseline smoke: checking packed versions against trusted ${base}; no release approval inferred`,
+  );
+  return new Map(["@kalada/core", "@kalada/projection"].map((name) => [name, baseVersion(name)]));
 }
 
-function assertProjectionManifest(archive: string): void {
+function baseVersion(name: string): string {
+  const path =
+    name === "@kalada/core" ? "packages/core/package.json" : "packages/projection/package.json";
+  const manifest = JSON.parse(run(["git", "show", `${base}:${path}`], root));
+  if (typeof manifest.version !== "string") throw new Error(`Trusted base lacks ${name} version`);
+  return manifest.version;
+}
+
+function assertProjectionManifest(
+  archive: string,
+  coreArchive: string,
+  approved: Map<string, string>,
+): void {
   const manifest = JSON.parse(run(["tar", "-xOf", archive, "package/package.json"], root));
+  const core = JSON.parse(run(["tar", "-xOf", coreArchive, "package/package.json"], root));
   const expectedExports = [".", "./projection-v1.schema.json", "./package.json"];
   if (manifest.name !== "@kalada/projection" || manifest.sideEffects !== false) {
     throw new Error("Projection package identity or sideEffects metadata drifted");
@@ -71,7 +95,15 @@ function assertProjectionManifest(archive: string): void {
   if (JSON.stringify(Object.keys(manifest.exports)) !== JSON.stringify(expectedExports)) {
     throw new Error("Projection package exports unintended entry points");
   }
-  if (JSON.stringify(manifest.dependencies) !== JSON.stringify({ "@kalada/core": "^0.5.0" })) {
+  assertApprovedGraph(
+    core.version,
+    manifest.version,
+    manifest.dependencies?.["@kalada/core"],
+    approved,
+  );
+  if (
+    JSON.stringify(manifest.dependencies) !== JSON.stringify({ "@kalada/core": `^${core.version}` })
+  ) {
     throw new Error("Projection runtime dependency boundary drifted");
   }
   for (const field of ["devDependencies", "optionalDependencies", "peerDependencies"]) {
@@ -203,10 +235,10 @@ async function runConsumer(directory: string, archives: string[]): Promise<void>
 async function main(): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "kalada-projection-smoke-"));
   try {
-    const core = await packCoreCandidate(directory);
+    const core = pack("@kalada/core", directory);
     const projection = pack("@kalada/projection", directory);
     const projectionArchive = join(directory, projection.filename);
-    assertProjectionManifest(projectionArchive);
+    assertProjectionManifest(projectionArchive, join(directory, core.filename), approvedGraph());
     assertProjectionFiles(projection);
     assertPackedRuntime(projectionArchive);
     await assertNoWorkspaceLeakage(projectionArchive, projection);
