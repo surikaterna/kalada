@@ -1,8 +1,9 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { assertApprovedGraph } from "../scripts/approved-projection-graph.js";
 import { validateReleaseIntegrity } from "../scripts/release-integrity.js";
 
 const temporaryDirectories: string[] = [];
@@ -55,7 +56,7 @@ async function createRelease(
   });
   await writeFile(
     join(repository, "packages/one/CHANGELOG.md"),
-    `# @example/one\n\n## ${version}\n\n### Minor Changes\n\n- abc1234: ${description}\n`,
+    `# @example/one\n\n## ${version}\n\n### Minor Changes\n\n- ${git(repository, "log", "-1", "--diff-filter=A", "--format=%h", "HEAD", "--", ".changeset/one.md")}: ${description}\n`,
   );
   git(repository, "add", "-A");
   git(repository, "commit", "-qm", "release");
@@ -68,6 +69,42 @@ afterEach(async () => {
 });
 
 describe("release integrity validation", () => {
+  it("rejects mutually matching stale packed versions against the independently approved graph", () => {
+    const approved = new Map([
+      ["@kalada/core", "0.6.0"],
+      ["@kalada/projection", "0.1.1"],
+    ]);
+    expect(() => assertApprovedGraph("0.6.0", "0.1.1", "^0.6.0", approved)).not.toThrow();
+    expect(() => assertApprovedGraph("0.5.0", "0.1.0", "^0.5.0", approved)).toThrow(
+      "approved graph",
+    );
+    expect(() => assertApprovedGraph("0.6.0", "0.1.1", "^0.5.0", approved)).toThrow(
+      "approved core",
+    );
+  });
+  it("fails explicitly if the requested exact PR head is unavailable", async () => {
+    const { base, repository } = await createRepository();
+    const result = spawnSync(
+      "bun",
+      [
+        "scripts/check-changesets.ts",
+        base,
+        "0000000000000000000000000000000000000000",
+        "surikaterna/kalada",
+        repository,
+      ],
+      {
+        cwd: new URL("..", import.meta.url).pathname,
+        encoding: "utf8",
+        env: { ...process.env, TMPDIR: repository },
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      "Head commit 0000000000000000000000000000000000000000 is unavailable; exact-head validation cannot proceed",
+    );
+    expect(result.stdout).not.toContain("validated");
+  });
   it("does not mistake an ordinary source state for a generated release", async () => {
     const { base, repository } = await createRepository();
     await writeFile(join(repository, "packages/one/src/index.ts"), "export const one = 2;\n");
@@ -83,6 +120,33 @@ describe("release integrity validation", () => {
     const { base, repository } = await createRepository();
     await createRelease(repository);
 
+    expect(() => validateReleaseIntegrity(repository, base)).not.toThrow();
+  });
+
+  it("rejects forged and missing direct changelog hashes even with matching prose", async () => {
+    const { base, repository } = await createRepository();
+    await createRelease(repository);
+    const path = join(repository, "packages/one/CHANGELOG.md");
+    const validHash = git(
+      repository,
+      "log",
+      "-1",
+      "--diff-filter=A",
+      "--format=%h",
+      base,
+      "--",
+      ".changeset/one.md",
+    );
+    for (const entry of ["deadbee: Add the public one API.", "Add the public one API."]) {
+      await writeFile(path, `# @example/one\n\n## 0.1.0\n\n### Minor Changes\n\n- ${entry}\n`);
+      expect(() => validateReleaseIntegrity(repository, base)).toThrow(
+        "changelog does not match consumed minor Changesets",
+      );
+    }
+    await writeFile(
+      path,
+      `# @example/one\n\n## 0.1.0\n\n### Minor Changes\n\n- ${validHash}: Add the public one API.\n`,
+    );
     expect(() => validateReleaseIntegrity(repository, base)).not.toThrow();
   });
 

@@ -84,6 +84,24 @@ afterEach(async () => {
 });
 
 describe("terminal release controls", () => {
+  it("keeps publishing behind main-only release checks, not the PR validation job", () => {
+    const workflow = readFileSync(join(root, ".github/workflows/release.yml"), "utf8");
+    expect(workflow).toMatch(/on:\s*\n\s*push:\s*\n\s*branches:\s*\n\s*- main/u);
+    expect(workflow).toContain("if: github.repository == 'surikaterna/kalada'");
+    const checks = [
+      "bun run lint",
+      "bun run typecheck",
+      "bun run test",
+      "bun run build",
+      "bun run projection:smoke",
+    ];
+    const publish = workflow.indexOf("publish-script: bun run release");
+    expect(publish).toBeGreaterThan(0);
+    for (const check of checks) {
+      expect(workflow.indexOf(check)).toBeGreaterThan(0);
+      expect(workflow.indexOf(check)).toBeLessThan(publish);
+    }
+  });
   it("retains the exact schema-v2 exception record and its history", () => {
     const current = readFileSync(join(root, exceptionPath), "utf8");
     const historical = run(root, "git", ["show", `${sourceSha}:${exceptionPath}`]);

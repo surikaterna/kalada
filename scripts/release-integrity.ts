@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 type Bump = "major" | "minor" | "patch";
-type Change = { bump: Bump; description: string; packageName: string };
+type Change = { bump: Bump; description: string; packageName: string; hash: string };
 type DiffEntry = { path: string; status: string };
 type Manifest = { name?: string; private?: boolean; version?: string; [key: string]: unknown };
 
@@ -27,7 +27,7 @@ function diffEntries(repository: string, base: string): DiffEntry[] {
   return entries;
 }
 
-function parseChangeset(text: string, path: string): Change[] {
+function parseChangeset(text: string, path: string, hash: string): Change[] {
   const match = /^---\n([\s\S]*?)\n---\n+([\s\S]+)$/u.exec(text.trim());
   if (!match) throw new Error(`${path} is not a valid Changeset`);
   const description = match[2]?.trim() ?? "";
@@ -35,7 +35,7 @@ function parseChangeset(text: string, path: string): Change[] {
   return (match[1] ?? "").split("\n").map((line) => {
     const entry = /^['"]?([^'"]+)['"]?:\s*(patch|minor|major)$/u.exec(line.trim());
     if (!entry?.[1] || !entry[2]) throw new Error(`${path} has unsupported frontmatter`);
-    return { packageName: entry[1], bump: entry[2] as Bump, description };
+    return { packageName: entry[1], bump: entry[2] as Bump, description, hash };
   });
 }
 
@@ -105,7 +105,7 @@ function parseReleaseLines(lines: string[], packageName: string): Map<string, st
     if (heading) {
       category = startCategory(entries, category, heading, packageName);
     } else if (line.startsWith("- ") && category) {
-      entries.get(category)?.push(line.replace(/^- (?:[0-9a-f]+: )?/u, ""));
+      entries.get(category)?.push(line.slice(2));
     } else if (line.trim() && category && (entries.get(category)?.length ?? 0) > 0) {
       const values = entries.get(category) ?? [];
       values[values.length - 1] = `${values.at(-1)} ${line.trim()}`;
@@ -146,18 +146,62 @@ function assertChangelog(
   packageName: string,
   version: string,
   changes: Change[],
+  dependencies: Map<string, string>,
+  dependencyChanges: Change[],
 ): void {
   const actual = releaseEntries(current, packageName, version);
+  assertDependencyNotes(actual.get("patch") ?? [], packageName, dependencies, dependencyChanges);
   for (const bump of ["major", "minor", "patch"] as const) {
     const expected = changes
       .filter((change) => change.bump === bump)
-      .map((change) => normalized(change.description));
-    const observed = (actual.get(bump) ?? []).map(normalized);
+      .map((change) => `${change.hash}: ${normalized(change.description)}`);
+    const observed = (actual.get(bump) ?? [])
+      .filter((entry) => !entry.startsWith("Updated dependencies ["))
+      .map(normalized);
     if (expected.sort().join("\n") !== observed.sort().join("\n")) {
       throw new Error(`${packageName} changelog does not match consumed ${bump} Changesets`);
     }
   }
   assertPreviousChangelog(current, previous, packageName);
+}
+
+function assertDependencyNotes(
+  patchEntries: string[],
+  packageName: string,
+  dependencies: Map<string, string>,
+  dependencyChanges: Change[],
+): void {
+  const dependencyNotes = patchEntries.filter((entry) =>
+    entry.startsWith("Updated dependencies ["),
+  );
+  const expectedNotes = [...new Set(dependencyChanges.map(({ hash }) => hash))].map(
+    (hash) => `Updated dependencies [${hash}]`,
+  );
+  const dependencyList = [...dependencies].map(([name, version]) => `${name}@${version}`);
+  // Changesets emits one dependency list under the last hash, not one list per hash.
+  const observedNotes = dependencyNotes.map((entry, index) => {
+    const match = /^Updated dependencies \[([0-9a-f]+)\](.*)$/u.exec(entry);
+    if (!match) throw new Error(`${packageName} has malformed dependency notes`);
+    const list = match[2]?.trim();
+    if (list) {
+      if (index !== dependencyNotes.length - 1) {
+        throw new Error(`${packageName} has misplaced dependency versions`);
+      }
+      const observed = list
+        .split(/(?:^|\s)-\s+/u)
+        .filter(Boolean)
+        .sort();
+      if (observed.join("\n") !== dependencyList.sort().join("\n")) {
+        throw new Error(`${packageName} changelog dependency versions do not match release graph`);
+      }
+    }
+    return `Updated dependencies [${match[1]}]`;
+  });
+  if (
+    observedNotes.sort().join("\n") !== expectedNotes.sort().join("\n") ||
+    (dependencyList.length > 0 && !dependencyNotes.at(-1)?.includes(" - "))
+  )
+    throw new Error(`${packageName} changelog dependency notes do not match Changesets`);
 }
 
 function assertPreviousChangelog(
@@ -178,17 +222,40 @@ function assertPreviousChangelog(
   }
 }
 
-function assertManifest(previous: Manifest, current: Manifest, path: string, bump: Bump): string {
+function assertManifest(
+  previous: Manifest,
+  current: Manifest,
+  path: string,
+  bump: Bump,
+  versions: Map<string, { previous: string; current: string }>,
+): { version: string; dependencies: Map<string, string> } {
   if (!previous.version || !current.version) throw new Error(`${path} must declare a version`);
   const expected = incrementVersion(previous.version, bump);
   if (current.version !== expected || current.version === "0.0.0") {
     throw new Error(`${path} version must advance from ${previous.version} to ${expected}`);
   }
-  const withoutVersion = { ...current, version: previous.version };
-  if (JSON.stringify(previous) !== JSON.stringify(withoutVersion)) {
-    throw new Error(`${path} may only change its version`);
+  const dependencies = new Map<string, string>();
+  const allowed = { ...(previous.dependencies as Record<string, string> | undefined) };
+  for (const [name, { previous: oldVersion, current: version }] of versions) {
+    if (!(name in allowed)) continue;
+    const prior = allowed[name];
+    const proposed = `^${version}`;
+    if (prior === proposed) continue;
+    const actual = (current.dependencies as Record<string, string> | undefined)?.[name];
+    if (prior !== `^${oldVersion}` || actual !== proposed) {
+      throw new Error(`${path} dependency ${name} must match release graph ${proposed}`);
+    }
+    allowed[name] = proposed;
+    dependencies.set(name, version);
   }
-  return current.version;
+  const expectedManifest =
+    previous.dependencies === undefined ? previous : { ...previous, dependencies: allowed };
+  if (
+    JSON.stringify(expectedManifest) !== JSON.stringify({ ...current, version: previous.version })
+  ) {
+    throw new Error(`${path} may only change its version and approved dependencies`);
+  }
+  return { version: current.version, dependencies };
 }
 
 function expectedPaths(changesets: string[], packageManifests: string[]): Set<string> {
@@ -200,7 +267,45 @@ function expectedPaths(changesets: string[], packageManifests: string[]): Set<st
   return expected;
 }
 
-export function validateReleaseIntegrity(repository: string, base: string): void {
+function releaseGraph(
+  repository: string,
+  base: string,
+  packages: Map<string, string>,
+  changes: Change[],
+) {
+  const affected = [...new Set(changes.map(({ packageName }) => packageName))];
+  const baseManifests = new Map<string, Manifest>();
+  for (const [name, path] of packages) {
+    baseManifests.set(name, parseManifest(readBase(repository, base, path) ?? "", path));
+  }
+  // Changesets advances dependents when their internal dependency range advances.
+  for (let index = 0; index < affected.length; index++) {
+    const name = affected[index];
+    for (const [dependent, manifest] of baseManifests) {
+      if (
+        !affected.includes(dependent) &&
+        Object.hasOwn((manifest.dependencies as object) ?? {}, name)
+      )
+        affected.push(dependent);
+    }
+  }
+  const versions = new Map<string, { previous: string; current: string }>();
+  for (const name of affected) {
+    const path = requiredPackagePath(packages, name);
+    const previous = baseManifests.get(name);
+    if (!previous?.version) throw new Error(`${path} must declare a version`);
+    versions.set(name, {
+      previous: previous.version,
+      current: incrementVersion(
+        previous.version,
+        highestBump(changes.filter((change) => change.packageName === name)),
+      ),
+    });
+  }
+  return { affected, versions };
+}
+
+export function validateReleaseIntegrity(repository: string, base: string): Map<string, string> {
   const root = resolve(repository);
   const entries = diffEntries(root, base);
   const consumed = entries.filter(
@@ -208,11 +313,21 @@ export function validateReleaseIntegrity(repository: string, base: string): void
   );
   if (consumed.length === 0)
     throw new Error("Generated release must consume at least one Changeset");
-  const changes = consumed.flatMap(({ path }) =>
-    parseChangeset(readBase(root, base, path) ?? "", path),
-  );
+  const changes = consumed.flatMap(({ path }) => {
+    const hash = git(root, [
+      "log",
+      "-1",
+      "--diff-filter=A",
+      "--format=%h",
+      base,
+      "--",
+      path,
+    ])?.trim();
+    if (!hash) throw new Error(`No source commit for ${path}`);
+    return parseChangeset(readBase(root, base, path) ?? "", path, hash);
+  });
   const packages = packagePaths(root, base);
-  const affected = [...new Set(changes.map(({ packageName }) => packageName))];
+  const { affected, versions } = releaseGraph(root, base, packages, changes);
   const manifests = affected.map((name) => requiredPackagePath(packages, name));
   const expected = expectedPaths(
     consumed.map(({ path }) => path),
@@ -225,7 +340,9 @@ export function validateReleaseIntegrity(repository: string, base: string): void
   ) {
     throw new Error("Release diff contains missing or unexpected artifacts");
   }
-  for (const packageName of affected) validatePackage(root, base, packageName, packages, changes);
+  for (const packageName of affected)
+    validatePackage(root, base, packageName, packages, changes, versions);
+  return new Map([...versions].map(([name, { current }]) => [name, current]));
 }
 
 function requiredPackagePath(packages: Map<string, string>, packageName: string): string {
@@ -240,6 +357,7 @@ function validatePackage(
   packageName: string,
   packages: Map<string, string>,
   changes: Change[],
+  versions: Map<string, { previous: string; current: string }>,
 ): void {
   const path = packages.get(packageName);
   if (!path) throw new Error(`Unknown package ${packageName}`);
@@ -247,11 +365,13 @@ function validatePackage(
   if (!previousText) throw new Error(`Missing base manifest ${path}`);
   const currentText = readFileSync(resolve(repository, path), "utf8");
   const packageChanges = changes.filter((change) => change.packageName === packageName);
-  const version = assertManifest(
-    parseManifest(previousText, path),
+  const previous = parseManifest(previousText, path);
+  const { version, dependencies } = assertManifest(
+    previous,
     parseManifest(currentText, path),
     path,
     highestBump(packageChanges),
+    versions,
   );
   const changelogPath = `${path.slice(0, -"package.json".length)}CHANGELOG.md`;
   const currentChangelog = readFileSync(resolve(repository, changelogPath), "utf8");
@@ -261,5 +381,7 @@ function validatePackage(
     packageName,
     version,
     packageChanges,
+    dependencies,
+    changes.filter((change) => dependencies.has(change.packageName)),
   );
 }

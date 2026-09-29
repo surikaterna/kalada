@@ -11,9 +11,16 @@ export function git(repository: string, args: string[]): Buffer {
 }
 
 export function assertCommit(repository: string, commit: string, label: string): void {
-  const actual = git(repository, ["rev-parse", "--verify", `${commit}^{commit}`])
-    .toString()
-    .trim();
+  let actual: string;
+  try {
+    actual = git(repository, ["rev-parse", "--verify", `${commit}^{commit}`])
+      .toString()
+      .trim();
+  } catch {
+    throw new Error(
+      `${label} commit ${commit} is unavailable; exact-head validation cannot proceed`,
+    );
+  }
   if (actual !== commit) throw new Error(`${label} must be an immutable 40-character commit SHA`);
 }
 
