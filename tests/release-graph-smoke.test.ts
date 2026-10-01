@@ -92,6 +92,12 @@ async function put(repository: string, path: string, value: unknown): Promise<vo
 async function baseFixture(repository: string): Promise<string> {
   for (const name of ["core", "projection"] as const) {
     await cp(join(root, "packages", name), join(repository, "packages", name), { recursive: true });
+    // Packed code comes from this checkout; release metadata belongs to the synthetic graph.
+    const current = await manifest(repository, name);
+    current.version = name === "core" ? "0.5.0" : "0.1.0";
+    if (name === "projection") current.dependencies["@kalada/core"] = "^0.5.0";
+    await put(repository, `packages/${name}/package.json`, current);
+    await rm(join(repository, `packages/${name}/CHANGELOG.md`), { force: true });
   }
   for (const name of ["syntax", "host"] as const) {
     await put(repository, `packages/${name}/package.json`, {

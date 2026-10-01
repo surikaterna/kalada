@@ -96,6 +96,18 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 }
 
+async function internalDependencies(names: readonly string[]): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const manifest = await readJson(resolve(root, "packages", name, "package.json"));
+      expect(manifest.name).toBe(`@kalada/${name}`);
+      expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/u);
+      return [`@kalada/${name}`, `^${manifest.version}`];
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 describe("package boundaries", () => {
   it("creates only the intended packages", async () => {
     const entries = await readdir(resolve(root, "packages"), { withFileTypes: true });
@@ -251,10 +263,7 @@ describe("package boundaries", () => {
 
   it("keeps host limited to Kalada dependencies and free of schema vendors", async () => {
     const manifest = await readJson(resolve(host, "package.json"));
-    expect(manifest.dependencies).toEqual({
-      "@kalada/core": "^0.5.0",
-      "@kalada/syntax": "^0.0.0",
-    });
+    expect(manifest.dependencies).toEqual(await internalDependencies(["core", "syntax"]));
     for (const field of ["optionalDependencies", "peerDependencies"]) {
       expect(manifest[field], field).toBeUndefined();
     }
@@ -263,11 +272,7 @@ describe("package boundaries", () => {
 
   it("keeps language service on public Kalada dependencies", async () => {
     const manifest = await readJson(resolve(languageService, "package.json"));
-    expect(manifest.dependencies).toEqual({
-      "@kalada/core": "^0.5.0",
-      "@kalada/host": "^0.0.0",
-      "@kalada/syntax": "^0.0.0",
-    });
+    expect(manifest.dependencies).toEqual(await internalDependencies(["core", "host", "syntax"]));
     const hostSource = await readFile(resolve(host, "src/index.ts"), "utf8");
     expect(hostSource).not.toContain("@kalada/language-service");
     const source = await productionSource(resolve(languageService, "src"));
