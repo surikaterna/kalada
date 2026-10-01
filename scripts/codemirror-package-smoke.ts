@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import type { CompletionOutcome } from "@kalada/language-service";
 import { chromium } from "playwright";
-import { copyChangesetReleaseWorkspace } from "./smoke-release-workspace.js";
+import { copyChangesetReleaseWorkspace, hasPendingReleases } from "./smoke-release-workspace.js";
 
 declare global {
   interface Window {
@@ -62,7 +62,8 @@ function run(command: string[], cwd: string): string {
 
 async function createRelease(directory: string): Promise<void> {
   await copyChangesetReleaseWorkspace(root, directory);
-  run([resolve(root, "node_modules/.bin/changeset"), "version"], directory);
+  if (await hasPendingReleases(directory))
+    run([resolve(root, "node_modules/.bin/changeset"), "version"], directory);
   const manifest = JSON.parse(
     await readFile(join(directory, "packages/codemirror/package.json"), "utf8"),
   );

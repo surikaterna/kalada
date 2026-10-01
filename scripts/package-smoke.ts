@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -32,12 +32,8 @@ function runFailure(command: string[], cwd: string, expected: RegExp): void {
   }
 }
 
-async function createConsumer(directory: string): Promise<void> {
-  await writeFile(
-    join(directory, "package.json"),
-    JSON.stringify({ name: "kalada-package-smoke", private: true, type: "module" }),
-  );
-  const exports = [
+function expectedCoreExports(): string {
+  return [
     "DEFAULT_KALADA_V1_FUNCTION_LIMITS",
     "DEFAULT_KALADA_V1_LIMITS",
     "Duration",
@@ -62,6 +58,14 @@ async function createConsumer(directory: string): Promise<void> {
   ]
     .sort()
     .join(",");
+}
+
+async function createConsumer(directory: string): Promise<void> {
+  await writeFile(
+    join(directory, "package.json"),
+    JSON.stringify({ name: "kalada-package-smoke", private: true, type: "module" }),
+  );
+  const exports = expectedCoreExports();
   await writeFile(
     join(directory, "index.mjs"),
     'import { createRequire } from "node:module";\nimport * as core from "@kalada/core";\n' +
@@ -126,13 +130,14 @@ async function assertCoreInstall(directory: string, archive: string): Promise<vo
     throw new Error("Core install did not resolve to the packed tarball with integrity");
   }
   const packed = JSON.parse(run(["tar", "-xOf", archive, "package/package.json"], root));
+  const source = JSON.parse(await readFile(join(root, "packages/core/package.json"), "utf8"));
   const manifest = JSON.parse(await readFile(join(installed, "package.json"), "utf8"));
   if (manifest.name !== packed.name || manifest.version !== packed.version) {
     throw new Error("Installed core manifest differs from archive");
   }
   if (
     packed.name !== "@kalada/core" ||
-    packed.version !== "0.5.0" ||
+    packed.version !== source.version ||
     packed.dependencies ||
     packed.peerDependencies ||
     packed.optionalDependencies ||
@@ -149,13 +154,10 @@ async function assertCoreInstall(directory: string, archive: string): Promise<vo
 }
 
 async function packCoreCandidate(directory: string): Promise<string> {
-  const candidate = join(directory, "core-0.5.0");
-  await cp(join(root, "packages/core"), candidate, { recursive: true });
-  const path = join(candidate, "package.json");
-  const manifest = JSON.parse(await readFile(path, "utf8"));
-  manifest.version = "0.5.0";
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
-  const output = run(["npm", "pack", "--json", candidate, "--pack-destination", directory], root);
+  const output = run(
+    ["npm", "pack", "--json", "--workspace", "@kalada/core", "--pack-destination", directory],
+    root,
+  );
   const [{ filename }] = JSON.parse(output) as [{ filename: string }];
   return join(directory, filename);
 }

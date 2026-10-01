@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { copyFile, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { copyChangesetReleaseWorkspace } from "./smoke-release-workspace.js";
+import { copyChangesetReleaseWorkspace, hasPendingReleases } from "./smoke-release-workspace.js";
 
 interface PackResult {
   readonly filename: string;
@@ -31,7 +31,8 @@ function run(command: string[], cwd: string): string {
 
 async function createReleasePlan(directory: string): Promise<void> {
   await copyChangesetReleaseWorkspace(root, directory);
-  run([resolve(root, "node_modules/.bin/changeset"), "version"], directory);
+  if (await hasPendingReleases(directory))
+    run([resolve(root, "node_modules/.bin/changeset"), "version"], directory);
   const syntax = JSON.parse(
     await readFile(join(directory, "packages/syntax/package.json"), "utf8"),
   );

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import {
   assertChangesetPackagesPresent,
   copyChangesetReleaseWorkspace,
   discoverWorkspaceDirectories,
+  hasPendingReleases,
 } from "../scripts/smoke-release-workspace.js";
 
 const directories: string[] = [];
@@ -15,6 +16,17 @@ afterEach(async () => {
 });
 
 describe("smoke release workspace", () => {
+  it("versions only pending releases, not already consumed or empty Changesets", async () => {
+    const source = await fixture();
+    expect(await hasPendingReleases(source)).toBe(true);
+    await unlink(join(source, ".changeset/quiet-hosts-describe.md"));
+    expect(await hasPendingReleases(source)).toBe(false);
+    await writeFile(join(source, ".changeset/empty.md"), "---\n---\n\nNo releases.\n");
+    expect(await hasPendingReleases(source)).toBe(false);
+    await writeFile(join(source, ".changeset/invalid.md"), "not valid frontmatter");
+    await expect(hasPendingReleases(source)).rejects.toThrow();
+  });
+
   it("copies every workspace named by Changesets, including newly added packages", async () => {
     const source = await fixture();
     await expect(

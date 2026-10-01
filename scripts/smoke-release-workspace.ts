@@ -37,6 +37,14 @@ export async function discoverWorkspaceDirectories(root: string): Promise<string
   return [...new Set(directories)].sort();
 }
 
+export async function hasPendingReleases(root: string): Promise<boolean> {
+  for (const file of await changesetFiles(root)) {
+    const text = await readFile(join(root, ".changeset", file), "utf8");
+    if (parseChangesetFile(text).releases.length > 0) return true;
+  }
+  return false;
+}
+
 export async function assertChangesetPackagesPresent(
   root: string,
   workspaceDirectories: readonly string[],
