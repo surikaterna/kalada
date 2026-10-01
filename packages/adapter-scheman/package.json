@@ -1,6 +1,6 @@
 {
   "name": "@kalada/adapter-scheman",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Conservative Scheman v2 adapter for Kalada host environments",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kalada/host": "^0.0.0",
+    "@kalada/host": "^0.1.0",
     "@scheman/core": "^2.0.0"
   },
   "publishConfig": {
