@@ -30,6 +30,7 @@ export class NeutralEditorSession implements EditorSession {
   private disposed = false;
   private notifications: EditorSnapshot[] = [];
   private publishingChanges = false;
+  private changing = 0;
   private readonly separator = new Compartment();
   private readonly tooling: EditorTooling;
   private readonly options: EditorSessionOptions;
@@ -175,13 +176,31 @@ export class NeutralEditorSession implements EditorSession {
     const previous = this.snapshot;
     const snapshot = Object.freeze({ ...previous, version: previous.version + 1, text });
     this.snapshot = snapshot;
-    this.bridge.changed?.(snapshot, previous, transaction);
+    // Reserve FIFO order before service hooks can reenter, but publish only after they commit.
     this.notifications.push(snapshot);
-    if (!transaction) this.publishChanges();
+    this.changing += 1;
+    let failed = false;
+    let failure: unknown;
+    try {
+      this.bridge.changed?.(snapshot, previous, transaction);
+    } catch (error) {
+      this.notifications = this.notifications.filter((pending) => pending !== snapshot);
+      failed = true;
+      failure = error;
+    } finally {
+      this.changing -= 1;
+    }
+    // Successful nested hooks must drain even on failure; transactions wait for the update listener.
+    try {
+      if (!transaction) this.publishChanges();
+    } catch (error) {
+      if (!failed) throw error;
+    }
+    if (failed) throw failure;
   }
 
   private publishChanges(): void {
-    if (this.publishingChanges || !this.notifications.length) return;
+    if (this.changing || this.publishingChanges || !this.notifications.length) return;
     this.publishingChanges = true;
     try {
       while (this.notifications.length) {
