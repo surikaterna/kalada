@@ -11,12 +11,14 @@ import { EditorView } from "@codemirror/view";
 import { createKaladaEditorSession } from "@kalada/codemirror";
 import { normalizeManualEnvironment } from "@kalada/host";
 import { createLanguageService } from "@kalada/language-service";
+import { runBridgeFailures } from "./bridge-failure.mjs";
 import { runSeparators } from "./editor-separators.mjs";
 import { runNeutralBrowser } from "./neutral-browser.mjs";
 import { runReentrancy } from "./neutral-reentrancy.mjs";
 
 await runNeutralBrowser();
 await runReentrancy();
+await runBridgeFailures();
 runSeparators();
 
 const shape = (field) => ({

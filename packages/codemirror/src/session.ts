@@ -52,6 +52,15 @@ function kaladaBridge(
   return {
     filterCompletions: true,
     isCurrent: (identity) => provider.isCurrent(identity),
+    matches(snapshot) {
+      const current = provider.service.getDocument(provider.uri);
+      return (
+        !!current &&
+        current.uri === snapshot.uri &&
+        current.version === snapshot.version &&
+        current.text === snapshot.text
+      );
+    },
     changed(snapshot, previous, transaction) {
       const current = provider.service.getDocument(provider.uri);
       if (!current || current.text !== previous.text || current.version !== previous.version)

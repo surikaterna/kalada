@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-Ci2rzans.js",
-      "sha256": "623d4dd1ee67ccdea6fbcc6c2db65bdd6cf8504aab6eef429d6c77f6e3c1e81a",
+      "file": "assets/environment-BP8SheVg.js",
+      "sha256": "8bb73a03459c2df3b79d144d5fa0923b23d2472a3aa7b3627e575f5eec229ac8",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-BP5hDy5u.js",
+          "name": "static:./index-Cnq2rU07.js",
           "count": 1
         }
       ],
@@ -90,12 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-BP5hDy5u.js",
-      "sha256": "e1ef55e8993af30452ee9f927186df5293147e8f964f4b25628de8d7a7d5d329",
+      "file": "assets/index-Cnq2rU07.js",
+      "sha256": "845b0387057f8a1e9f78afa90793bf428890dd4b7161e07a67b8e72f3d283a04",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-Ci2rzans.js",
+          "name": "dynamic:./environment-BP8SheVg.js",
           "count": 1
         }
       ],
@@ -317,7 +317,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "973ae6aba495343f03b7506abf5816b69b612ec587244917dfd4221e275025e3",
+      "sha256": "68f4945d408c974e0ffa3be1739062607f8cfe8cc5135c469cdb5a7b4c9e5a4b",
       "closure": "shell",
       "imports": [],
       "capabilities": [],

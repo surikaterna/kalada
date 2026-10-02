@@ -14,6 +14,7 @@ import { detectLineSeparator, textForEditor, textFromEditor } from "./line-separ
 /** Internal bridge hooks are deliberately not part of the neutral public entry point. */
 export interface EditorBridge {
   changed?: (snapshot: EditorSnapshot, previous: EditorSnapshot, transaction?: Transaction) => void;
+  matches?: (snapshot: EditorSnapshot) => boolean;
   renderHover?: (hover: EditorHover, from: number, to: number) => Tooltip;
   isCurrent?: (identity: EditorIdentity) => boolean;
   filterCompletions?: boolean;
@@ -28,6 +29,8 @@ export class NeutralEditorSession implements EditorSession {
   private snapshot: EditorSnapshot;
   private attached: EditorView | null = null;
   private disposed = false;
+  private failed = false;
+  private failureView: EditorView | null = null;
   private notifications: EditorSnapshot[] = [];
   private publishingChanges = false;
   private changing = 0;
@@ -52,7 +55,7 @@ export class NeutralEditorSession implements EditorSession {
     this.tooling = new EditorTooling(
       {
         snapshot: () => this.snapshot,
-        view: () => (this.disposed ? null : this.attached),
+        view: () => (this.disposed || this.failed ? null : this.attached),
         renderHover: bridge.renderHover,
         isCurrent: bridge.isCurrent,
         filterCompletions: bridge.filterCompletions,
@@ -111,7 +114,7 @@ export class NeutralEditorSession implements EditorSession {
     if (this.disposed) return;
     this.disposed = true;
     this.tooling.invalidate(this.attached);
-    if (this.attached) this.tooling.clear(this.attached, true);
+    if (this.attached && !this.failed) this.tooling.clear(this.attached, true);
     this.attached = null;
   }
 
@@ -126,7 +129,10 @@ export class NeutralEditorSession implements EditorSession {
         };
       }),
       // Provider callbacks may dispatch; run them only after CodeMirror leaves its update phase.
-      EditorView.updateListener.of(() => this.publishChanges()),
+      EditorView.updateListener.of(() => {
+        this.publishChanges();
+        this.cleanupFailure();
+      }),
       this.separator.of({
         // Resolve when CodeMirror builds a state, including reuse of a cached extension.
         get extension() {
@@ -158,7 +164,16 @@ export class NeutralEditorSession implements EditorSession {
   }
 
   private update(update: ViewUpdate): void {
-    if (this.disposed || !update.docChanged) return;
+    if (this.disposed || this.failed || !update.docChanged) return;
+    try {
+      this.updateTransactions(update);
+    } catch (error) {
+      this.fail(update.view);
+      throw error;
+    }
+  }
+
+  private updateTransactions(update: ViewUpdate): void {
     for (const transaction of update.transactions) {
       if (!transaction.docChanged) continue;
       if (
@@ -185,6 +200,7 @@ export class NeutralEditorSession implements EditorSession {
       this.bridge.changed?.(snapshot, previous, transaction);
     } catch (error) {
       this.notifications = this.notifications.filter((pending) => pending !== snapshot);
+      this.reconcileFailure(snapshot, previous, !!transaction);
       failed = true;
       failure = error;
     } finally {
@@ -212,7 +228,37 @@ export class NeutralEditorSession implements EditorSession {
     } finally {
       this.publishingChanges = false;
     }
-    if (!this.disposed && this.attached) this.tooling.schedule(this.attached);
+    if (!this.disposed && !this.failed && this.attached) this.tooling.schedule(this.attached);
+  }
+
+  private reconcileFailure(attempt: EditorSnapshot, previous: EditorSnapshot, attached: boolean) {
+    if (attached) {
+      this.fail(this.attached);
+      return;
+    }
+    try {
+      if (this.bridge.matches?.(this.snapshot)) return;
+      if (this.snapshot === attempt && this.bridge.matches?.(previous)) {
+        this.snapshot = previous;
+        this.tooling.invalidate();
+        return;
+      }
+    } catch {}
+    this.fail(null);
+    this.notifications = [];
+  }
+
+  private fail(view: EditorView | null): void {
+    this.failed = true;
+    this.failureView = view;
+    // Invalidation is dispatch-free: CodeMirror is still inside its plugin update boundary.
+    this.tooling.invalidate(view);
+  }
+
+  private cleanupFailure(): void {
+    const view = this.failureView;
+    this.failureView = null;
+    if (view) this.tooling.clear(view, true);
   }
 
   private notifyChange(snapshot: EditorSnapshot): void {
@@ -223,5 +269,6 @@ export class NeutralEditorSession implements EditorSession {
 
   private assertOpen(): void {
     if (this.disposed) throw new Error("Editor session is disposed");
+    if (this.failed) throw new Error("Editor session has failed");
   }
 }

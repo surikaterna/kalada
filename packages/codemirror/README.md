@@ -15,6 +15,26 @@ including undo and redo, become monotonic language-service revisions. `replaceDo
 `refreshEnvironment`, and `dispose` preserve request identity and stale/cancellation checks. Dispose is
 idempotent; destroying a view detaches it without closing the session.
 
+### Kalada bridge failures
+
+The bridge assumes exclusive ownership of its URI and a truthful, synchronous `getDocument`.
+If a detached update throws, it rethrows the original error and does not notify for that attempt.
+When the service still exactly matches the previous URI/version/text and no neutral snapshot change
+intervened, the provisional snapshot is restored. When the service matches the latest neutral snapshot
+(including committed nested edits), that state remains usable. Successful descendants retain FIFO
+notifications with their exact historical service snapshots. Unmatched or unobservable state makes
+the session terminally failed; intervening environment refreshes or edits are never rolled back.
+
+An attached bridge exception is always terminal, even after a service commit: CodeMirror cannot undo
+its view update and may disable the throwing plugin. The original exception is reported through
+CodeMirror's exception sink (`EditorView.exceptionSink`); `view.dispatch` need not throw. Subsequent
+replacement, formatting, environment refresh and attachment explicitly fail. Tooling is invalidated
+without dispatch inside the plugin update; presentation cleanup runs after the update boundary.
+Earlier successful transactions in a batch still notify, but the failed and later transactions do not.
+No further service synchronization or tooling publication occurs, and disposal remains idempotent.
+There is no retry, compensating update, or close/reopen recovery. Arbitrary lying/proxy services and
+transactional redesign are outside this bounded contract.
+
 CodeMirror packages are peers so consumers use one set of state classes. This package has no parser,
 schema traversal, inference, evaluation, filesystem, or network behavior. Tooltips use DOM text nodes,
 and the extension includes keyboard completion, keyboard hover, Escape handling, and accessible labels.
