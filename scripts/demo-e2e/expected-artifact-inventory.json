@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-BH9xc7mV.js",
-      "sha256": "e88c7149404f78b2ecd15cbe45bc8e3f503ccc196986f513328bc571a45359a3",
+      "file": "assets/environment-E6-uRvMq.js",
+      "sha256": "bcac0a6916d1d15d8390fd08f612502e46180b10be1adf23e989f12bd0a73e68",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-BIZ16XrD.js",
+          "name": "static:./index-1XQVsALW.js",
           "count": 1
         }
       ],
@@ -90,12 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-BIZ16XrD.js",
-      "sha256": "8a05cefbc099e891ee1e5a9aeeeb37f54d7801e103b699d4f86947b3e0c9d345",
+      "file": "assets/index-1XQVsALW.js",
+      "sha256": "f5e3a0194d9120a62f96d5ef031e7548020452980722cc761c2b126574d1a614",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-BH9xc7mV.js",
+          "name": "dynamic:./environment-E6-uRvMq.js",
           "count": 1
         }
       ],
@@ -218,6 +218,12 @@
         "node_modules/.bun/crelt@1.0.7/node_modules/crelt/index.js",
         "node_modules/.bun/style-mod@4.1.4/node_modules/style-mod/src/style-mod.js",
         "node_modules/.bun/w3c-keyname@2.2.8/node_modules/w3c-keyname/index.js",
+        "packages/codemirror/src/editor-presentation.ts",
+        "packages/codemirror/src/editor-requests.ts",
+        "packages/codemirror/src/editor-session.ts",
+        "packages/codemirror/src/editor-tooling.ts",
+        "packages/codemirror/src/editor-validation.ts",
+        "packages/codemirror/src/kalada-provider.ts",
         "packages/codemirror/src/line-separator.ts",
         "packages/codemirror/src/render.ts",
         "packages/codemirror/src/session-helpers.ts",
@@ -311,7 +317,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "bbddc285a715750bc228428e427831e0f4c091497c1c08a58405aad912dd77ea",
+      "sha256": "4207e26d2b328e76150bfd260795ab33000a811c8d06773336c8ac904820e909",
       "closure": "shell",
       "imports": [],
       "capabilities": [],

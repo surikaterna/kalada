@@ -10,8 +10,43 @@ const result = (request, text) => ({ ...request.snapshot, value: { from: 0, to: 
 export async function runReentrancy() {
   await nestedFormat();
   await invalidatedFormat();
+  await refreshedFormat();
   await lifecycleAbort("detach");
   await lifecycleAbort("dispose");
+}
+
+async function refreshedFormat() {
+  const pending = [];
+  let replacement;
+  const fixture = mount({
+    format(request) {
+      if (pending.length === 0) {
+        request.signal.addEventListener(
+          "abort",
+          () => {
+            replacement = fixture.session.format();
+          },
+          { once: true },
+        );
+      }
+      return new Promise((resolve) => pending.push({ request, resolve }));
+    },
+  });
+  const first = fixture.session.format();
+  fixture.session.refreshEnvironment();
+  assert(pending.length === 2, "refresh starts one reentrant replacement");
+  assert(
+    pending[1].request.snapshot.environmentGeneration === 1,
+    "replacement sees new environment",
+  );
+  assert(!pending[1].request.signal.aborted, "refresh does not abort valid replacement twice");
+  pending[0].resolve(result(pending[0].request, "obsolete"));
+  assert((await first) === false, "old environment response rejected");
+  pending[1].resolve(result(pending[1].request, "fresh"));
+  assert((await replacement) === true, "replacement publishes after refresh");
+  assert(!pending[1].request.signal.aborted, "publication does not abort settled request");
+  assert(fixture.session.getSnapshot().text === "fresh", "new environment edit applied");
+  fixture.destroy();
 }
 
 function mount(provider) {

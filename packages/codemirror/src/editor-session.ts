@@ -71,8 +71,10 @@ export class NeutralEditorSession implements EditorSession {
       ...this.snapshot,
       environmentGeneration: this.snapshot.environmentGeneration + 1,
     });
-    this.tooling.invalidate();
-    if (!this.attached) return;
+    if (!this.attached) {
+      this.tooling.invalidate();
+      return;
+    }
     this.tooling.clear(this.attached, true);
     this.tooling.schedule(this.attached);
   }
