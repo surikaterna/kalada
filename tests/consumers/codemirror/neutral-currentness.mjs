@@ -14,12 +14,13 @@ const value = {
   hover: { from: 0, to: 3, content: "old hover" },
 };
 
-function fixture(async = false) {
+function fixture(async = false, onHover) {
   const pending = {};
   const provider = Object.fromEntries(
     Object.keys(value).map((kind) => [
       kind,
       (request) => {
+        if (kind === "hover") onHover?.();
         if (!async) return { ...request.snapshot, value: value[kind] };
         return new Promise((resolve) => {
           pending[kind] = {
@@ -53,6 +54,72 @@ export async function runCurrentness() {
   await staleCompletionApply();
   await lateResults();
   await currentAsyncResults();
+  await movedHover();
+  await reentrantHover();
+  await pointerHoverLeave();
+}
+
+async function movedHover() {
+  for (const action of ["cursor", "selection", "pointer", "leave"]) {
+    const { pending, view, destroy } = fixture(true);
+    await wait();
+    const diagnostics = pending.diagnostics;
+    keyboardHover(view);
+    const hover = pending.hover;
+    if (action === "cursor") view.dispatch({ selection: { anchor: 2 } });
+    else if (action === "selection") view.dispatch({ selection: { anchor: 0, head: 2 } });
+    else
+      view.dom.dispatchEvent(
+        new MouseEvent(action === "leave" ? "mouseleave" : "mousemove", {
+          clientX: 0,
+          clientY: 0,
+          bubbles: true,
+        }),
+      );
+    hover.resolve();
+    diagnostics.resolve();
+    await wait();
+    assert(!document.querySelector('[role="tooltip"]'), `${action}-stale hover discarded`);
+    assert(
+      !diagnostics.request.signal.aborted && diagnosticCount(view.state) === 1,
+      `${action} intent change preserves unrelated diagnostics`,
+    );
+    destroy();
+  }
+}
+
+async function reentrantHover() {
+  const { view, destroy } = fixture(false, () => {
+    view.dispatch({ selection: { anchor: 2 } });
+    view.dispatch({ selection: { anchor: 0 } });
+  });
+  keyboardHover(view);
+  await wait();
+  assert(
+    !document.querySelector('[role="tooltip"]'),
+    "reentrant moved-and-restored hover rejected",
+  );
+  destroy();
+}
+
+async function pointerHoverLeave() {
+  const { pending, view, destroy } = fixture(true);
+  await wait();
+  const coords = view.coordsAtPos(1);
+  view.contentDOM.querySelector(".cm-line").dispatchEvent(
+    new MouseEvent("mousemove", {
+      clientX: coords.left,
+      clientY: (coords.top + coords.bottom) / 2,
+      bubbles: true,
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 850));
+  assert(pending.hover, "public pointer hover requested");
+  view.dom.dispatchEvent(new MouseEvent("mouseleave"));
+  pending.hover.resolve();
+  await wait();
+  assert(!document.querySelector('[role="tooltip"]'), "pointer-leave stale hover rejected");
+  destroy();
 }
 
 async function staleCompletionApply() {

@@ -13,6 +13,7 @@ import {
   hoverTooltip,
   keymap,
   type Tooltip,
+  ViewPlugin,
 } from "@codemirror/view";
 import type {
   EditorCompletion,
@@ -41,6 +42,7 @@ export interface ToolingHost {
 export class EditorTooling {
   private readonly requests = new EditorRequests();
   private frame: number | null = null;
+  private hoverIntent = 0;
   private readonly host: ToolingHost;
   private readonly provider: EditorProvider;
   constructor(host: ToolingHost, provider: EditorProvider = {}) {
@@ -52,6 +54,7 @@ export class EditorTooling {
     return [
       autocompletion({ override: [(context) => this.complete(context)] }),
       hoverTooltip((view, offset) => this.hover(view, offset)),
+      this.hoverIntentExtension(),
       keyboardTooltipField,
       keymap.of([
         ...completionKeymap,
@@ -66,6 +69,24 @@ export class EditorTooling {
         },
       ]),
     ];
+  }
+
+  private hoverIntentExtension() {
+    return ViewPlugin.define((view) => {
+      const changed = () => {
+        this.hoverIntent += 1;
+      };
+      const events = ["mousemove", "mouseleave", "pointerdown"];
+      for (const event of events) view.dom.addEventListener(event, changed);
+      return {
+        update: (update) => {
+          if (!update.startState.selection.eq(update.state.selection)) changed();
+        },
+        destroy: () => {
+          for (const event of events) view.dom.removeEventListener(event, changed);
+        },
+      };
+    });
   }
 
   invalidate(view = this.host.view()): void {
@@ -179,12 +200,19 @@ export class EditorTooling {
     publish?: (tooltip: Tooltip) => void,
   ): Tooltip | null | Promise<Tooltip | null> {
     if (this.host.view() !== view || !this.provider.hover) return null;
-    const ticket = this.ticket("hover", view);
+    const intent = this.hoverIntent;
+    const selection = view.state.selection;
+    const request = this.ticket("hover", view);
+    const ticket = {
+      ...request,
+      current: () =>
+        request.current() && intent === this.hoverIntent && selection.eq(view.state.selection),
+    };
     const source = sourceOffset(view.state.doc, view.state.lineBreak, offset);
     return this.resolve(
       this.provider.hover(ticket, source),
       ticket,
-      (result) => {
+      (result, guarded) => {
         if (!validRange(result.value, ticket.snapshot.text)) return null;
         const range = this.range(view, result.value);
         const tooltip = (this.host.renderHover ?? editorTooltip)(
@@ -192,6 +220,7 @@ export class EditorTooling {
           range.from,
           range.to,
         );
+        if (!guarded.current()) return null;
         publish?.(tooltip);
         return tooltip;
       },

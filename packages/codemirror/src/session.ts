@@ -1,4 +1,6 @@
+import type { DocumentSnapshot } from "@kalada/language-service";
 import type { KaladaEditorSession, KaladaEditorSessionOptions } from "./contracts.js";
+import type { EditorSnapshot } from "./editor-contracts.js";
 import { type EditorBridge, NeutralEditorSession } from "./editor-session.js";
 import { KaladaProvider } from "./kalada-provider.js";
 import { hoverTooltip } from "./render.js";
@@ -12,17 +14,18 @@ export function createKaladaEditorSession(
   const opened = service.openDocument(options.document);
   let disposed = false;
   const provider = new KaladaProvider(service, opened.uri);
+  const committed = new WeakMap<EditorSnapshot, DocumentSnapshot>();
   const core = new NeutralEditorSession(
     {
       document: opened,
       ariaLabel: "Kalada expression editor",
       provider,
-      onDocumentChange: () => {
-        const snapshot = service.getDocument(opened.uri);
+      onDocumentChange: (identity) => {
+        const snapshot = committed.get(identity);
         if (snapshot) options.onDocumentChange?.(snapshot);
       },
     },
-    kaladaBridge(provider),
+    kaladaBridge(provider, (identity, snapshot) => committed.set(identity, snapshot)),
   );
   return {
     extension: core.extension,
@@ -42,7 +45,10 @@ export function createKaladaEditorSession(
   };
 }
 
-function kaladaBridge(provider: KaladaProvider): EditorBridge {
+function kaladaBridge(
+  provider: KaladaProvider,
+  committed: (identity: EditorSnapshot, snapshot: DocumentSnapshot) => void,
+): EditorBridge {
   return {
     filterCompletions: true,
     isCurrent: (identity) => provider.isCurrent(identity),
@@ -65,6 +71,7 @@ function kaladaBridge(provider: KaladaProvider): EditorBridge {
       });
       if (updated.text !== snapshot.text)
         throw new Error("CodeMirror transaction translation changed document text");
+      committed(snapshot, updated);
     },
     renderHover(hover, from, to) {
       const info = provider.hovers.get(hover);

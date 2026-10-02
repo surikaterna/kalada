@@ -11,8 +11,53 @@ export async function runReentrancy() {
   await nestedFormat();
   await invalidatedFormat();
   await refreshedFormat();
+  await changedFormat();
   await lifecycleAbort("detach");
   await lifecycleAbort("dispose");
+}
+
+async function changedFormat() {
+  let resolveFirst;
+  let replacement;
+  let captured;
+  const versions = [];
+  const fixture = mount(
+    {
+      format(request) {
+        if (!resolveFirst) {
+          request.signal.addEventListener(
+            "abort",
+            () => {
+              replacement = fixture.session.format();
+            },
+            { once: true },
+          );
+          return new Promise((resolve) => {
+            resolveFirst = () => resolve(result(request, "obsolete"));
+          });
+        }
+        captured = request.snapshot;
+        return { ...captured, value: { from: 0, to: captured.text.length, text: "fresh" } };
+      },
+    },
+    (snapshot) => versions.push(snapshot.version),
+  );
+  const first = fixture.session.format();
+  fixture.session.replaceDocument("new text");
+  assert(
+    captured?.text === "new text" && captured.version === 2,
+    "abort-triggered provider sees committed edit and identity",
+  );
+  assert(replacement === true, "synchronous replacement publishes safely after view update");
+  assert(fixture.view.state.doc.toString() === "fresh", "replacement edit reaches view");
+  assert(
+    fixture.session.getSnapshot().text === "fresh" && fixture.session.getSnapshot().version === 3,
+    "nested snapshot is not overwritten",
+  );
+  assert(versions.join(",") === "2,3", "reentrant change notifications stay ordered");
+  resolveFirst();
+  assert((await first) === false, "pre-edit response rejected");
+  fixture.destroy();
 }
 
 async function refreshedFormat() {
@@ -49,10 +94,11 @@ async function refreshedFormat() {
   fixture.destroy();
 }
 
-function mount(provider) {
+function mount(provider, onDocumentChange) {
   const session = createEditorSession({
     document: { uri: "fixture:abort", version: 1, text: "red" },
     provider,
+    onDocumentChange,
   });
   const parent = document.createElement("div");
   document.body.append(parent);

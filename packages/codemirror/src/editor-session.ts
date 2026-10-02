@@ -28,6 +28,8 @@ export class NeutralEditorSession implements EditorSession {
   private snapshot: EditorSnapshot;
   private attached: EditorView | null = null;
   private disposed = false;
+  private notifications: EditorSnapshot[] = [];
+  private publishingChanges = false;
   private readonly separator = new Compartment();
   private readonly tooling: EditorTooling;
   private readonly options: EditorSessionOptions;
@@ -122,6 +124,8 @@ export class NeutralEditorSession implements EditorSession {
           destroy: () => this.detach(view),
         };
       }),
+      // Provider callbacks may dispatch; run them only after CodeMirror leaves its update phase.
+      EditorView.updateListener.of(() => this.publishChanges()),
       this.separator.of({
         // Resolve when CodeMirror builds a state, including reuse of a cached extension.
         get extension() {
@@ -163,17 +167,36 @@ export class NeutralEditorSession implements EditorSession {
         throw new Error("CodeMirror and editor snapshots diverged");
       this.changed(textFromEditor(transaction.newDoc, transaction.state.lineBreak), transaction);
     }
-    this.tooling.schedule(update.view);
   }
 
   private changed(text: string, transaction?: Transaction): void {
     if (this.snapshot.version >= Number.MAX_SAFE_INTEGER)
       throw new RangeError("Editor document revision exhausted");
-    this.tooling.invalidate();
     const previous = this.snapshot;
     const snapshot = Object.freeze({ ...previous, version: previous.version + 1, text });
-    this.bridge.changed?.(snapshot, previous, transaction);
     this.snapshot = snapshot;
+    this.bridge.changed?.(snapshot, previous, transaction);
+    this.notifications.push(snapshot);
+    if (!transaction) this.publishChanges();
+  }
+
+  private publishChanges(): void {
+    if (this.publishingChanges || !this.notifications.length) return;
+    this.publishingChanges = true;
+    try {
+      while (this.notifications.length) {
+        const notifications = this.notifications;
+        this.notifications = [];
+        this.tooling.invalidate();
+        for (const snapshot of notifications) this.notifyChange(snapshot);
+      }
+    } finally {
+      this.publishingChanges = false;
+    }
+    if (!this.disposed && this.attached) this.tooling.schedule(this.attached);
+  }
+
+  private notifyChange(snapshot: EditorSnapshot): void {
     try {
       this.options.onDocumentChange?.(snapshot);
     } catch {}

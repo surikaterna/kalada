@@ -4,12 +4,12 @@
   "base": "/kalada/",
   "files": [
     {
-      "file": "assets/environment-E6-uRvMq.js",
-      "sha256": "bcac0a6916d1d15d8390fd08f612502e46180b10be1adf23e989f12bd0a73e68",
+      "file": "assets/environment-DQCdZq3U.js",
+      "sha256": "81f8fceb7da434c3884173c284d3f03e679b898880530ed08d23a6781666d1fa",
       "closure": "lazy-environment",
       "imports": [
         {
-          "name": "static:./index-1XQVsALW.js",
+          "name": "static:./index-DP3JlygY.js",
           "count": 1
         }
       ],
@@ -90,12 +90,12 @@
       ]
     },
     {
-      "file": "assets/index-1XQVsALW.js",
-      "sha256": "f5e3a0194d9120a62f96d5ef031e7548020452980722cc761c2b126574d1a614",
+      "file": "assets/index-DP3JlygY.js",
+      "sha256": "5246d1033e5c06e9b88fec26200e64641f327d9b641c41b878ab1d48553b3525",
       "closure": "entry-static",
       "imports": [
         {
-          "name": "dynamic:./environment-E6-uRvMq.js",
+          "name": "dynamic:./environment-DQCdZq3U.js",
           "count": 1
         }
       ],
@@ -317,7 +317,7 @@
     },
     {
       "file": "index.html",
-      "sha256": "4207e26d2b328e76150bfd260795ab33000a811c8d06773336c8ac904820e909",
+      "sha256": "d32bdda9d499bae6e742010d5a07da4f15eaf0b5ebea9f74c47e5b18487306a7",
       "closure": "shell",
       "imports": [],
       "capabilities": [],
