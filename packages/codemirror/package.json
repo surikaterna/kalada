@@ -28,6 +28,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./editor": {
+      "import": {
+        "types": "./dist/editor.d.ts",
+        "default": "./dist/editor.js"
+      },
+      "require": {
+        "types": "./dist/editor.d.cts",
+        "default": "./dist/editor.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

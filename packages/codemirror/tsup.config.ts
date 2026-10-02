@@ -4,7 +4,7 @@ export default defineConfig({
   bundle: true,
   clean: true,
   dts: true,
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/editor.ts"],
   external: [
     "@kalada/language-service",
     "@codemirror/autocomplete",
