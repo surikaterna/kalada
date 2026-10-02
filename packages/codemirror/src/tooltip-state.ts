@@ -6,7 +6,7 @@ export const setKeyboardTooltip = StateEffect.define<Tooltip | null>();
 export const keyboardTooltipField = StateField.define<readonly Tooltip[]>({
   create: () => [],
   update(value, transaction) {
-    let next = value;
+    let next = transaction.docChanged ? [] : value;
     for (const effect of transaction.effects) {
       if (effect.is(setKeyboardTooltip)) next = effect.value ? [effect.value] : [];
     }

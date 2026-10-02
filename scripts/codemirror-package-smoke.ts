@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rename, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
@@ -68,7 +68,7 @@ async function createRelease(directory: string): Promise<void> {
     await readFile(join(directory, "packages/codemirror/package.json"), "utf8"),
   );
   if (
-    manifest.version !== "0.1.0" ||
+    manifest.version !== "0.2.0" ||
     manifest.dependencies["@kalada/language-service"] !== "^0.1.0"
   ) {
     throw new Error("Unexpected CodeMirror release plan");
@@ -93,6 +93,10 @@ function assertPackage(result: PackResult, archive: string): void {
     "dist/index.cjs",
     "dist/index.d.ts",
     "dist/index.d.cts",
+    "dist/editor.js",
+    "dist/editor.cjs",
+    "dist/editor.d.ts",
+    "dist/editor.d.cts",
     "package.json",
   ]) {
     if (!paths.includes(required))
@@ -103,6 +107,44 @@ function assertPackage(result: PackResult, archive: string): void {
   );
   if (runtime.some((text) => /parseKalada|editorGraph|\.evaluate\s*\(/u.test(text))) {
     throw new Error("CodeMirror adapter contains language or evaluation logic");
+  }
+}
+
+async function runNeutralIsolation(directory: string): Promise<void> {
+  const names = ["core", "syntax", "host", "language-service"];
+  for (const name of names)
+    await rename(join(directory, "node_modules/@kalada", name), join(directory, `hidden-${name}`));
+  try {
+    run(["node", "neutral.mjs"], directory);
+    run(
+      [
+        resolve(root, "node_modules/.bin/tsc"),
+        "--strict",
+        "--noEmit",
+        "--target",
+        "ES2022",
+        "--module",
+        "NodeNext",
+        "--moduleResolution",
+        "NodeNext",
+        "neutral-types.mts",
+        "neutral-types.cts",
+      ],
+      directory,
+    );
+    run(
+      ["bun", "build", "neutral-browser.mjs", "--target=browser", "--outfile=neutral-browser.js"],
+      directory,
+    );
+    const bundle = await readFile(join(directory, "neutral-browser.js"), "utf8");
+    if (/parseKalada|@kalada\/language-service|["']node:/u.test(bundle))
+      throw new Error("Neutral entry dependency isolation failed");
+  } finally {
+    for (const name of names)
+      await rename(
+        join(directory, `hidden-${name}`),
+        join(directory, "node_modules/@kalada", name),
+      );
   }
 }
 
@@ -151,7 +193,13 @@ async function runBrowser(directory: string): Promise<void> {
       if (message.type() === "error") browserErrors.push(message.text());
     });
     await page.goto(`http://127.0.0.1:${address.port}`);
-    await page.waitForFunction(() => window.__kaladaReady === true);
+    await page
+      .waitForFunction(() => window.__kaladaReady === true)
+      .catch((error) => {
+        throw new Error(`Browser fixture failed to initialize: ${browserErrors.join(" | ")}`, {
+          cause: error,
+        });
+      });
     await verifyBrowser(page);
     if (browserErrors.length > 0) {
       throw new Error(`CodeMirror browser errors: ${browserErrors.join(" | ")}`);
@@ -163,6 +211,12 @@ async function runBrowser(directory: string): Promise<void> {
 }
 
 async function verifyBrowser(page: import("playwright").Page): Promise<void> {
+  await verifyBrowserCompletion(page);
+  await verifyBrowserEnvironment(page);
+  await verifyLifecycle(page);
+}
+
+async function verifyBrowserCompletion(page: import("playwright").Page): Promise<void> {
   const direct = await page.evaluate(() => window.__kalada.directCompletion());
   await page.locator(".cm-content").focus();
   await page.keyboard.press("Control+Space");
@@ -183,6 +237,13 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   await page.waitForFunction(() => window.__kalada.view.state.doc.toString() === "user.name");
   await page.keyboard.press("Control+Shift+H");
   await page.locator('[role="tooltip"]').waitFor();
+  const headings = await page.locator(".cm-kalada-hover strong").allTextContents();
+  if (
+    headings.join("|") !==
+    "Input editor shape|Output Kalada semantic projection|Presence / branch conditions|Limit/unknown evidence"
+  ) {
+    throw new Error("Rich Kalada hover presentation changed");
+  }
   if (await page.locator("img").count()) throw new Error("Tooltip rendered injected HTML");
   if (
     (await page.locator(".cm-content").getAttribute("aria-label")) !== "Kalada expression editor"
@@ -198,6 +259,9 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   );
   await page.evaluate(() => window.__kalada.undo());
   await page.evaluate(() => window.__kalada.redo());
+}
+
+async function verifyBrowserEnvironment(page: import("playwright").Page): Promise<void> {
   await page.evaluate(() => {
     window.__kalada.refresh();
     window.__kalada.replace("user.");
@@ -218,7 +282,6 @@ async function verifyBrowser(page: import("playwright").Page): Promise<void> {
   ) {
     throw new Error("Document revisions are not monotonic");
   }
-  await verifyLifecycle(page);
 }
 
 async function verifyLifecycle(page: import("playwright").Page): Promise<void> {
@@ -268,6 +331,8 @@ async function main(): Promise<void> {
       run(["node", "esm.mjs"], consumer);
       run(["node", "cjs.cjs"], consumer);
       runTypes(consumer);
+      await runNeutralIsolation(consumer);
+      await runBrowser(consumer);
     }
     console.log(`Packed CodeMirror smoke passed: ${basename(archive)}`);
   } finally {
