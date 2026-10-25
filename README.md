@@ -1,5 +1,14 @@
 # Kalada
 
+## Runtime security (CVE-2026-111497)
+
+The workspace pins Bun1.4.4; CI and publishing pin Node24.22.1. Node consumers require22.23.4,24.22.1 or26.12.1 (or newer patched releases on those supported lines).
+
+See the [Node October 2026 security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) and [Bun advisory](https://github.com/oven-sh/bun/security/advisories/GHSA-663w-cv8g-jj2p). Rebuild and redeploy affected images and artifacts; existing deployments and previously compiled executables are not updated by this source change.
+
+Shared patched-runtime smoke safely round-tripped HTTP `Content-Encoding: br` through native fetch on Node22.23.4,24.22.1,26.12.1 and Bun1.4.4. This is runtime evidence, not an application-suite or exploit test.
+
+
 Kalada is a deterministic, expression-oriented language designed for portable, versioned
 evaluation contracts. The dependency-free `@kalada/core` package exposes the native Kalada v1 API
 at its canonical root. The native profile

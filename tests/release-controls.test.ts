@@ -35,7 +35,7 @@ function createFixture(): { base: string; path: string } {
     name: "fixture",
     version: "0.0.0",
     private: true,
-    packageManager: "bun@1.4.2",
+    packageManager: "bun@1.4.4",
     workspaces: ["packages/*"],
   });
   write(join(path, "bun.lock"), "{}\n");
